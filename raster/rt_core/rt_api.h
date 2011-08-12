@@ -89,6 +89,7 @@
 
 #include "liblwgeom.h"
 
+#include "proj_api.h"
 #include "gdal_alg.h"
 #include "gdal_frmts.h"
 #include "gdal.h"

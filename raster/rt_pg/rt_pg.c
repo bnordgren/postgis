@@ -49,10 +49,12 @@
 
 /*#include "lwgeom_pg.h"*/
 #include "liblwgeom.h"
+#include "lwgeom_transform.h"
 #include "rt_pg.h"
 #include "pgsql_compat.h"
 #include "rt_api.h"
 #include "../raster_config.h"
+#include "rt_collection.h"
 
 #include <utils/lsyscache.h> /* for get_typlenbyvalalign */
 #include <utils/array.h> /* for ArrayType */
@@ -82,12 +84,6 @@ struct rt_raster_serialized_t {
 
 #define RT_RASTER_SERIALIZED_T_LEN sizeof(struct rt_raster_serialized_t)
 
-/*
- * This is required for builds against pgsql 8.2
- */
-#ifdef PG_MODULE_MAGIC
-PG_MODULE_MAGIC;
-#endif
 
 /* Internal funcs */
 static char * replace(const char *str, const char *oldstr, const char *newstr,
@@ -251,6 +247,9 @@ Datum RASTER_metadata(PG_FUNCTION_ARGS);
 
 /* get raster band's meta data */
 Datum RASTER_bandmetadata(PG_FUNCTION_ARGS);
+
+/* raster spatial operations */
+Datum RASTER_intersection(PG_FUNCTION_ARGS);
 
 /* Replace function taken from
  * http://ubuntuforums.org/showthread.php?s=aa6f015109fd7e4c7e30d2fd8b717497&t=141670&page=3
@@ -6484,6 +6483,146 @@ Datum RASTER_bandmetadata(PG_FUNCTION_ARGS)
 }
 
 /* ---------------------------------------------------------------- */
+/*  Two-raster spatial operations                                   */
+/* ---------------------------------------------------------------- */
+
+
+/**
+ * Perform the intersection between two rasters, returning a raster.
+ * The result is represented either by a mask (a raster having only
+ * true/false values)
+ * or by an "image" (a raster having valid pixel values over the result
+ * and "nodata" over the area which is to be excluded.)
+ */
+PG_FUNCTION_INFO_V1(RASTER_intersection_rr2r);
+Datum RASTER_intersection_rr2r(PG_FUNCTION_ARGS)
+{
+	/* arguments & return val */
+	rt_pgraster *r1_pg, *r2_pg, *result_pg ;
+	bool        mask ; /* true/false flag */
+	int32_t     dest_srid ; /* SRS of the destination */
+
+	rt_raster   r1, r2, result ;  /* deserialized rasters */
+	projPJ      r1_srs, r2_srs, result_srs ; /* Proj4 projection descriptors */
+	Proj4Cache proj_cache ;       /* projection cache */
+
+	/* properties of the result */
+	double nodata = 0.;
+	uint32_t hasnodata = 0;
+	two_raster_value_op pixel_calculator ;
+
+	POSTGIS_RT_DEBUG(3, "RASTER_intersection_rr2r: Starting");
+
+	/* r1 is null, return null */
+	if (PG_ARGISNULL(0)) PG_RETURN_NULL();
+	r1_pg = (rt_pgraster *) PG_DETOAST_DATUM_SLICE(PG_GETARG_DATUM(0), 0, RT_RASTER_SERIALIZED_T_LEN);
+
+	/* raster */
+	r1 = rt_raster_deserialize(r1_pg, FALSE);
+	if (!r1) {
+		elog(ERROR, "RASTER_intersection_rr2r: Could not deserialize r1");
+		PG_RETURN_NULL();
+	}
+
+	/* r2 is null, return null */
+	if (PG_ARGISNULL(1)) PG_RETURN_NULL();
+	r2_pg = (rt_pgraster *) PG_DETOAST_DATUM_SLICE(PG_GETARG_DATUM(1), 0, RT_RASTER_SERIALIZED_T_LEN);
+
+	/* raster */
+	r2 = rt_raster_deserialize(r2_pg, FALSE);
+	if (!r2) {
+		elog(ERROR, "RASTER_intersection_rr2r: Could not deserialize r2");
+		PG_RETURN_NULL();
+	}
+
+	/* mask/image flag */
+	mask = PG_GETARG_BOOL(2) ;
+
+	/* destination SRID (if not specified, use r1) */
+	if (!PG_ARGISNULL(3)) {
+		dest_srid = PG_GETARG_INT32(3) ;
+	} else {
+		dest_srid = rt_raster_get_srid(r1) ;
+	}
+
+	POSTGIS_RT_DEBUG(3, "RASTER_intersection_rr2r: Fetching projections");
+	/* get the projection descriptions */
+	proj_cache = GetPROJ4Cache(fcinfo) ;
+	if (!IsInPROJ4Cache(proj_cache, dest_srid)) {
+		AddToPROJ4Cache(proj_cache, dest_srid, SRID_UNKNOWN) ;
+	}
+	if (!IsInPROJ4Cache(proj_cache, rt_raster_get_srid(r1))) {
+		AddToPROJ4Cache(proj_cache, rt_raster_get_srid(r1), dest_srid) ;
+	}
+	if (!IsInPROJ4Cache(proj_cache, rt_raster_get_srid(r2))) {
+		AddToPROJ4Cache(proj_cache, rt_raster_get_srid(r2), dest_srid) ;
+	}
+	result_srs = GetProjectionFromPROJ4Cache(proj_cache, dest_srid) ;
+	r1_srs = GetProjectionFromPROJ4Cache(proj_cache, rt_raster_get_srid(r1)) ;
+	r2_srs = GetProjectionFromPROJ4Cache(proj_cache, rt_raster_get_srid(r2)) ;
+
+	/* calculate geometry of result raster */
+	POSTGIS_RT_DEBUG(3, "RASTER_intersection_rr2r: Calculating extent of result");
+	result = rt_raster_raster_prep(
+			r1, r1_srs,
+			r2, r2_srs,
+			dest_srid, result_srs,
+			rt_raster_prep_intersection_grid) ;
+
+	/* add a band (bands) to store result */
+	POSTGIS_RT_DEBUG(3, "RASTER_intersection_rr2r: Generating bands for result");
+	if (mask) {
+		rt_raster_generate_new_band(result, PT_1BB, 0., 0, 0., 0) ;
+		pixel_calculator = rt_raster_mask_value ;
+	} else {
+		int nbands = rt_raster_get_num_bands(r1) ;
+		int band ;
+		for (band = 0; band < nbands; band++) {
+			rt_band cur_band = rt_raster_get_band(r1, band) ;
+
+			/* assume that all bands have same nodata value */
+			if (band==0) {
+				hasnodata = rt_band_get_hasnodata_flag(cur_band) ;
+				if (hasnodata) {
+					nodata = rt_band_get_nodata(cur_band) ;
+				}
+			}
+
+			/* create the band */
+			rt_raster_generate_new_band(result,
+					rt_band_get_pixtype(cur_band),
+					0., hasnodata, nodata, band) ;
+		}
+		pixel_calculator = rt_raster_copy_first ;
+	}
+
+	/* iterate over the result raster */
+	POSTGIS_RT_DEBUG(3, "RASTER_intersection_rr2r: Iterating over result");
+	rt_raster_raster_op_engine(
+			r1, pj_get_def(r1_srs,0),
+			r2, pj_get_def(r2_srs,0),
+			result, pj_get_def(result_srs,0),
+			mask,
+			rt_raster_raster_intersection,
+			pixel_calculator) ;
+
+
+	POSTGIS_RT_DEBUG(3, "RASTER_intersection_rr2r: Cleanup and Exit");
+	result_pg = rt_raster_serialize(result);
+	rt_raster_destroy(result);
+	PG_FREE_IF_COPY(r1_pg, 0);
+	PG_FREE_IF_COPY(r2_pg, 0);
+	pj_free(r1_srs) ;
+	pj_free(r2_srs) ;
+	pj_free(result_srs) ;
+
+	if (NULL == result_pg) PG_RETURN_NULL();
+
+	SET_VARSIZE(result_pg, result_pg->size);
+	PG_RETURN_POINTER(result_pg);
+}
+
+/* ---------------------------------------------------------------- */
 /*  Memory allocation / error reporting hooks                       */
 /* ---------------------------------------------------------------- */
 
@@ -6555,16 +6694,16 @@ rt_pg_notice(const char *fmt, va_list ap)
 
 
 /* This is needed by liblwgeom */
-void
-lwgeom_init_allocators(void)
-{
-    /* liblwgeom callback - install PostgreSQL handlers */
-    lwalloc_var = rt_pg_alloc;
-    lwrealloc_var = rt_pg_realloc;
-    lwfree_var = rt_pg_free;
-    lwerror_var = rt_pg_error;
-    lwnotice_var = rt_pg_notice;
-}
+//void
+//lwgeom_init_allocators(void)
+//{
+//    /* liblwgeom callback - install PostgreSQL handlers */
+//    lwalloc_var = rt_pg_alloc;
+//    lwrealloc_var = rt_pg_realloc;
+//    lwfree_var = rt_pg_free;
+//    lwerror_var = rt_pg_error;
+//    lwnotice_var = rt_pg_notice;
+//}
 
 
 void

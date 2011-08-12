@@ -3263,4 +3263,14 @@ CREATE OR REPLACE FUNCTION DropRasterTable(table_name varchar)
 --  END
 -------------------------------------------------------------------
 
+-----------------------------------------------------------------------
+-- Raster Operations
+-----------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION ST_Intersection(r1 raster, r2 raster, 
+									mask boolean DEFAULT TRUE, 
+									srid INT DEFAULT NULL)
+	RETURNS raster 
+    AS 'MODULE_PATHNAME','RASTER_intersection_rr2r'
+    LANGUAGE 'C' IMMUTABLE;
+
 -- COMMIT;

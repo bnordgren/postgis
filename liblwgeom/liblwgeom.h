@@ -2188,6 +2188,9 @@ LWGEOM* lwgeom_snap(const LWGEOM* geom1, const LWGEOM* geom2, double tolerance);
 LWGEOM* lwgeom_sharedpaths(const LWGEOM* geom1, const LWGEOM* geom2);
 
 
+int lwgeom_intersects(LWGEOM *geom1, LWGEOM *geom2) ;
+
+
 /*******************************************************************************
  * PROJ4-dependent extra functions on LWGEOM
  ******************************************************************************/
