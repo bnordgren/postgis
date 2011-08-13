@@ -322,14 +322,13 @@ sc_destroy_mask_evaluator(EVALUATOR *dead)
  * Otherwise, the value from the second input collection is returned.
  *
  * This Evaluator requires that the two inputs have the same number of
- * bands.
+ * bands. (e.g., the same "length" in their returned VALUEs).
  * @{
  */
 
 
-/*
- * Evaluation of a virtual collection composed of two input collections. The
- * returned value will be the value of input1 if possible and input2 if not.
+/**
+ * Utility function which
  */
 VALUE *
 first_value_util(EVALUATOR *eval,
@@ -364,7 +363,7 @@ first_value_util(EVALUATOR *eval,
 		return NULL ;
 	}
 
-	if (inc1(sc->input1, point)) {
+	if (inc1(sc->input1->inclusion, point)) {
 		result1 = sc_evaluate(sc->input1, point) ;
 		have_value = (result1 != NULL) ;
 		/* populate the result with the result from the first input */
