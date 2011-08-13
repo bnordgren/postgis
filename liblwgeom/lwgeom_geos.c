@@ -807,8 +807,8 @@ int lwgeom_intersects(LWGEOM *geom1, LWGEOM *geom2)
 	{
 		box1 = geom1->bbox ;
 		box2 = geom2->bbox ;
-		if ( ( box2.xmax < box1.xmin ) || ( box2.xmin > box1.xmax ) ||
-		        ( box2.ymax < box1.ymin ) || ( box2.ymin > box1.ymax ) )
+		if ( ( box2->xmax < box1->xmin ) || ( box2->xmin > box1->xmax ) ||
+		     ( box2->ymax < box1->ymin ) || ( box2->ymin > box1->ymax ) )
 		{
 			return 0;
 		}
