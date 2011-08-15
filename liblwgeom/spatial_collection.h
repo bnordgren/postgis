@@ -110,6 +110,23 @@ void sc_destroy(SPATIAL_COLLECTION *sc) ;
 VALUE *val_create(int num_values);
 void val_destroy(VALUE *val) ;
 
+/* Implementations of the includes interface */
+INCLUDES *sc_create_geometry_includes(LWGEOM *geom) ;
+void sc_destroy_geometry_includes(INCLUDES *dead) ;
+
+INCLUDES *sc_create_relation_includes(RELATION_FN relation);
+void sc_destroy_relation_includes(INCLUDES *dead) ;
+
+/* Implementations of the evaluator interface */
+EVALUATOR *sc_create_mask_evaluator(double true_val, double false_val, int index);
+void sc_destroy_mask_evaluator(EVALUATOR *dead) ;
+
+EVALUATOR *sc_create_first_value_evaluator(void);
+void sc_destroy_first_value_evaluator(EVALUATOR *dead);
+
+/* implementations of the spatial collection interface */
+SPATIAL_COLLECTION *sc_create_geometry_wrapper(LWGEOM *geom, double inside, double outside);
+void sc_destroy_geometry_wrapper(SPATIAL_COLLECTION *dead) ;
 
 
 #endif /* SPATIAL_COLLECTION_H */

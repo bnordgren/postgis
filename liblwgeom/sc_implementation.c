@@ -322,27 +322,38 @@ sc_destroy_mask_evaluator(EVALUATOR *dead)
  * Otherwise, the value from the second input collection is returned.
  *
  * This Evaluator requires that the two inputs have the same number of
- * bands. (e.g., the same "length" in their returned VALUEs).
+ * bands. (e.g., the same "length" in their returned VALUEs). It also
+ * assumes that the coordinate system for both input collections is the
+ * same as the coordinate system for this object. For the evaluate and
+ * includes functions, this means that the functions expect points in
+ * the same srid. For evaluateIndex and includesIndex, this means that
+ * the same grid definition applies to both inputs and the result.
  * @{
  */
 
 
 /**
- * Utility function which
+ * Utility function which embodies the logic to select a return value
+ * from two inputs given a query point.
+ *
+ * @param eval pointer to the evaluator utility.
+ * @param point the point for which a VALUE is needed.
+ * @param index a true value indicates that point is an index into the raster
  */
 VALUE *
 first_value_util(EVALUATOR *eval,
 		LWPOINT *point,
-		INCLUDES_FN *inc1,
-		INCLUDES_FN *inc2)
+		int index)
 {
 	VALUE *result, *result_in1, *result_in2 ;
 	SPATIAL_COLLECTION *sc ;
+	INCLUDES_FN inc1, inc2 ;
+	EVALUATOR_FN eval1, eval2 ;
 	int have_value ;
 	int i ;
 
 	/* check for naughty users */
-	if (eval == NULL || point == NULL || inc1 == NULL || inc2==NULL) return NULL;
+	if (eval == NULL || point == NULL) return NULL;
 	if (eval->collection == NULL) return NULL ;
 	if (eval->result == NULL) return NULL ;
 	if (eval->result->length != 1) return NULL ;
@@ -355,6 +366,26 @@ first_value_util(EVALUATOR *eval,
 	if (!sc_hasTwoInputs(sc)) return NULL  ;
 	if (sc->input1->evaluator == NULL) return NULL ;
 	if (sc->input2->evaluator == NULL) return NULL  ;
+	if (sc->input1->inclusion == NULL) return NULL ;
+	if (sc->input2->inclusion == NULL) return NULL  ;
+
+	/* get the evaluator and includes functions for the inputs */
+	if (!index) {
+		eval1 = sc->input1->evaluator->evaluate ;
+		eval2 = sc->input2->evaluator->evaluate ;
+		inc1  = sc->input1->inclusion->includes ;
+		inc2  = sc->input2->inclusion->includes ;
+	} else {
+		eval1 = sc->input1->evaluator->evaluateIndex ;
+		eval2 = sc->input2->evaluator->evaluateIndex ;
+		inc1  = sc->input1->inclusion->includesIndex ;
+		inc2  = sc->input2->inclusion->includesIndex ;
+	}
+
+	/* ensure that the function pointers are all set */
+	if ( (eval1 == NULL) || (eval2 == NULL) ||
+		 (inc1 == NULL)  || (inc2 == NULL) )
+		return NULL ;
 
 	/* ensure all the results have the same number of values */
 	if ( !( (result->length != sc->input1->evaluator->result->length) &&
@@ -364,7 +395,7 @@ first_value_util(EVALUATOR *eval,
 	}
 
 	if (inc1(sc->input1->inclusion, point)) {
-		result1 = sc_evaluate(sc->input1, point) ;
+		result1 = eval1(sc->input1->evaluator, point) ;
 		have_value = (result1 != NULL) ;
 		/* populate the result with the result from the first input */
 		if (have_value) {
@@ -374,13 +405,13 @@ first_value_util(EVALUATOR *eval,
 		}
 	}
 
-	if (!have_value && inc2(sc->input2, point)) {
-		result2 = sc_evaluate(sc->input2, point) ;
+	if (!have_value && inc2(sc->input2->inclusion, point)) {
+		result2 = eval2(sc->input2->evaluator, point) ;
 		have_value = (result2 != NULL) ;
 		/* populate the result with the result from the first input */
 		if (have_value) {
 			for (i=0; i<result->length; i++) {
-				result->data[i] = result1->data[i] ;
+				result->data[i] = result2->data[i] ;
 			}
 		}
 	}
@@ -390,39 +421,109 @@ first_value_util(EVALUATOR *eval,
 	return result ;
 }
 
+/**
+ * Implementation of EVALUATOR_FN for the case where point
+ * represents some real world coordinate. It will rely on
+ * the includes() and evaluate() functions of the inputs to
+ * determine the result.
+ */
 VALUE *
 first_value_evaluator(EVALUATOR *eval, LWPOINT *point)
 {
-	INCLUDE_FN *inc1 ;
-	INCLUDE_FN *inc2 ;
+	return first_value_util(eval, point, 0) ;
+}
 
-	/* check for naughty users */
-	if (eval == NULL || point == NULL) return NULL  ;
-	if (eval->collection == NULL) return NULL ;
-	if (!sc_hasTwoInputs(eval->collection)) return NULL ;
+/**
+ * Implementation of EVALUATOR_FN for the case where point
+ * represents grid coordinates. It will rely on
+ * the includesIndex() and evaluateIndex() functions of the inputs to
+ * determine the result.
+ */
+VALUE *
+first_value_evaluatorIndex(EVALUATOR *eval, LWPOINT *point)
+{
+	return first_value_util(eval, point, 1) ;
+}
 
-	inc1 = eval->collection->input1->inclusion->includes ;
-	inc2 = eval->collection->input2->inclusion->includes ;
+/**
+ * Creates an instance of the Evaluator interface which
+ * will return a value from one of the two inputs.
+ */
+EVALUATOR *
+sc_create_first_value_evaluator(void)
+{
+	return eval_create(NULL, first_value_evaluator, first_value_evaluatorIndex) ;
+}
 
-	return first_value_util(eval, point, inc1, inc2) ;
+/**
+ * Destroys objects created by sc_create_first_value_evaluator. Do
+ * not pass any other objects to this function.
+ */
+void
+sc_destroy_first_value_evaluator(EVALUATOR *dead)
+{
+	eval_destroy(dead) ;
 }
 
 /** @} */ /* end of firsval_evaluator_i documentation group */
 
 /** @} */ /* end of evaluator_i documentation group */
 
-/*
- * Implementations of the "SpatialCollection" interface.
- * ===========================================================================
+/**
+ * \defgroup spatial_collection_i Implementations of the "SpatialCollection" interface.
+ *
+ * @{
  */
 
 /**
- * Single geometry wrapper: a "collection" backed by a single LWGEOM object.
+ * \defgroup geo_wrap_collection A "collection" backed by a single LWGEOM object.
  * This collection uses geometry_includes for inclusion and mask_evaluator
+ * for evaluation.
+ * @{
+ */
+
+/**
+ * Constructor to create a geometry wrapper collection object.
  *
  * @param geom the geometry to wrap
- * @
+ * @param inside the "value" associated with the geometry's interior
+ * @param outside the "value" associated with the geometry's exterior
  */
 SPATIAL_COLLECTION *
 sc_create_geometry_wrapper(LWGEOM *geom, double inside, double outside)
+{
+	INCLUDES *inclusion ;
+	EVALUATOR *evaluator ;
+
+	inclusion = sc_create_geometry_includes(geom) ;
+	evaluator = sc_create_mask_evaluator(inside, outside, 0) ;
+
+	if ( inclusion == NULL || evaluator==NULL )
+	{
+		if (inclusion != NULL ) sc_destroy_geometry_includes(inclusion) ;
+		if (evaluator != NULL ) sc_destroy_mask_evaluator(evaluator) ;
+		return NULL ;
+	}
+
+	return sc_create(SPATIAL_ONLY, NULL, inclusion, evaluator) ;
+}
+
+/**
+ * Destroys an instance of the geometry wrapper spatial collection.
+ * Only pass items in which were created with the sc_create_geometry_wrapper
+ * function.
+ */
+void
+sc_destroy_geometry_wrapper(SPATIAL_COLLECTION *dead)
+{
+	if (dead == NULL) return ;
+
+	sc_destroy_geometry_includes(dead->inclusion) ;
+	sc_destroy_mask_evaluator(dead->evaluator) ;
+	sc_destroy(dead) ;
+}
+
+/** @} */  /* end of geo_wrap_collection documentation group */
+
+/** @} */  /* end of spatial_collection_i documentation group */
 
