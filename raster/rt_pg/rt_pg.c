@@ -47,7 +47,6 @@
 #include <executor/executor.h> /* for GetAttributeByName in RASTER_reclass */
 #include <funcapi.h>
 
-/*#include "lwgeom_pg.h"*/
 #include "liblwgeom.h"
 #include "lwgeom_transform.h"
 #include "rt_pg.h"
@@ -66,12 +65,6 @@
 #define MAX_DBL_CHARLEN (3 + DBL_MANT_DIG - DBL_MIN_EXP)
 #define MAX_INT_CHARLEN 32
 
-/*
- * This is required for builds against pgsql 8.2
- */
-#ifdef PG_MODULE_MAGIC
-PG_MODULE_MAGIC;
-#endif
 
 /* Internal funcs */
 static char * replace(const char *str, const char *oldstr, const char *newstr,
