@@ -358,7 +358,14 @@ AC_SUBST([PGSQL_FE_LDFLAGS])
 AC_SUBST([PGSQL_FE_CPPFLAGS])
 
 dnl Extract the include flags for the backend (libpgcommon)
-PGSQL_BE_CPPFLAGS=-I`$PGCONFIG --includedir-server`
+PGSRV_INC=`$PGCONFIG --includedir-server`
+PGSQL_BE_CPPFLAGS="-I${PGSRV_INC}"
+dnl Add $PGSRV_INC/port/win32 to MinGW build to pick up netdb.h
+case $host in
+	*mingw32*)
+		PGSQL_BE_CPPFLAGS="${PGSQL_BE_CPPFLAGS} -I${PGSRV_INC}/port/win32"
+		;;
+esac
 
 AC_SUBST([PGSQL_BE_CPPFLAGS])
 
@@ -785,7 +792,7 @@ if test "x$RASTER" = "xraster"; then dnl # {
     dnl ================================================
     POSTGIS_SRCDIR=`$PWDREGRESS`
     LIBLWGEOM_CFLAGS="-I${POSTGIS_SRCDIR}/liblwgeom"
-    LIBLWGEOM_LDFLAGS="${POSTGIS_SRCDIR}/liblwgeom/liblwgeom.a"
+    LIBLWGEOM_LDFLAGS="${POSTGIS_SRCDIR}/liblwgeom/.libs/liblwgeom.a"
     LIBPGCOMMON_CFLAGS="-I${POSTGIS_SRCDIR}/libpgcommon"
     LIBPGCOMMON_LDFLAGS="${POSTGIS_SRCDIR}/libpgcommon/libpgcommon.a"
 
