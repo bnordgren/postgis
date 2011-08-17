@@ -196,6 +196,30 @@ struct rt_raster_t {
 
 };
 
+struct rt_extband_t {
+    uint8_t bandNum;
+    char* path; /* externally owned ? */
+};
+
+struct rt_band_t {
+    rt_pixtype pixtype;
+    int32_t offline;
+    uint16_t width;
+    uint16_t height;
+    int32_t hasnodata; /* a flag indicating if this band contains nodata values */
+    int32_t isnodata;   /* a flag indicating if this band is filled only with
+                           nodata values */
+    double nodataval; /* int will be converted ... */
+    int32_t ownsData; /* XXX mloskot: its behaviour needs to be documented */
+
+    union {
+        void* mem; /* actual data, externally owned */
+        struct rt_extband_t offline;
+    } data;
+
+};
+
+
 /* WKT string representing each polygon in WKT format acompagned by its
 correspoding value */
 struct rt_geomval_t {
