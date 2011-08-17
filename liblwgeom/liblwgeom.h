@@ -47,14 +47,6 @@
 #define LW_FAILURE 0
 #define LW_SUCCESS 1
 
-/*
-* this will change to NaN when I figure out how to
-* get NaN in a platform-independent way
-*/
-#define NO_VALUE 0.0
-#define NO_Z_VALUE NO_VALUE
-#define NO_M_VALUE NO_VALUE
-
 /**
 * LWTYPE numbers, used internally by PostGIS
 */
@@ -1415,10 +1407,6 @@ extern int geometry_type_from_string(const char *str, int *type, int *z, int *m)
 #define LW_MAX(a,b) ((a) >	(b) ? (a) : (b))
 #define LW_MIN(a,b) ((a) <= (b) ? (a) : (b))
 #define LW_ABS(a)   ((a) <	(0) ? -(a) : (a))
-
-/* for the measure functions*/
-#define DIST_MAX		-1
-#define DIST_MIN		1
 
 /* general utilities
 	2D*/
