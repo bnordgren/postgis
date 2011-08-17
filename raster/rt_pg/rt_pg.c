@@ -6434,7 +6434,7 @@ Datum RASTER_intersection_rr2r(PG_FUNCTION_ARGS)
 
 	/* r1 is null, return null */
 	if (PG_ARGISNULL(0)) PG_RETURN_NULL();
-	r1_pg = (rt_pgraster *) PG_DETOAST_DATUM_SLICE(PG_GETARG_DATUM(0), 0, RT_RASTER_SERIALIZED_T_LEN);
+	r1_pg = (rt_pgraster *) PG_DETOAST_DATUM_SLICE(PG_GETARG_DATUM(0), 0, sizeof(struct rt_raster_serialized_t));
 
 	/* raster */
 	r1 = rt_raster_deserialize(r1_pg, FALSE);
@@ -6445,7 +6445,7 @@ Datum RASTER_intersection_rr2r(PG_FUNCTION_ARGS)
 
 	/* r2 is null, return null */
 	if (PG_ARGISNULL(1)) PG_RETURN_NULL();
-	r2_pg = (rt_pgraster *) PG_DETOAST_DATUM_SLICE(PG_GETARG_DATUM(1), 0, RT_RASTER_SERIALIZED_T_LEN);
+	r2_pg = (rt_pgraster *) PG_DETOAST_DATUM_SLICE(PG_GETARG_DATUM(1), 0, sizeof(struct rt_raster_serialized_t));
 
 	/* raster */
 	r2 = rt_raster_deserialize(r2_pg, FALSE);
