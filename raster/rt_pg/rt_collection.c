@@ -1,6 +1,5 @@
 #include "liblwgeom.h"
 #include "rt_api.h"
-#include "rt_core_internal.h"
 #include "rt_collection.h"
 
 /*- spatial operations (spatial part) --------------------------------*/
