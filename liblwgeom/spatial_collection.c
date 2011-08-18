@@ -3,6 +3,7 @@
 
 SPATIAL_COLLECTION *
 sc_create(COLLECTION_TYPE t,
+		  int32 srid,
 		  PARAMETERS *params,
 		  INCLUDES *inc,
 		  EVALUATOR *eval)
@@ -20,6 +21,7 @@ sc_create(COLLECTION_TYPE t,
 
 		/* copy provided pointers to the collection struct */
 		sc->type = t ;
+		sc->srid = srid ;
 		sc->params = params ;
 		sc->inclusion = inc ;
 		sc->evaluator = eval ;
@@ -230,4 +232,11 @@ sc_hasTwoInputs(SPATIAL_COLLECTION *sc)
 {
 	if (sc == NULL) return 0 ;
 	return (sc->input1 != NULL) && (sc->input2 != NULL) ;
+}
+
+int32
+sc_get_srid(SPATIAL_COLLECTION *sc)
+{
+	if (sc == NULL) return -1 ;
+	return sc->srid ;
 }

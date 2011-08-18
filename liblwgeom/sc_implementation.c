@@ -1,5 +1,6 @@
 #include "liblwgeom.h"
 #include "spatial_collection.h"
+#include "proj_api.h"
 
 
 /**
@@ -58,6 +59,74 @@ sc_destroy_geometry_includes(INCLUDES *dead)
 
 /** @} */ /* sc_geom_include documentation group */
 
+/**
+ * \defgroup proj_wrap_include An includes implementation which reprojects the input coordinates.
+ *
+ * This is designed to be used as the "includes" component of a reprojecting
+ * collection wrapper.
+ * @{
+ */
+
+struct proj_wrap_inc_s {
+	INCLUDES *wrapped ;
+	projPJ source ;
+	projPJ dest ;
+};
+
+int
+projection_includes(INCLUDES *inc, LWPOINT *point)
+{
+	LWGEOM *point2d_g ;
+	LWPOINT *point2d ;
+	struct proj_wrap_inc_s *params ;
+	int result ;
+
+	if (inc == NULL || inc->params == NULL || point == NULL) return 0 ;
+	params = (struct proj_wrap_inc_s *)(inc->params) ;
+
+	/* copy the point so the outside world doesn't see it change. */
+	point2d = lwgeom_make2d(point->srid,
+			     lwpoint_get_x(point), lwpoint_get_y(point));
+
+	/* note that this is a cast, not a copy */
+	point2d_g = lwpoint_as_lwgeom(point2d) ;
+
+	/* project the point */
+	lwgeom_transform(point2d_g, params->source, params->dest) ;
+
+	/* now call the wrapped object with the projected coordinates */
+	result = params->wrapped->includes(params->wrapped, point2d) ;
+	lwpoint_free(point2d) ;
+
+	return result ;
+}
+
+INCLUDES *
+sc_create_projection_includes(INCLUDES *wrapped, projPJ source, projPJ dest)
+{
+	struct proj_wrap_inc_s *params ;
+
+	params = (struct proj_wrap_inc_s *)lwalloc(sizeof(struct proj_wrap_inc_s));
+	if (params == NULL) return NULL ;
+
+	/* initialize the parameters object */
+	params->wrapped = wrapped ;
+	params->source = source ;
+	params->dest = dest ;
+
+	/* create the includes object */
+	return inc_create((PARAMETERS *)params, projection_includes, NULL);
+}
+
+void
+sc_destroy_projection_includes(INCLUDES *dead)
+{
+	if (dead == NULL) return ;
+	lwfree(dead->params) ;
+	inc_destroy(dead) ;
+}
+
+/** @} */ /* end of proj_wrap_includes documentation group */
 
 /**
  * \defgroup sc_relation_include Inclusion for a combination of two collections.
@@ -69,6 +138,7 @@ sc_destroy_geometry_includes(INCLUDES *dead)
  * (e.g., either input may be backed by a geometry, geometry-value, or a raster.)
  * @{
  */
+
 
 /**
  * A RELATION_FN which evaluates the "intersection" of the two inputs.
@@ -312,6 +382,74 @@ sc_destroy_mask_evaluator(EVALUATOR *dead)
 
 /** @} */ /* end of mask_evaluator_i documentation group */
 
+/**
+ * \defgroup proj_wrap_eval An evaluator implementation which reprojects the query point
+ *
+ * @{
+ */
+
+struct proj_wrap_eval_s {
+	EVALUATOR *wrapped ;
+	projPJ source ;
+	projPJ dest ;
+};
+
+VALUE *
+projection_evaluator(EVALUATOR *eval, LWPOINT *point)
+{
+	LWGEOM *point2d_g ;
+	LWPOINT *point2d ;
+	struct proj_wrap_inc_s *params ;
+	VALUE *result ;
+
+	if (eval == NULL || eval->params == NULL || point == NULL) return 0 ;
+	params = (struct proj_wrap_eval_s *)(eval->params) ;
+
+	/* copy the point so the outside world doesn't see it change. */
+	point2d = lwgeom_make2d(point->srid,
+			     lwpoint_get_x(point), lwpoint_get_y(point));
+
+	/* note that this is a cast, not a copy */
+	point2d_g = lwpoint_as_lwgeom(point2d) ;
+
+	/* project the point */
+	lwgeom_transform(point2d_g, params->source, params->dest) ;
+
+	/* now call the wrapped object with the projected coordinates */
+	result = params->wrapped->evaluate(params->wrapped, point2d) ;
+	lwpoint_free(point2d) ;
+
+	return result ;
+}
+
+EVALUATOR *
+sc_create_projection_eval(EVALUATOR *wrapped, projPJ source, projPJ dest)
+{
+	struct proj_wrap_eval_s *params ;
+
+	params = (struct proj_wrap_eval_s *)lwalloc(sizeof(struct proj_wrap_eval_s));
+	if (params == NULL) return NULL ;
+
+	/* initialize the parameters object */
+	params->wrapped = wrapped ;
+	params->source = source ;
+	params->dest = dest ;
+
+	/* create the includes object */
+	return inc_create((PARAMETERS *)params, projection_evaluator, NULL);
+}
+
+void
+sc_destroy_projection_eval(EVALUATOR *dead)
+{
+	if (dead == NULL) return ;
+	lwfree(dead->params) ;
+	eval_destroy(dead) ;
+}
+
+
+/** @} */ /* end of proj_wrap_eval documentation group */
+
 
 /**
  * \defgroup firstval_evaluator_i Evaluator to return a value from one of the collection's two inputs.
@@ -490,7 +628,7 @@ sc_destroy_first_value_evaluator(EVALUATOR *dead)
  * @param outside the "value" associated with the geometry's exterior
  */
 SPATIAL_COLLECTION *
-sc_create_geometry_wrapper(LWGEOM *geom, double inside, double outside)
+sc_create_geometry_wrapper(LWGEOM *geom, int32 srid, double inside, double outside)
 {
 	INCLUDES *inclusion ;
 	EVALUATOR *evaluator ;
@@ -505,7 +643,7 @@ sc_create_geometry_wrapper(LWGEOM *geom, double inside, double outside)
 		return NULL ;
 	}
 
-	return sc_create(SPATIAL_ONLY, NULL, inclusion, evaluator) ;
+	return sc_create(SPATIAL_ONLY, srid, NULL, inclusion, evaluator) ;
 }
 
 /**
@@ -524,6 +662,78 @@ sc_destroy_geometry_wrapper(SPATIAL_COLLECTION *dead)
 }
 
 /** @} */  /* end of geo_wrap_collection documentation group */
+
+/**
+ * \defgroup proj_wrap_collection Collection wrapper which reprojects coordinates.
+ *
+ * This collection implementation intercepts and reprojects the
+ * real-world coordinates passed to the evaluate and includes methods.
+ * At creation time, the user declares the projection in which they
+ * will supply coordinates. Whenever the evaluate or includes methods
+ * are called, the point is projected from the declared projection
+ * to the projection expected by the collection which this object is
+ * wrapping.
+ *
+ * @{
+ */
+
+struct proj_wrap_s {
+	SPATIAL_COLLECTION *wrapped ;
+	projPJ source ;
+	projPJ dest ;
+};
+
+SPATIAL_COLLECTION *
+sc_create_projection_wrapper(SPATIAL_COLLECTION *wrapped,
+		                     int32 desired_srid,
+		                     projPJ wrapped_proj, projPJ desired_proj )
+{
+	INCLUDES *inclusion ;
+	EVALUATOR *evaluator ;
+	struct proj_wrap_s *params ;
+
+	if (wrapped == NULL) return NULL ;
+
+	params = (struct proj_wrap_s *)lwalloc(sizeof(struct proj_wrap_s)) ;
+	if (params == NULL) return NULL ;
+
+	/* initialize the parameters */
+	params->wrapped = wrapped ;
+	params->source  = desired_proj ;
+	params->dest    = wrapped_proj ;
+
+	inclusion = sc_create_projection_includes(wrapped->inclusion,
+			         desired_proj, wrapped_proj) ;
+	evaluator = sc_create_projection_eval(wrapped->evaluator,
+			         desired_proj, wrapped_proj) ;
+
+	if ( inclusion == NULL || evaluator==NULL )
+	{
+		if (inclusion != NULL ) sc_destroy_projection_includes(inclusion) ;
+		if (evaluator != NULL ) sc_destroy_projection_eval(evaluator) ;
+		return NULL ;
+	}
+
+	return sc_create(wrapped->type, desired_srid,
+			         (PARAMETERS *)params, inclusion, evaluator) ;
+}
+
+void
+sc_destroy_projection_wrapper(SPATIAL_COLLECTION *dead)
+{
+	if (dead == NULL) return ;
+
+	if (dead->params != NULL) {
+		lwfree(dead->params) ;
+	}
+	sc_destroy_projection_includes(dead->inclusion) ;
+	sc_destroy_projection_eval(dead->evaluator) ;
+	sc_destroy(dead) ;
+}
+
+
+
+/** @} */  /* end of proj_wrap_collection documentation group */
 
 /** @} */  /* end of spatial_collection_i documentation group */
 
