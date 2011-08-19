@@ -25,7 +25,7 @@ Datum transform(PG_FUNCTION_ARGS)
 	projPJ input_pj, output_pj;
 	int32 result_srid ;
 
-	PROJ4Cache *proj_cache = NULL;
+	PROJ4PortalCache *PROJ4Cache = NULL;
 
 
 	result_srid = PG_GETARG_INT32(1);
@@ -44,7 +44,8 @@ Datum transform(PG_FUNCTION_ARGS)
 	}
 
 	/* Set the search path if we haven't already */
-	SetPROJ4LibPath();
+	if (!IsPROJ4LibPathSet)
+		SetPROJ4LibPath();
 
 	/*
 	 * If input SRID and output SRID are equal, return geometry
@@ -57,21 +58,21 @@ Datum transform(PG_FUNCTION_ARGS)
 	}
 
 	/* get or initialize the cache for this round */
-	proj_cache = GetPROJ4Cache(fcinfo) ;
+	PROJ4Cache = GetPROJ4SRSCache(fcinfo) ;
 
 	/* Add the output srid to the cache if it's not already there */
-	if (!IsInPROJ4Cache(proj_cache, result_srid))
-		AddToPROJ4Cache(proj_cache, result_srid, pglwgeom_get_srid(geom));
+	if (!IsInPROJ4SRSCache(PROJ4Cache, result_srid))
+		AddToPROJ4SRSCache(PROJ4Cache, result_srid, pglwgeom_get_srid(geom));
 
 	/* Get the output projection */
-	output_pj = GetProjectionFromPROJ4Cache(proj_cache, result_srid);
+	output_pj = GetProjectionFromPROJ4SRSCache(PROJ4Cache, result_srid);
 
 	/* Add the input srid to the cache if it's not already there */
-	if (!IsInPROJ4Cache(proj_cache, pglwgeom_get_srid(geom)))
-		AddToPROJ4Cache(proj_cache, pglwgeom_get_srid(geom), result_srid);
+	if (!IsInPROJ4SRSCache(PROJ4Cache, pglwgeom_get_srid(geom)))
+		AddToPROJ4SRSCache(PROJ4Cache, pglwgeom_get_srid(geom), result_srid);
 
 	/* Get the input projection	 */
-	input_pj = GetProjectionFromPROJ4Cache(proj_cache, pglwgeom_get_srid(geom));
+	input_pj = GetProjectionFromPROJ4SRSCache(PROJ4Cache, pglwgeom_get_srid(geom));
 
 
 	/* now we have a geometry, and input/output PJ structs. */
@@ -132,7 +133,8 @@ Datum transform_geom(PG_FUNCTION_ARGS)
 	}
 
 	/* Set the search path if we haven't already */
-	SetPROJ4LibPath();
+	if (!IsPROJ4LibPathSet)
+		SetPROJ4LibPath();
 
 	/* Read the arguments */
 	input_proj4_text  = (PG_GETARG_TEXT_P(1));
