@@ -96,11 +96,13 @@ SA_HEADERS = \
 
 all: liblwgeom.la
 
-# nothing to install or uninstall
-install uninstall:
+install: install-liblwgeom
+
+uninstall: uninstall-liblwgeom
 
 install-liblwgeom: liblwgeom.la
 	$(LIBTOOL) --mode=install $(INSTALL) liblwgeom.la "$(DESTDIR)$(libdir)/liblwgeom.la"
+	$(INSTALL) liblwgeom.h "$(DESTDIR)$(includedir)/liblwgeom.h"
 
 uninstall-liblwgeom: 
 	$(LIBTOOL) --mode=uninstall rm -f "$(DESTDIR)$(libdir)/liblwgeom.la"
@@ -122,8 +124,8 @@ clean:
 	rm -f liblwgeom.la
 	rm -rf .libs
 
-# Nothing specific in distclean (will be done by clean)
-distclean:
+distclean: clean
+	rm -f liblwgeom.h
 
 check: liblwgeom.la
 	make -C cunit check
