@@ -25,7 +25,7 @@ Datum transform(PG_FUNCTION_ARGS)
 	projPJ input_pj, output_pj;
 	int32 result_srid ;
 
-	Proj4Cache *proj_cache = NULL;
+	PROJ4Cache *proj_cache = NULL;
 
 
 	result_srid = PG_GETARG_INT32(1);
