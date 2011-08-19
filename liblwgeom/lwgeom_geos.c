@@ -761,6 +761,195 @@ lwgeom_union(const LWGEOM *geom1, const LWGEOM *geom2)
 	return result;
 }
 
+int lwgeom_intersects(LWGEOM *geom1, LWGEOM *geom2)
+{
+	int result;
+	int type1, type2, polytype;
+	GBOX *box1, *box2 ;
+	LWPOINT *point;
+	LWGEOM *lwgeom;
+#if 0
+	MemoryContext old_context;
+	RTREE_POLY_CACHE *poly_cache;
+/* #ifdef PREPARED_GEOM */
+	PrepGeomCache *prep_cache;
+#endif
+
+	/* can't be null */
+	if ( (geom1==NULL) || (geom2==NULL) ) {
+		return -1 ;
+	}
+	/* collections not allowed */
+	if (lwgeom_is_collection(geom1) || lwgeom_is_collection(geom2)) {
+		return -1 ;
+	}
+	/* either they both have SRIDS or they both don't */
+	if ((  TYPE_HASSRID(geom1->type) && !TYPE_HASSRID(geom2->type)) ||
+		( !TYPE_HASSRID(geom1->type) &&  TYPE_HASSRID(geom2->type))){
+		return -1 ;
+	}
+	/* if they have SRID's, they both have to be the same */
+	if ( TYPE_HASSRID(geom1->type) && (geom1->srid != geom2->srid)) {
+		return -1 ;
+	}
+
+	/* A.Intersects(Empty) == FALSE */
+	/* Empty.Intersects(B) == FALSE */
+	if ( lwgeom_is_empty(geom1) || lwgeom_is_empty(geom2) )
+		return 0;
+
+	/*
+	 * short-circuit 1: if geom2 bounding box does not overlap
+	 * geom1 bounding box we can prematurely return FALSE.
+	 * Do the test IFF BOUNDING BOX AVAILABLE.
+	 */
+	if ( TYPE_HASBBOX(geom1->type) && TYPE_HASBBOX(geom2->type))
+	{
+		box1 = geom1->bbox ;
+		box2 = geom2->bbox ;
+		if ( ( box2->xmax < box1->xmin ) || ( box2->xmin > box1->xmax ) ||
+		     ( box2->ymax < box1->ymin ) || ( box2->ymin > box1->ymax ) )
+		{
+			return 0;
+		}
+	}
+
+/*
+ * This next bit has to disappear until "polygon caching" finds its way
+ * to lwgeom.
+ */
+#if 0
+	/*
+	 * short-circuit 2: if the geoms are a point and a polygon,
+	 * call the point_outside_polygon function.
+	 */
+	type1 = TYPE_GETTYPE(geom1->type);
+	type2 = TYPE_GETTYPE(geom2->type);
+	if ( (type1 == POINTTYPE && (type2 == POLYGONTYPE || type2 == MULTIPOLYGONTYPE)) ||
+	        (type2 == POINTTYPE && (type1 == POLYGONTYPE || type1 == MULTIPOLYGONTYPE)))
+	{
+		LWDEBUG(3, "Point in Polygon test requested...short-circuiting.");
+
+		if ( type1 == POINTTYPE )
+		{
+			point = lwgeom_as_lwpoint(geom1);
+			lwgeom = geom2;
+			polytype = type2;
+		}
+		else
+		{
+			point = lwgeom_as_lwpoint(geom2);
+			lwgeom = geom1;
+			polytype = type1;
+		}
+
+
+		/*
+		 * Switch the context to the function-scope context,
+		 * retrieve the appropriate cache object, cache it for
+		 * future use, then switch back to the local context.
+		 */
+		old_context = MemoryContextSwitchTo(fcinfo->flinfo->fn_mcxt);
+		poly_cache = retrieveCache(lwgeom, serialized_poly, fcinfo->flinfo->fn_extra);
+		fcinfo->flinfo->fn_extra = poly_cache;
+		MemoryContextSwitchTo(old_context);
+
+		if ( poly_cache->ringIndices )
+		{
+			result = point_in_multipolygon_rtree(poly_cache->ringIndices, poly_cache->polyCount, poly_cache->ringCounts, point);
+		}
+		else if ( polytype == POLYGONTYPE )
+		{
+			result = point_in_polygon((LWPOLY*)lwgeom, point);
+		}
+		else if ( polytype == MULTIPOLYGONTYPE )
+		{
+			result = point_in_multipolygon((LWMPOLY*)lwgeom, point);
+		}
+		else
+		{
+			/* Gulp! Should not be here... */
+			elog(ERROR,"Type isn't poly or multipoly!");
+			return -1;
+		}
+
+		PG_FREE_IF_COPY(geom1, 0);
+		PG_FREE_IF_COPY(geom2, 1);
+		lwgeom_release((LWGEOM *)lwgeom);
+		lwgeom_release((LWGEOM *)point);
+		if ( result != -1 ) /* not outside */
+		{
+			return 1;
+		}
+		else
+		{
+			return 0;
+		}
+	}
+#endif
+
+	initGEOS(lwnotice, lwgeom_geos_error);
+/* #ifdef PREPARED_GEOM */
+#if 0
+	prep_cache = GetPrepGeomCache( fcinfo, geom1, geom2 );
+
+	if ( prep_cache && prep_cache->prepared_geom )
+	{
+		if ( prep_cache->argnum == 1 )
+		{
+			GEOSGeometry *g = (GEOSGeometry *)POSTGIS2GEOS(geom2);
+			if ( 0 == g )   /* exception thrown at construction */
+			{
+				lwerror("Geometry could not be converted to GEOS: %s", lwgeom_geos_errmsg);
+				PG_RETURN_NULL();
+			}
+			result = GEOSPreparedIntersects( prep_cache->prepared_geom, g);
+			GEOSGeom_destroy(g);
+		}
+		else
+		{
+			GEOSGeometry *g = (GEOSGeometry *)POSTGIS2GEOS(geom1);
+			if ( 0 == g )   /* exception thrown at construction */
+			{
+				lwerror("Geometry could not be converted to GEOS: %s", lwgeom_geos_errmsg);
+				PG_RETURN_NULL();
+			}
+			result = GEOSPreparedIntersects( prep_cache->prepared_geom, g);
+			GEOSGeom_destroy(g);
+		}
+	}
+	else
+#endif
+	{
+		GEOSGeometry *g1;
+		GEOSGeometry *g2;
+		g1 = (GEOSGeometry *)LWGEOM2GEOS(geom1);
+		if ( 0 == g1 )   /* exception thrown at construction */
+		{
+			lwerror("First argument geometry could not be converted to GEOS: %s", lwgeom_geos_errmsg);
+			return -1;
+		}
+		g2 = (GEOSGeometry *)LWGEOM2GEOS(geom2);
+		if ( 0 == g2 )   /* exception thrown at construction */
+		{
+			lwerror("Second argument geometry could not be converted to GEOS: %s", lwgeom_geos_errmsg);
+			GEOSGeom_destroy(g1);
+			return -1;
+		}
+		result = GEOSIntersects( g1, g2);
+		GEOSGeom_destroy(g1);
+		GEOSGeom_destroy(g2);
+	}
+
+	if (result == 2)
+	{
+		lwerror("GEOSIntersects: %s", lwgeom_geos_errmsg);
+		return -1; /* never get here */
+	}
+
+	return result ;
+}
+
 
 GEOSGeometry*
 LWGEOM_GEOS_buildArea(const GEOSGeometry* geom_in)

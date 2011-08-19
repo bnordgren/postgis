@@ -19,7 +19,8 @@ DATA=
 SQL_OBJS=rtpostgis.sql.in
 
 # Objects to build using PGXS
-OBJS=rt_pg.o
+OBJS=rt_pg.o \
+	rt_collection.o
 
 # Libraries to link into the module (proj, geos)
 #

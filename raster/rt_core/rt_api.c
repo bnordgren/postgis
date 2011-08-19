@@ -37,6 +37,7 @@
 #include <limits.h> /* for integer type limits */
 #include <time.h> /* for time */
 #include "rt_api.h"
+#include "lwgeom_geos.h"
 
 #define POSTGIS_RASTER_WARN_ON_TRUNCATION
 
@@ -768,28 +769,6 @@ rt_pixtype_name(rt_pixtype pixtype) {
 
 /*- rt_band ----------------------------------------------------------*/
 
-struct rt_extband_t {
-    uint8_t bandNum;
-    char* path; /* externally owned ? */
-};
-
-struct rt_band_t {
-    rt_pixtype pixtype;
-    int32_t offline;
-    uint16_t width;
-    uint16_t height;
-    int32_t hasnodata; /* a flag indicating if this band contains nodata values */
-    int32_t isnodata;   /* a flag indicating if this band is filled only with
-                           nodata values */
-    double nodataval; /* int will be converted ... */
-    int32_t ownsData; /* XXX mloskot: its behaviour needs to be documented */
-
-    union {
-        void* mem; /* actual data, externally owned */
-        struct rt_extband_t offline;
-    } data;
-
-};
 
 rt_band
 rt_band_new_inline(uint16_t width, uint16_t height,
@@ -2766,6 +2745,7 @@ rt_band_reclass(rt_band srcband, rt_pixtype pixtype,
 
 	return band;
 }
+
 
 /*- rt_raster --------------------------------------------------------*/
 
@@ -6481,6 +6461,10 @@ rt_raster rt_raster_gdal_warp(
 
 	return rast;
 }
+
+
+
+
 
 /**
  * Return a raster of the provided geometry
