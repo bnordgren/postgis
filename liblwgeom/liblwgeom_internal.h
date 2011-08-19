@@ -55,6 +55,18 @@
 #define MAXFLOAT      3.402823466e+38F
 #endif
 
+/* for the measure functions*/
+#define DIST_MAX		-1
+#define DIST_MIN		1
+
+/*
+* this will change to NaN when I figure out how to
+* get NaN in a platform-independent way
+*/
+#define NO_VALUE 0.0
+#define NO_Z_VALUE NO_VALUE
+#define NO_M_VALUE NO_VALUE
+
 
 /**
 * Well-Known Text (WKT) Output Variant Types
