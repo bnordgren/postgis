@@ -870,7 +870,7 @@ if test "x$RASTER" = "xraster"; then dnl # {
 except ImportError:
   pass'
 
-	GDAL_PYTHON_FOUND=`$PYTHON -c "$GDAL_PYTHON_TEST"`
+	GDAL_PYTHON_FOUND=`python -c "$GDAL_PYTHON_TEST"`
 	if test "$GDAL_PYTHON_FOUND" = "1"; then
 	    AC_MSG_RESULT([found])
 	else	
@@ -886,7 +886,7 @@ except ImportError:
 except ImportError:
   pass'
 
-	GDAL_NUMPY_FOUND=`$PYTHON -c "$GDAL_NUMPY_TEST"`
+	GDAL_NUMPY_FOUND=`python -c "$GDAL_NUMPY_TEST"`
 	if test "$GDAL_NUMPY_FOUND" = "1"; then
 	    AC_MSG_RESULT([found])
 	else	
