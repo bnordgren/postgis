@@ -131,6 +131,9 @@ typedef struct rt_valuecount_t* rt_valuecount;
 typedef struct rt_gdaldriver_t* rt_gdaldriver;
 typedef struct rt_reclassexpr_t* rt_reclassexpr;
 
+struct quantile_llist ; 
+
+
 
 /**
 * Global functions for memory/logging handlers.
@@ -1238,6 +1241,28 @@ struct rt_histogram_t {
 struct rt_quantile_t {
 	double quantile;
 	double value;
+};
+
+/* listed-list structures for rt_band_get_quantiles_stream */
+struct quantile_llist {
+	uint8_t algeq; /* AL-GEQ (1) or AL-GT (0) */
+	double quantile;
+	uint64_t tau; /* position in sequence */
+
+	struct quantile_llist_element *head; /* H index 0 */
+	struct quantile_llist_element *tail; /* H index last */
+	uint32_t count; /* # of elements in H */
+
+	uint64_t sum1; /* N1H */
+	uint64_t sum2; /* N2H */
+};
+
+struct quantile_llist_element {
+	double value;
+	uint32_t count;
+
+	struct quantile_llist_element *prev;
+	struct quantile_llist_element *next;
 };
 
 /* number of times a value occurs */
