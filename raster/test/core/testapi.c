@@ -993,8 +993,9 @@ static void testBandStats() {
 	rt_histogram histogram = NULL;
 	double bin_width[] = {100};
 	double quantiles[] = {0.1, 0.3, 0.5, 0.7, 0.9};
+	double quantiles2[] = {0.66666667};
 	rt_quantile quantile = NULL;
-	int count = 0;
+	uint32_t count = 0;
 
 	rt_raster raster;
 	rt_band band;
@@ -1004,6 +1005,10 @@ static void testBandStats() {
 	uint32_t ymax = 100;
 	double nodata;
 	int rtn;
+
+	uint32_t values[] = {0, 91, 55, 86, 76, 41, 36, 97, 25, 63, 68, 2, 78, 15, 82, 47};
+	struct quantile_llist *qlls = NULL;
+	uint32_t qlls_count;
 
 	raster = rt_raster_new(xmax, ymax);
 	assert(raster); /* or we're out of virtual memory */
@@ -1097,6 +1102,86 @@ static void testBandStats() {
 
 	rtdealloc(stats->values);
 	rtdealloc(stats);
+
+	deepRelease(raster);
+
+	xmax = 4;
+	ymax = 4;
+	raster = rt_raster_new(4, 4);
+	assert(raster); /* or we're out of virtual memory */
+	band = addBand(raster, PT_8BUI, 0, 0);
+	CHECK(band);
+	rt_band_set_nodata(band, 0);
+
+	for (x = 0; x < xmax; x++) {
+		for (y = 0; y < ymax; y++) {
+			rtn = rt_band_set_pixel(band, x, y, values[(x * ymax) + y]);
+			CHECK((rtn != -1));
+		}
+	}
+
+	nodata = rt_band_get_nodata(band);
+	CHECK_EQUALS(nodata, 0);
+
+	quantile = (rt_quantile) rt_band_get_quantiles_stream(
+		band, 1, 1, 15,
+		&qlls, &qlls_count,
+		quantiles2, 1,
+		&count);
+	CHECK(quantile);
+	CHECK(count);
+	CHECK((qlls_count > 0));
+	CHECK(FLT_EQ(quantile[0].value, 78));
+	rtdealloc(quantile);
+	quantile_llist_destroy(&qlls, qlls_count);
+	qlls = NULL;
+	qlls_count = 0;
+
+	quantile = (rt_quantile) rt_band_get_quantiles_stream(
+		band, 1, 1, 60,
+		&qlls, &qlls_count,
+		NULL, 0,
+		&count);
+	CHECK(quantile);
+	CHECK(count);
+	CHECK((qlls_count > 0));
+
+	quantile = (rt_quantile) rt_band_get_quantiles_stream(
+		band, 1, 1, 60,
+		&qlls, &qlls_count,
+		NULL, 0,
+		&count);
+	CHECK(quantile);
+	CHECK(count);
+	CHECK((qlls_count > 0));
+
+	quantile = (rt_quantile) rt_band_get_quantiles_stream(
+		band, 1, 1, 60,
+		&qlls, &qlls_count,
+		NULL, 0,
+		&count);
+	CHECK(quantile);
+	CHECK(count);
+	CHECK((qlls_count > 0));
+
+	quantile = (rt_quantile) rt_band_get_quantiles_stream(
+		band, 1, 1, 60,
+		&qlls, &qlls_count,
+		NULL, 0,
+		&count);
+	CHECK(quantile);
+	CHECK(count);
+	CHECK((qlls_count > 0));
+
+	quantile_llist_destroy(&qlls, qlls_count);
+
+	/*
+	for (x = 0; x < count; x++) {
+		printf("%f = %f\n", quantile[x].quantile, quantile[x].value);
+	}
+	*/
+
+	rtdealloc(quantile);
 
 	deepRelease(raster);
 }
@@ -1302,7 +1387,7 @@ static void testValueCount() {
 	uint32_t xmax = 100;
 	uint32_t y;
 	uint32_t ymax = 100;
-	int rtn = 0;
+	uint32_t rtn = 0;
 
 	double count[] = {3, 4, 5};
 
@@ -1318,32 +1403,32 @@ static void testValueCount() {
 			CHECK((rtn != -1));
 		}
 	}
-	vcnts = rt_band_get_value_count(band, 1, NULL, 0, 0, &rtn);
+	vcnts = rt_band_get_value_count(band, 1, NULL, 0, 0, NULL, &rtn);
 	CHECK(vcnts);
 	CHECK((rtn > 0));
 	rtdealloc(vcnts);
 
-	vcnts = rt_band_get_value_count(band, 1, NULL, 0, 0.01, &rtn);
+	vcnts = rt_band_get_value_count(band, 1, NULL, 0, 0.01, NULL, &rtn);
 	CHECK(vcnts);
 	CHECK((rtn > 0));
 	rtdealloc(vcnts);
 
-	vcnts = rt_band_get_value_count(band, 1, NULL, 0, 0.1, &rtn);
+	vcnts = rt_band_get_value_count(band, 1, NULL, 0, 0.1, NULL, &rtn);
 	CHECK(vcnts);
 	CHECK((rtn > 0));
 	rtdealloc(vcnts);
 
-	vcnts = rt_band_get_value_count(band, 1, NULL, 0, 1, &rtn);
+	vcnts = rt_band_get_value_count(band, 1, NULL, 0, 1, NULL, &rtn);
 	CHECK(vcnts);
 	CHECK((rtn > 0));
 	rtdealloc(vcnts);
 
-	vcnts = rt_band_get_value_count(band, 1, NULL, 0, 10, &rtn);
+	vcnts = rt_band_get_value_count(band, 1, NULL, 0, 10, NULL, &rtn);
 	CHECK(vcnts);
 	CHECK((rtn > 0));
 	rtdealloc(vcnts);
 
-	vcnts = rt_band_get_value_count(band, 1, count, 3, 1, &rtn);
+	vcnts = rt_band_get_value_count(band, 1, count, 3, 1, NULL, &rtn);
 	CHECK(vcnts);
 	CHECK((rtn > 0));
 	rtdealloc(vcnts);
