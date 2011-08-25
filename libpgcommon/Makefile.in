@@ -11,7 +11,9 @@
 # **********************************************************************
 
 CC=@CC@
-CFLAGS=@CFLAGS@ @PGSQL_BE_CPPFLAGS@ @PROJ_CPPFLAGS@ -I../liblwgeom @PICFLAGS@ @WARNFLAGS@ 
+CFLAGS=@CFLAGS@ @PGSQL_BE_CPPFLAGS@ @PROJ_CPPFLAGS@ -I../liblwgeom @PICFLAGS@ @WARNFLAGS@ @GETTEXT_CFLAGS@
+LDFLAGS=@GETTEXT_LDFLAGS@ @LIBINTL@
+
 NUMERICFLAGS=@NUMERICFLAGS@
 
 YACC=@YACC@
@@ -19,6 +21,7 @@ LEX=@LEX@
 
 # Standalone COMMON objects
 SA_OBJS = \
+	gserialized_gist.o \
 	lwgeom_transform.o \
 	lwgeom_pg.o
 
@@ -26,6 +29,7 @@ SA_OBJS = \
 SA_HEADERS = \
 	lwgeom_pg.h \
 	lwgeom_transform.h \
+	gserialized_gist.h \
 	pgsql_compat.h
 
 all: libpgcommon.a
@@ -53,8 +57,4 @@ check: libpgcommon.a
 # Command to build each of the .o files
 $(SA_OBJS): %.o: %.c 
 	$(CC) $(CFLAGS) -c -o $@ $<
-
-
-  
-
 
