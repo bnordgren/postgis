@@ -6011,7 +6011,6 @@ rt_raster_to_gdal_mem(rt_raster raster, const char *srs,
 	GDALDriverH drv = NULL;
 	int drv_gen = 0;
 	GDALDatasetH ds = NULL;
-	double gt[] = {0.0, 1.0, 0.0, 0.0, 0.0, 1.0};
 	CPLErr cplerr;
 	GDALDataType gdal_pt = GDT_Unknown;
 	GDALRasterBandH band;
@@ -6054,13 +6053,7 @@ rt_raster_to_gdal_mem(rt_raster raster, const char *srs,
 	}
 
 	/* add geotransform */
-	gt[0] = rt_raster_get_x_offset(raster);
-	gt[1] = rt_raster_get_x_scale(raster);
-	gt[2] = rt_raster_get_x_skew(raster);
-	gt[3] = rt_raster_get_y_offset(raster);
-	gt[4] = rt_raster_get_y_skew(raster);
-	gt[5] = rt_raster_get_y_scale(raster);
-	cplerr = GDALSetGeoTransform(ds, gt);
+	cplerr = GDALSetGeoTransform(ds, raster->idx_to_geo);
 	if (cplerr != CE_None) {
 		rterror("rt_raster_to_gdal_mem: Unable to set geotransformation\n");
 		GDALClose(ds);
