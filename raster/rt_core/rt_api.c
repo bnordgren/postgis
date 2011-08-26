@@ -3431,12 +3431,13 @@ rt_raster_new(uint16_t width, uint16_t height) {
     ret->width = width;
 
     ret->height = height;
-    ret->scaleX = 1;
-    ret->scaleY = 1;
-    ret->ipX = 0.0;
-    ret->ipY = 0.0;
-    ret->skewX = 0.0;
-    ret->skewY = 0.0;
+    ret->idx_to_geo[X_SCALE] = 1;
+    ret->idx_to_geo[Y_SCALE] = 1;
+    ret->idx_to_geo[X_OFFSET] = 0.0;
+    ret->idx_to_geo[Y_OFFSET] = 0.0;
+    ret->idx_to_geo[X_SKEW] = 0.0;
+    ret->idx_to_geo[Y_SKEW] = 0.0;
+    ret->g2i_valid = GDALInvGeoTransform(ret->idx_to_geo, ret->geo_to_idx);
     ret->srid = SRID_UNKNOWN;
 
     ret->numBands = 0;
@@ -3480,8 +3481,10 @@ rt_raster_set_scale(rt_raster raster,
 
     assert(NULL != raster);
 
-    raster->scaleX = scaleX;
-    raster->scaleY = scaleY;
+    raster->idx_to_geo[X_SCALE] = scaleX;
+    raster->idx_to_geo[Y_SCALE] = scaleY;
+    raster->g2i_valid = GDALInvGeoTransform(raster->idx_to_geo,
+    		                                raster->geo_to_idx);
 }
 
 double
@@ -3490,7 +3493,7 @@ rt_raster_get_x_scale(rt_raster raster) {
 
     assert(NULL != raster);
 
-    return raster->scaleX;
+    return raster->idx_to_geo[X_SCALE];
 }
 
 double
@@ -3499,7 +3502,7 @@ rt_raster_get_y_scale(rt_raster raster) {
 
     assert(NULL != raster);
 
-    return raster->scaleY;
+    return raster->idx_to_geo[Y_SCALE];
 }
 
 void
@@ -3509,8 +3512,10 @@ rt_raster_set_skews(rt_raster raster,
 
     assert(NULL != raster);
 
-    raster->skewX = skewX;
-    raster->skewY = skewY;
+    raster->idx_to_geo[X_SKEW] = skewX;
+    raster->idx_to_geo[Y_SKEW] = skewY;
+    raster->g2i_valid = GDALInvGeoTransform(raster->idx_to_geo,
+    		                                raster->geo_to_idx);
 }
 
 double
@@ -3519,7 +3524,7 @@ rt_raster_get_x_skew(rt_raster raster) {
 
     assert(NULL != raster);
 
-    return raster->skewX;
+    return raster->idx_to_geo[X_SKEW];
 }
 
 double
@@ -3528,7 +3533,7 @@ rt_raster_get_y_skew(rt_raster raster) {
 
     assert(NULL != raster);
 
-    return raster->skewY;
+    return raster->idx_to_geo[Y_SKEW];
 }
 
 void
@@ -3537,8 +3542,10 @@ rt_raster_set_offsets(rt_raster raster, double x, double y) {
 
     assert(NULL != raster);
 
-    raster->ipX = x;
-    raster->ipY = y;
+    raster->idx_to_geo[X_OFFSET] = x;
+    raster->idx_to_geo[Y_OFFSET] = y;
+    raster->g2i_valid = GDALInvGeoTransform(raster->idx_to_geo,
+    		                                raster->geo_to_idx);
 }
 
 double
@@ -3547,7 +3554,7 @@ rt_raster_get_x_offset(rt_raster raster) {
 
     assert(NULL != raster);
 
-    return raster->ipX;
+    return raster->idx_to_geo[X_OFFSET];
 }
 
 double
@@ -3556,7 +3563,7 @@ rt_raster_get_y_offset(rt_raster raster) {
 
     assert(NULL != raster);
 
-    return raster->ipY;
+    return raster->idx_to_geo[Y_OFFSET];
 }
 
 int32_t
@@ -3844,16 +3851,43 @@ rt_raster_cell_to_geopoint(rt_raster raster,
     assert(NULL != x1);
     assert(NULL != y1);
 
-    /* Six parameters affine transformation */
-    *x1 = raster->scaleX * x + raster->skewX * y + raster->ipX;
-    *y1 = raster->scaleY * y + raster->skewY * x + raster->ipY;
+    GDALApplyGeoTransform(raster->idx_to_geo, x, y, x1, y1);
 
     RASTER_DEBUGF(3, "rt_raster_cell_to_geopoint(%g,%g)", x, y);
-    RASTER_DEBUGF(3, " ipx/y:%g/%g", raster->ipX, raster->ipY);
+    RASTER_DEBUGF(3, " ipx/y:%g/%g", rt_raster_get_x_offset(raster),
+    		                         rt_raster_get_y_offset(raster));
     RASTER_DEBUGF(3, "cell_to_geopoint: ipX:%g, ipY:%g, %g,%g -> %g,%g",
-            raster->ipX, raster->ipY, x, y, *x1, *y1);
+            rt_raster_get_x_offset(raster),
+            rt_raster_get_y_offset(raster), x, y, *x1, *y1);
 
 }
+
+
+int
+rt_raster_geopoint_to_cell(rt_raster raster,
+        double x, double y,
+        double* x1, double* y1) {
+
+
+    assert(NULL != raster);
+    assert(NULL != x1);
+    assert(NULL != y1);
+
+    if (raster->g2i_valid) {
+    	GDALApplyGeoTransform(raster->geo_to_idx, x, y, x1, y1);
+    }
+
+    RASTER_DEBUGF(3, "rt_raster_geopoint_to_cell(%g,%g)", x, y);
+    RASTER_DEBUGF(3, " ipx/y:%g/%g", rt_raster_get_x_offset(raster),
+    		                         rt_raster_get_y_offset(raster));
+    RASTER_DEBUGF(3, "geopoint_to_cell: ipX:%g, ipY:%g, %g,%g -> %g,%g",
+            rt_raster_get_x_offset(raster),
+            rt_raster_get_y_offset(raster), x, y, *x1, *y1);
+
+    return raster->g2i_valid;
+
+}
+
 
 rt_geomval
 rt_raster_dump_as_wktpolygons(rt_raster raster, int nband, int * pnElements)
@@ -4759,12 +4793,13 @@ rt_raster_from_wkb(const uint8_t* wkb, uint32_t wkbsize) {
         return 0;
     }
     rast->numBands = read_uint16(&ptr, endian);
-    rast->scaleX = read_float64(&ptr, endian);
-    rast->scaleY = read_float64(&ptr, endian);
-    rast->ipX = read_float64(&ptr, endian);
-    rast->ipY = read_float64(&ptr, endian);
-    rast->skewX = read_float64(&ptr, endian);
-    rast->skewY = read_float64(&ptr, endian);
+    rast->idx_to_geo[X_SCALE] = read_float64(&ptr, endian);
+    rast->idx_to_geo[Y_SCALE] = read_float64(&ptr, endian);
+    rast->idx_to_geo[X_OFFSET] = read_float64(&ptr, endian);
+    rast->idx_to_geo[Y_OFFSET] = read_float64(&ptr, endian);
+    rast->idx_to_geo[X_SKEW] = read_float64(&ptr, endian);
+    rast->idx_to_geo[Y_SKEW] = read_float64(&ptr, endian);
+    rast->g2i_valid = GDALInvGeoTransform(rast->idx_to_geo, rast->geo_to_idx);
     rast->srid = read_int32(&ptr, endian);
     rast->width = read_uint16(&ptr, endian);
     rast->height = read_uint16(&ptr, endian);
@@ -4775,11 +4810,11 @@ rt_raster_from_wkb(const uint8_t* wkb, uint32_t wkbsize) {
     RASTER_DEBUGF(3, "rt_raster_from_wkb: Raster numBands: %d",
             rast->numBands);
     RASTER_DEBUGF(3, "rt_raster_from_wkb: Raster scale: %gx%g",
-            rast->scaleX, rast->scaleY);
+            rt_raster_get_x_scale(rast), rt_raster_get_y_scale(rast));
     RASTER_DEBUGF(3, "rt_raster_from_wkb: Raster ip: %gx%g",
-            rast->ipX, rast->ipY);
+            rt_raster_get_x_offset(rast), rt_raster_get_y_offset(rast));
     RASTER_DEBUGF(3, "rt_raster_from_wkb: Raster skew: %gx%g",
-            rast->skewX, rast->skewY);
+            rt_raster_get_x_skew(rast), rt_raster_get_y_skew(rast));
     RASTER_DEBUGF(3, "rt_raster_from_wkb: Raster srid: %d",
             rast->srid);
     RASTER_DEBUGF(3, "rt_raster_from_wkb: Raster dims: %dx%d",
@@ -4933,6 +4968,7 @@ rt_raster_to_wkb(rt_raster raster, uint32_t *wkbsize) {
     uint8_t *ptr = NULL;
     uint16_t i = 0;
     uint8_t littleEndian = isMachineLittleEndian();
+    struct rt_raster_serialized_t s_raster ;
 
 
 
@@ -4959,15 +4995,18 @@ rt_raster_to_wkb(rt_raster raster, uint32_t *wkbsize) {
     RASTER_DEBUGF(3, "Writing raster header to wkb on position %d (expected 0)",
             d_binptr_to_pos(ptr, wkbend, *wkbsize));
 
-    /* Write endianness */
+    /* Copy header */
+    rt_raster_serialize_header(raster, &s_raster);
+
+    /* overwrite endianness */
     *ptr = littleEndian;
     ptr += 1;
 
-    /* Write version(size - (end - ptr)) */
+    /* overwrite version(size - (end - ptr)) */
     write_uint16(&ptr, littleEndian, 0);
 
-    /* Copy header (from numBands up) */
-    memcpy(ptr, &(raster->numBands), sizeof (struct rt_raster_serialized_t) - 6);
+    /* move to end of structure */
+    memcpy(ptr, &(s_raster.numBands), sizeof (struct rt_raster_serialized_t) - 6);
     ptr += sizeof (struct rt_raster_serialized_t) - 6;
 
     RASTER_DEBUGF(3, "Writing bands header to wkb position %d (expected 61)",
@@ -5194,8 +5233,46 @@ rt_raster_serialized_size(rt_raster raster) {
     return size;
 }
 
+
+void
+rt_raster_deserialize_header(rt_raster raster,
+		struct rt_raster_serialized_t *s_raster)
+{
+	raster->size = s_raster->size ;
+	raster->version = s_raster->version ;
+	raster->numBands = s_raster->numBands ;
+	rt_raster_set_scale(raster, s_raster->scaleX, s_raster->scaleY);
+	rt_raster_set_offsets(raster, s_raster->ipX, s_raster->ipY) ;
+	rt_raster_set_skews(raster, s_raster->skewX, s_raster->skewY) ;
+	raster->srid     = s_raster->srid ;
+	raster->width    = s_raster->width ;
+	raster->height   = s_raster->height ;
+}
+
+
+void
+rt_raster_serialize_header(rt_raster raster,
+		struct rt_raster_serialized_t *s_raster)
+{
+	s_raster->size = raster->size ;
+	s_raster->version = raster->version ;
+	s_raster->numBands = raster->numBands ;
+	s_raster->scaleX   = rt_raster_get_x_scale(raster) ;
+	s_raster->scaleY   = rt_raster_get_y_scale(raster) ;
+	s_raster->ipX      = rt_raster_get_x_offset(raster) ;
+	s_raster->ipY      = rt_raster_get_y_offset(raster) ;
+	s_raster->skewX    = rt_raster_get_x_skew(raster) ;
+	s_raster->skewY    = rt_raster_get_y_skew(raster) ;
+	s_raster->srid     = raster->srid ;
+	s_raster->width    = raster->width ;
+	s_raster->height   = raster->height ;
+}
+
+
+
 void*
-rt_raster_serialize(rt_raster raster) {
+rt_raster_serialize(rt_raster raster)
+{
     uint32_t size = rt_raster_serialized_size(raster);
     uint8_t* ret = NULL;
     uint8_t* ptr = NULL;
@@ -5231,7 +5308,7 @@ rt_raster_serialize(rt_raster raster) {
     raster->version = 0;
 
     /* Copy header */
-    memcpy(ptr, raster, sizeof (struct rt_raster_serialized_t));
+    rt_raster_serialize_header(raster, (struct rt_raster_serialized_t *)ptr);
 
     RASTER_DEBUG(3, "Start hex dump of raster being serialized using 0x2D to mark non-written bytes");
 
@@ -5417,7 +5494,7 @@ rt_raster_deserialize(void* serialized, int header_only) {
 
     /* Deserialize raster header */
     RASTER_DEBUG(3, "rt_raster_deserialize: Deserialize raster header");
-    memcpy(rast, serialized, sizeof (struct rt_raster_serialized_t));
+    rt_raster_deserialize_header(rast, serialized) ;
 
     if (0 == rast->numBands || header_only) {
         rast->bands = 0;
@@ -5666,11 +5743,14 @@ rt_raster_from_band(rt_raster raster, uint32_t *bandNums, int count) {
 
 	/* copy raster attributes */
 	/* scale */
-	rt_raster_set_scale(rast, raster->scaleX, raster->scaleY);
+	rt_raster_set_scale(rast, rt_raster_get_x_scale(raster),
+			                  rt_raster_get_y_scale(raster));
 	/* offset */
-	rt_raster_set_offsets(rast, raster->ipX, raster->ipY);
+	rt_raster_set_offsets(rast, rt_raster_get_x_offset(raster),
+			                    rt_raster_get_y_offset(raster));
 	/* skew */
-	rt_raster_set_skews(rast, raster->skewX, raster->skewY);
+	rt_raster_set_skews(rast, rt_raster_get_x_skew(raster),
+			                  rt_raster_get_y_skew(raster));
 	/* srid */
 	rt_raster_set_srid(rast, raster->srid);
 
