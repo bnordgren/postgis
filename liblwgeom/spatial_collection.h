@@ -63,6 +63,7 @@ struct evaluator_i {
 struct spatial_collection_i {
 	COLLECTION_TYPE type ;
 	int32_t       srid ;
+	GBOX          extent ;
 	PARAMETERS *params ;
 	SPATIAL_COLLECTION *input1 ;
 	SPATIAL_COLLECTION *input2 ;
@@ -73,14 +74,15 @@ struct spatial_collection_i {
 SPATIAL_COLLECTION *
 sc_create(COLLECTION_TYPE t,
 		  int32_t srid,
+		  GBOX *extent,
 		  PARAMETERS *params,
 		  INCLUDES *inc,
 		  EVALUATOR *eval) ;
 
 SPATIAL_COLLECTION *
 sc_twoinput_create(COLLECTION_TYPE t,
-		           int32_t srid,
 		           PARAMETERS *params,
+		           GBOX *combined_extent,
 		           INCLUDES   *inc,
 		           EVALUATOR  *eval,
 		           SPATIAL_COLLECTION *input1,

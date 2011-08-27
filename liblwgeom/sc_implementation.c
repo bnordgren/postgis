@@ -1,6 +1,7 @@
 #include "liblwgeom.h"
 #include "spatial_collection.h"
 #include "proj_api.h"
+#include "string.h"
 
 
 /**
@@ -644,7 +645,10 @@ sc_create_geometry_wrapper(LWGEOM *geom, double inside, double outside)
 		return NULL ;
 	}
 
-	return sc_create(SPATIAL_ONLY, geom->srid, NULL, inclusion, evaluator) ;
+	/* ensure the geometry has an extent */
+	lwgeom_add_bbox(geom);
+
+	return sc_create(SPATIAL_ONLY, geom->srid, geom->bbox, NULL, inclusion, evaluator) ;
 }
 
 /**
@@ -684,6 +688,61 @@ struct proj_wrap_s {
 	projPJ dest ;
 };
 
+void
+project_gbox(GBOX *bbox, projPJ from, projPJ to)
+{
+	POINTARRAY **rings ;
+	POINTARRAY *pts ;
+	POINT4D     p4d ;
+	LWPOLY     *extent ;
+
+    rings = (POINTARRAY **) rtalloc(sizeof (POINTARRAY*));
+    if (!rings) {
+        return ;
+    }
+    rings[0] = ptarray_construct(0, 0, 5);
+    /* TODO: handle error on ptarray construction */
+    /* XXX jorgearevalo: the error conditions aren't managed in ptarray_construct */
+    if (!rings[0]) {
+        return ;
+    }
+    pts = rings[0];
+
+    /* first corner */
+    p4d.x = bbox->xmin ;
+    p4d.y = bbox->ymin ;
+    ptarray_set_point4d(pts, 0, &p4d);
+    ptarray_set_point4d(pts, 4, &p4d); /* needed for closing it? */
+
+    /* second corner */
+    p4d.x = bbox->xmin ;
+    p4d.y = bbox->ymax ;
+    ptarray_set_point4d(pts, 1, &p4d);
+
+    /* third corner */
+    p4d.x = bbox->xmax ;
+    p4d.y = bbox->ymax ;
+    ptarray_set_point4d(pts, 2, &p4d);
+
+    /* fourth corner */
+    p4d.x = bbox->xmax ;
+    p4d.y = bbox->ymin ;
+    ptarray_set_point4d(pts, 3, &p4d);
+
+    /* make the polygon */
+    extent = lwpoly_construct(SRID_UNKNOWN, 0, 1, rings);
+
+    /* project it and recalculate the mins and maxes */
+    lwgeom_transform(lwpoly_as_lwgeom(extent), from, to) ;
+    lwgeom_drop_bbox(lwpoly_as_lwgeom(extent)) ;
+    lwgeom_add_bbox(lwpoly_as_lwgeom(extent)) ;
+
+    /* copy this over the input bbox */
+	memcpy(bbox, extent->bbox, sizeof(GBOX)) ;
+
+	lwpoly_free(extent) ;
+}
+
 SPATIAL_COLLECTION *
 sc_create_projection_wrapper(SPATIAL_COLLECTION *wrapped,
 		                     int32_t desired_srid,
@@ -691,6 +750,7 @@ sc_create_projection_wrapper(SPATIAL_COLLECTION *wrapped,
 {
 	INCLUDES *inclusion ;
 	EVALUATOR *evaluator ;
+	GBOX extent ;
 	struct proj_wrap_s *params ;
 
 	if (wrapped == NULL) return NULL ;
@@ -715,7 +775,11 @@ sc_create_projection_wrapper(SPATIAL_COLLECTION *wrapped,
 		return NULL ;
 	}
 
-	return sc_create(wrapped->type, desired_srid,
+	/* calculate the projected extent */
+	memcpy(&extent, &(wrapped->extent), sizeof(GBOX)) ;
+	project_gbox(&extent, wrapped_proj, desired_proj) ;
+
+	return sc_create(wrapped->type, desired_srid, &extent,
 			         (PARAMETERS *)params, inclusion, evaluator) ;
 }
 

@@ -463,6 +463,7 @@ sc_create_raster_wrapper(rt_raster raster, int *bands, int num_bands)
 {
 	INCLUDES *inc ;
 	EVALUATOR *eval ;
+	LWPOLY *outline ;
 	SPATIAL_COLLECTION *sc ;
 
 	if (raster==NULL) return NULL ;
@@ -476,14 +477,19 @@ sc_create_raster_wrapper(rt_raster raster, int *bands, int num_bands)
 		return NULL ;
 	}
 
+	outline = rt_raster_get_convex_hull(raster) ;
+	lwgeom_add_bbox(lwpoly_as_lwgeom(outline)) ;
+
 	sc = sc_create(SPATIAL_PLUS_VALUE,
 			rt_raster_get_srid(raster),
+			outline->bbox,
 			NULL, inc, eval) ;
 
 	if (sc == NULL) {
 		sc_destroy_raster_env_includes(inc) ;
 		sc_destroy_raster_bands_evaluator(eval) ;
 	}
+	lwpoly_free(outline) ;
 
 	return sc ;
 }
@@ -505,6 +511,7 @@ sc_create_raster_nodata_wrapper(rt_raster raster, int *bands, int num_bands,
 {
 	INCLUDES *inc ;
 	EVALUATOR *eval ;
+	LWPOLY *outline ;
 	SPATIAL_COLLECTION *sc ;
 
 	if (raster==NULL) return NULL ;
@@ -518,14 +525,18 @@ sc_create_raster_nodata_wrapper(rt_raster raster, int *bands, int num_bands,
 		return NULL ;
 	}
 
+	outline = rt_raster_get_convex_hull(raster) ;
+	lwgeom_add_bbox(lwpoly_as_lwgeom(outline)) ;
+
 	sc = sc_create(SPATIAL_PLUS_VALUE,
-			rt_raster_get_srid(raster),
+			rt_raster_get_srid(raster), outline->bbox,
 			NULL, inc, eval) ;
 
 	if (sc == NULL) {
 		sc_destroy_raster_nodata_includes(inc) ;
 		sc_destroy_raster_bands_evaluator(eval) ;
 	}
+	lwpoly_free(outline) ;
 
 	return sc ;
 }

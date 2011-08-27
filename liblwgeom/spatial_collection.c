@@ -1,17 +1,20 @@
 #include "liblwgeom.h"
 #include "spatial_collection.h"
+#include "string.h"
 
 SPATIAL_COLLECTION *
 sc_create(COLLECTION_TYPE t,
 		  int32_t srid,
+		  GBOX *extent,
 		  PARAMETERS *params,
 		  INCLUDES *inc,
 		  EVALUATOR *eval)
 {
 	SPATIAL_COLLECTION *sc ;
 
-	/* collection must have an includes */
+	/* collection must have an includes and extent */
 	if (inc == NULL) return NULL ;
+	if (extent == NULL) return NULL ;
 
 	sc = (SPATIAL_COLLECTION *)lwalloc(sizeof(SPATIAL_COLLECTION)) ;
 	if ( sc != NULL ) {
@@ -26,6 +29,9 @@ sc_create(COLLECTION_TYPE t,
 		sc->inclusion = inc ;
 		sc->evaluator = eval ;
 
+		/* copy the extent */
+		memcpy(&(sc->extent), extent, sizeof(GBOX)) ;
+
 		/* set up reverse links */
 		sc->inclusion->collection = sc ;
 		if (sc->evaluator != NULL) {
@@ -38,8 +44,8 @@ sc_create(COLLECTION_TYPE t,
 
 SPATIAL_COLLECTION *
 sc_twoinput_create(COLLECTION_TYPE t,
-		           int32_t srid,
 		           PARAMETERS *params,
+		           GBOX       *combined_extent,
 		           INCLUDES   *inc,
 		           EVALUATOR  *eval,
 		           SPATIAL_COLLECTION *input1,
@@ -47,7 +53,13 @@ sc_twoinput_create(COLLECTION_TYPE t,
 {
 	SPATIAL_COLLECTION *sc ;
 
-	sc = sc_create(t, srid, params, inc, eval) ;
+	if (input1 == NULL || input2 == NULL) return NULL ;
+	if (input1->srid != input2->srid) {
+		// emit warning message
+		return NULL ;
+	}
+
+	sc = sc_create(t, input1->srid, combined_extent, params, inc, eval) ;
 	if (sc != NULL) {
 		sc->input1 = input1 ;
 		sc->input2 = input2 ;
