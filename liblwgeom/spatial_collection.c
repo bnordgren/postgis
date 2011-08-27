@@ -3,7 +3,7 @@
 
 SPATIAL_COLLECTION *
 sc_create(COLLECTION_TYPE t,
-		  int32 srid,
+		  int32_t srid,
 		  PARAMETERS *params,
 		  INCLUDES *inc,
 		  EVALUATOR *eval)
@@ -38,6 +38,7 @@ sc_create(COLLECTION_TYPE t,
 
 SPATIAL_COLLECTION *
 sc_twoinput_create(COLLECTION_TYPE t,
+		           int32_t srid,
 		           PARAMETERS *params,
 		           INCLUDES   *inc,
 		           EVALUATOR  *eval,
@@ -46,7 +47,7 @@ sc_twoinput_create(COLLECTION_TYPE t,
 {
 	SPATIAL_COLLECTION *sc ;
 
-	sc = sc_create(t, params, inc, eval) ;
+	sc = sc_create(t, srid, params, inc, eval) ;
 	if (sc != NULL) {
 		sc->input1 = input1 ;
 		sc->input2 = input2 ;
@@ -87,8 +88,8 @@ eval_create(PARAMETERS *params,
 
 	if (eval != NULL) {
 		eval->params = params ;
-		eval->evaluator = evaluator ;
-		eval->evaluatorIndex = evaluatorIndex ;
+		eval->evaluate = evaluator ;
+		eval->evaluateIndex = evaluatorIndex ;
 		eval->collection = NULL ;
 		eval->result = val_create(result_len) ;
 	}
@@ -103,6 +104,9 @@ eval_destroy(EVALUATOR *eval)
 		/* if there's an associated collection, un-associate it before freeing */
 		if (eval->collection != NULL) {
 			eval->collection->evaluator = NULL ;
+		}
+		if (eval->result != NULL) {
+			val_destroy(eval->result) ;
 		}
 		lwfree(eval) ;
 	}
@@ -234,7 +238,7 @@ sc_hasTwoInputs(SPATIAL_COLLECTION *sc)
 	return (sc->input1 != NULL) && (sc->input2 != NULL) ;
 }
 
-int32
+int32_t
 sc_get_srid(SPATIAL_COLLECTION *sc)
 {
 	if (sc == NULL) return -1 ;

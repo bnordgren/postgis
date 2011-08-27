@@ -85,7 +85,7 @@ projection_includes(INCLUDES *inc, LWPOINT *point)
 	params = (struct proj_wrap_inc_s *)(inc->params) ;
 
 	/* copy the point so the outside world doesn't see it change. */
-	point2d = lwgeom_make2d(point->srid,
+	point2d = lwpoint_make2d(point->srid,
 			     lwpoint_get_x(point), lwpoint_get_y(point));
 
 	/* note that this is a cast, not a copy */
@@ -173,14 +173,6 @@ int relation_symdifference(int r1, int r2)
 	return (r1 && !r2) || (!r1 && r2) ;
 }
 
-/**
- * RELATION_FN is a function pointer typedef which describes a function
- * capable of evaluating a spatial relationship at a point. The arguments
- * are boolean values which reflect the value of the includes function
- * for the first and second inputs, respectively. The return value is
- * the result of the relationship evaluation.
- */
-typedef int (RELATION_FN*)(int,int) ;
 
 
 /**
@@ -270,7 +262,7 @@ struct mask_params_s {
  */
 VALUE *
 mask_evaluator_util(EVALUATOR *eval, LWPOINT *point, INCLUDE_FN includes) {
-	struct mask_params_s params ;
+	struct mask_params_s *params ;
 	VALUE *result ;
 	double result_scalar ;
 
@@ -363,7 +355,7 @@ sc_create_mask_evaluator(double true_val, double false_val, int index)
 		idx_fn = mask_index_evaluator ;
 	}
 
-	return eval_create((PARAMETERS *)params, mask_evaluator, idx_fn) ;
+	return eval_create((PARAMETERS *)params, mask_evaluator, idx_fn, 1) ;
 }
 
 /**
@@ -399,14 +391,14 @@ projection_evaluator(EVALUATOR *eval, LWPOINT *point)
 {
 	LWGEOM *point2d_g ;
 	LWPOINT *point2d ;
-	struct proj_wrap_inc_s *params ;
+	struct proj_wrap_eval_s *params ;
 	VALUE *result ;
 
 	if (eval == NULL || eval->params == NULL || point == NULL) return 0 ;
 	params = (struct proj_wrap_eval_s *)(eval->params) ;
 
 	/* copy the point so the outside world doesn't see it change. */
-	point2d = lwgeom_make2d(point->srid,
+	point2d = lwpoint_make2d(point->srid,
 			     lwpoint_get_x(point), lwpoint_get_y(point));
 
 	/* note that this is a cast, not a copy */
@@ -436,7 +428,7 @@ sc_create_projection_eval(EVALUATOR *wrapped, projPJ source, projPJ dest)
 	params->dest = dest ;
 
 	/* create the includes object */
-	return inc_create((PARAMETERS *)params, projection_evaluator, NULL);
+	return eval_create((PARAMETERS *)params, projection_evaluator, NULL, 1);
 }
 
 void
@@ -485,7 +477,7 @@ first_value_util(EVALUATOR *eval,
 {
 	VALUE *result, *result_in1, *result_in2 ;
 	SPATIAL_COLLECTION *sc ;
-	INCLUDES_FN inc1, inc2 ;
+	INCLUDE_FN inc1, inc2 ;
 	EVALUATOR_FN eval1, eval2 ;
 	int have_value ;
 	int i ;
@@ -494,9 +486,7 @@ first_value_util(EVALUATOR *eval,
 	if (eval == NULL || point == NULL) return NULL;
 	if (eval->collection == NULL) return NULL ;
 	if (eval->result == NULL) return NULL ;
-	if (eval->result->length != 1) return NULL ;
 
-	params = (struct mask_params_s *)(eval->params) ;
 	result = eval->result ;
 	sc = eval->collection ;
 
@@ -533,23 +523,23 @@ first_value_util(EVALUATOR *eval,
 	}
 
 	if (inc1(sc->input1->inclusion, point)) {
-		result1 = eval1(sc->input1->evaluator, point) ;
-		have_value = (result1 != NULL) ;
+		result_in1 = eval1(sc->input1->evaluator, point) ;
+		have_value = (result_in1 != NULL) ;
 		/* populate the result with the result from the first input */
 		if (have_value) {
 			for (i=0; i<result->length; i++) {
-				result->data[i] = result1->data[i] ;
+				result->data[i] = result_in1->data[i] ;
 			}
 		}
 	}
 
 	if (!have_value && inc2(sc->input2->inclusion, point)) {
-		result2 = eval2(sc->input2->evaluator, point) ;
-		have_value = (result2 != NULL) ;
+		result_in2 = eval2(sc->input2->evaluator, point) ;
+		have_value = (result_in2 != NULL) ;
 		/* populate the result with the result from the first input */
 		if (have_value) {
 			for (i=0; i<result->length; i++) {
-				result->data[i] = result2->data[i] ;
+				result->data[i] = result_in2->data[i] ;
 			}
 		}
 	}
@@ -588,9 +578,19 @@ first_value_evaluatorIndex(EVALUATOR *eval, LWPOINT *point)
  * will return a value from one of the two inputs.
  */
 EVALUATOR *
-sc_create_first_value_evaluator(void)
+sc_create_first_value_evaluator(SPATIAL_COLLECTION *first, SPATIAL_COLLECTION *second)
 {
-	return eval_create(NULL, first_value_evaluator, first_value_evaluatorIndex) ;
+	if (first == NULL || second == NULL) return NULL ;
+	if (first->evaluator == NULL || second->evaluator == NULL) return NULL ;
+	if (first->evaluator->result == NULL || second->evaluator->result == NULL) {
+		return NULL  ;
+	}
+
+	if (first->evaluator->result->length != second->evaluator->result->length) {
+		return NULL ;
+	}
+	return eval_create(NULL, first_value_evaluator, first_value_evaluatorIndex,
+			first->evaluator->result->length) ;
 }
 
 /**
@@ -628,10 +628,11 @@ sc_destroy_first_value_evaluator(EVALUATOR *dead)
  * @param outside the "value" associated with the geometry's exterior
  */
 SPATIAL_COLLECTION *
-sc_create_geometry_wrapper(LWGEOM *geom, int32 srid, double inside, double outside)
+sc_create_geometry_wrapper(LWGEOM *geom, double inside, double outside)
 {
 	INCLUDES *inclusion ;
 	EVALUATOR *evaluator ;
+
 
 	inclusion = sc_create_geometry_includes(geom) ;
 	evaluator = sc_create_mask_evaluator(inside, outside, 0) ;
@@ -643,7 +644,7 @@ sc_create_geometry_wrapper(LWGEOM *geom, int32 srid, double inside, double outsi
 		return NULL ;
 	}
 
-	return sc_create(SPATIAL_ONLY, srid, NULL, inclusion, evaluator) ;
+	return sc_create(SPATIAL_ONLY, geom->srid, NULL, inclusion, evaluator) ;
 }
 
 /**
@@ -685,7 +686,7 @@ struct proj_wrap_s {
 
 SPATIAL_COLLECTION *
 sc_create_projection_wrapper(SPATIAL_COLLECTION *wrapped,
-		                     int32 desired_srid,
+		                     int32_t desired_srid,
 		                     projPJ wrapped_proj, projPJ desired_proj )
 {
 	INCLUDES *inclusion ;

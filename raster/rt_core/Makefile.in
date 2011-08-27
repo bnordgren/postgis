@@ -20,7 +20,8 @@ LDFLAGS=$(LIBLWGEOM_LDFLAGS) $(LIBGDAL_LDFLAGS) $(PROJ_LDFLAGS)
 CFLAGS=@CFLAGS@ @PICFLAGS@ @WARNFLAGS@ $(LIBLWGEOM_CFLAGS) $(LIBGDAL_CFLAGS) @PROJ_CPPFLAGS@
 
 # Standalone RTCORE objects
-RT_OBJS=rt_api.o
+RT_OBJS=rt_api.o \
+        sc_raster_impl.o
 RT_LIB=librtcore.a
 RT_HEADERS=rt_api.h
 
