@@ -887,8 +887,8 @@ SPATIAL_COLLECTION *
 sc_create_relation_op(COLLECTION_TYPE t,
 		              SPATIAL_COLLECTION *sc1,
 		              SPATIAL_COLLECTION *sc2,
-		              RELATION_ENV_FUNCTION env_fn,
-		              RELATION_FUNCTION inc_fn,
+		              ENVELOPE_PREP_OP env_fn,
+		              RELATION_FN inc_fn,
 		              EVALUATOR *eval)
 {
 	SPATIAL_COLLECTION *result ;
@@ -950,8 +950,8 @@ sc_create_relation_op_proj(COLLECTION_TYPE t,
 		              SPATIAL_COLLECTION *sc2,
 		              projPJ proj_sc1, projPJ proj_sc2,
 		              int32_t srid, projPJ proj_dest,
-		              RELATION_ENV_FUNCTION env_fn,
-		              RELATION_FUNCTION inc_fn,
+		              ENVELOPE_PREP_OP env_fn,
+		              RELATION_FN inc_fn,
 		              EVALUATOR *eval)
 {
 	SPATIAL_COLLECTION *sc1_wrap ;
