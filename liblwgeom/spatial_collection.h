@@ -113,6 +113,8 @@ eval_create(PARAMETERS *params,
 void eval_destroy(EVALUATOR *eval);
 void inc_destroy(INCLUDES *inc) ;
 void sc_destroy(SPATIAL_COLLECTION *sc) ;
+void sc_twoinput_destroy(SPATIAL_COLLECTION *dead) ;
+
 
 VALUE *val_create(int num_values);
 void val_destroy(VALUE *val) ;
@@ -161,6 +163,14 @@ sc_create_projection_wrapper(SPATIAL_COLLECTION *wrapped,
 		                     projPJ wrapped_proj, projPJ desired_proj );
 void sc_destroy_projection_wrapper(SPATIAL_COLLECTION *dead);
 
+/**
+ * A method signature used for functions which calculate the approximate extent
+ * of a result collection. The inputs are polygons representing the outlines
+ * of the two input collections (e.g., the four corners), and the output
+ * approximates the extent of the result. Both input polygons should be in the
+ * same projection.
+ */
+typedef GBOX *((*ENVELOPE_PREP_OP)(LWPOLY *, LWPOLY *)) ;
 
 
 #endif /* SPATIAL_COLLECTION_H */

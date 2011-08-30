@@ -154,6 +154,14 @@ sc_destroy(SPATIAL_COLLECTION *sc)
 	}
 }
 
+void
+sc_twoinput_destroy(SPATIAL_COLLECTION *dead)
+{
+	if (dead != NULL) {
+		sc_destroy(dead) ;
+	}
+}
+
 /* to compute the start of the data array */
 #define PADDING (sizeof(double)-(sizeof(VALUE)%sizeof(double)))
 

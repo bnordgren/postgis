@@ -809,5 +809,183 @@ sc_destroy_projection_wrapper(SPATIAL_COLLECTION *dead)
 
 /** @} */  /* end of proj_wrap_collection documentation group */
 
+/**
+ * \defgroup relation_collection Creates a collection formed by the spatial relationship of two input collections.
+ * @{
+ */
+
+/**
+ * Calculates the extent of two collections related by the intersection
+ * operation.
+ */
+GBOX *relation_env_intersection(LWPOLY *r1, LWPOLY *r2)
+{
+	LWGEOM *env ;
+	GBOX *bounds ;
+
+
+	env = lwgeom_intersection(lwpoly_as_lwgeom(r1),
+			                   lwpoly_as_lwgeom(r2)) ;
+	lwgeom_add_bbox(env) ;
+	bounds = gbox_copy(env->bbox);
+	lwgeom_free(env) ;
+	return bounds ;
+}
+
+/**
+ * Calculates the extent of two collections related by the difference
+ * operation.
+ */
+GBOX *relation_env_difference(LWPOLY *r1, LWPOLY *r2)
+{
+	LWGEOM *env ;
+	GBOX *bounds ;
+
+	env = lwgeom_difference(lwpoly_as_lwgeom(r1),
+			                   lwpoly_as_lwgeom(r2)) ;
+	lwgeom_add_bbox(env) ;
+	bounds = gbox_copy(env->bbox);
+	lwgeom_free(env) ;
+	return bounds ;
+}
+
+/**
+ * Calculates the extent of two collections related by the union
+ * operation.
+ */
+GBOX *relation_env_union(LWPOLY *r1, LWPOLY *r2)
+{
+	LWGEOM *env ;
+	GBOX *bounds ;
+
+	env = lwgeom_union(lwpoly_as_lwgeom(r1),
+			                   lwpoly_as_lwgeom(r2)) ;
+	lwgeom_add_bbox(env) ;
+	bounds = gbox_copy(env->bbox);
+	lwgeom_free(env) ;
+	return bounds ;
+}
+
+/**
+ * Calculates the extent of two collections related by the symmetric
+ * difference operation.
+ */
+GBOX *relation_env_symdifference(LWPOLY *r1, LWPOLY *r2)
+{
+	LWGEOM *env ;
+	GBOX *bounds ;
+
+	env = lwgeom_symdifference(lwpoly_as_lwgeom(r1),
+			                   lwpoly_as_lwgeom(r2)) ;
+	lwgeom_add_bbox(env) ;
+	bounds = gbox_copy(env->bbox);
+	lwgeom_free(env) ;
+	return bounds ;
+}
+
+SPATIAL_COLLECTION *
+sc_create_relation_op(COLLECTION_TYPE t,
+		              SPATIAL_COLLECTION *sc1,
+		              SPATIAL_COLLECTION *sc2,
+		              RELATION_ENV_FUNCTION env_fn,
+		              RELATION_FUNCTION inc_fn,
+		              EVALUATOR *eval)
+{
+	SPATIAL_COLLECTION *result ;
+	INCLUDES *inc ;
+	LWPOLY *sc1_outline ;
+	LWPOLY *sc2_outline ;
+	GBOX *result_env ;
+
+	/* sanity checks on inputs */
+	if (sc1 == NULL || sc2==NULL) return NULL ;
+	if (env_fn == NULL || inc_fn == NULL) return NULL ;
+	if (eval == NULL) return NULL ;
+
+	/* something which should print out an error */
+	if (sc1->srid != sc2->srid) return NULL ;
+
+	/* create the INCLUDES given the desired function */
+	inc = sc_create_relation_includes(inc_fn) ;
+	if (inc == NULL) return NULL ;
+
+	/* calculate an approximate envelope for the result */
+	sc1_outline = gbox_to_lwpoly(&(sc1->extent)) ;
+	sc2_outline = gbox_to_lwpoly(&(sc2->extent)) ;
+	if (sc1_outline == NULL || sc2_outline == NULL) {
+		sc_destroy_relation_includes(inc) ;
+		if (sc1_outline != NULL) lwpoly_free(sc1_outline) ;
+		if (sc2_outline != NULL) lwpoly_free(sc2_outline) ;
+		return NULL ;
+	}
+	result_env = env_fn(sc1_outline, sc2_outline) ;
+	lwpoly_free(sc1_outline) ;
+	lwpoly_free(sc2_outline) ;
+	if (result_env == NULL) {
+		sc_destroy_relation_includes(inc) ;
+		return NULL ;
+	}
+
+	/* create the two-input collection */
+	result = sc_twoinput_create(t, NULL, result_env, inc, eval, sc1, sc2) ;
+	if (result == NULL) {
+		sc_destroy_relation_includes(inc) ;
+		return NULL ;
+	}
+
+	return result ;
+}
+
+void
+sc_destroy_relation_op(SPATIAL_COLLECTION *dead)
+{
+	if (dead != NULL) {
+		sc_twoinput_destroy(dead) ;
+	}
+}
+
+SPATIAL_COLLECTION *
+sc_create_relation_op_proj(COLLECTION_TYPE t,
+		              SPATIAL_COLLECTION *sc1,
+		              SPATIAL_COLLECTION *sc2,
+		              projPJ proj_sc1, projPJ proj_sc2,
+		              int32_t srid, projPJ proj_dest,
+		              RELATION_ENV_FUNCTION env_fn,
+		              RELATION_FUNCTION inc_fn,
+		              EVALUATOR *eval)
+{
+	SPATIAL_COLLECTION *sc1_wrap ;
+	SPATIAL_COLLECTION *sc2_wrap ;
+
+	if (sc1 == NULL || sc2 == NULL) return NULL ;
+	if (proj_sc1 == NULL || proj_sc2 == NULL || proj_dest == NULL) return NULL ;
+
+	/* wrap sc1 if necessary */
+	sc1_wrap = sc1 ;
+	if (sc1->srid != srid) {
+		sc1_wrap = sc_create_projection_wrapper(sc1, srid, proj_sc1, proj_dest) ;
+		if (sc1_wrap == NULL) return NULL ;
+	}
+
+	/* wrap sc2 if necessary */
+	sc2_wrap = sc2 ;
+	if (sc2->srid != srid) {
+		sc2_wrap = sc_create_projection_wrapper(sc2, srid, proj_sc2, proj_dest) ;
+		if (sc2_wrap == NULL) return NULL ;
+	}
+
+	return sc_create_relation_op(t, sc1_wrap, sc2_wrap, env_fn, inc_fn, eval) ;
+}
+
+void
+sc_destroy_relation_op_proj(SPATIAL_COLLECTION *dead)
+{
+	if (dead != NULL) {
+		sc_twoinput_destroy(dead) ;
+	}
+}
+
+/** @} */ /* end of relation_collection documentation group */
+
 /** @} */  /* end of spatial_collection_i documentation group */
 
