@@ -1913,6 +1913,23 @@ extern int gbox_contains_point3d(const GBOX *gbox, const POINT3D *pt);
 extern char* gbox_to_string(const GBOX *gbox);
 
 /**
+ * Allocate an LWPOLY containing the four corner points represented by the
+ * #GBOX. The polygon is closed (first and fifth points are the same. 
+ * Caller is responsible for freeing. The LWPOLY will have an unknown SRID.
+ */ 
+extern LWPOLY *gbox_to_lwpoly(GBOX *bbox) ;
+
+/**
+ * Projects the four corners of the #GBOX to the new coordinate system, in place.
+ * Note that this is an approximation only.
+ * @param bbox the #GBOX to project
+ * @param from the current coordinate system of bbox
+ * @param to the desired coordinate system into which bbox should be transformed.
+ */
+extern void project_gbox(GBOX *bbox, projPJ from, projPJ to);
+
+
+/**
 * Return a copy of the #GBOX, based on dimensionality of flags.
 */
 extern GBOX* gbox_copy(const GBOX *gbox);

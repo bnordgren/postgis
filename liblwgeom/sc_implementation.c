@@ -688,23 +688,22 @@ struct proj_wrap_s {
 	projPJ dest ;
 };
 
-void
-project_gbox(GBOX *bbox, projPJ from, projPJ to)
+LWPOLY *
+gbox_to_lwpoly(GBOX *bbox)
 {
 	POINTARRAY **rings ;
 	POINTARRAY *pts ;
 	POINT4D     p4d ;
-	LWPOLY     *extent ;
 
     rings = (POINTARRAY **) rtalloc(sizeof (POINTARRAY*));
     if (!rings) {
-        return ;
+        return NULL ;
     }
     rings[0] = ptarray_construct(0, 0, 5);
     /* TODO: handle error on ptarray construction */
     /* XXX jorgearevalo: the error conditions aren't managed in ptarray_construct */
     if (!rings[0]) {
-        return ;
+        return NULL;
     }
     pts = rings[0];
 
@@ -730,7 +729,17 @@ project_gbox(GBOX *bbox, projPJ from, projPJ to)
     ptarray_set_point4d(pts, 3, &p4d);
 
     /* make the polygon */
-    extent = lwpoly_construct(SRID_UNKNOWN, 0, 1, rings);
+    return lwpoly_construct(SRID_UNKNOWN, 0, 1, rings);
+}
+
+void
+project_gbox(GBOX *bbox, projPJ from, projPJ to)
+{
+	LWPOLY *extent ;
+
+	/* make a polygon out of the gbox */
+	extent = gbox_to_lwpoly(bbox) ;
+	if (extent == NULL) return ;
 
     /* project it and recalculate the mins and maxes */
     lwgeom_transform(lwpoly_as_lwgeom(extent), from, to) ;
