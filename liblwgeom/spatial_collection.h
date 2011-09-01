@@ -118,6 +118,8 @@ void sc_twoinput_destroy(SPATIAL_COLLECTION *dead) ;
 
 VALUE *val_create(int num_values);
 void val_destroy(VALUE *val) ;
+void val_copy(VALUE *to, VALUE *from) ;
+
 
 /* Implementations of the includes interface */
 INCLUDES *sc_create_geometry_includes(LWGEOM *geom) ;

@@ -197,6 +197,15 @@ val_destroy(VALUE *val)
 	}
 }
 
+void
+val_copy(VALUE *to, VALUE *from)
+{
+	if (to == NULL || from == NULL) return ;
+	if (to->length != from->length) return ;
+
+	memcpy(to, from, sizeof(double)*to->length) ;
+}
+
 VALUE *
 sc_evaluate(SPATIAL_COLLECTION *sc, LWPOINT *point)
 {
