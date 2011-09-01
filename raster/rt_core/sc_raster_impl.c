@@ -1,3 +1,4 @@
+#include "liblwgeom.h"
 #include "sc_raster.h"
 #include "rt_api.h"
 #include "gdal.h"
@@ -553,3 +554,97 @@ sc_destroy_raster_nodata_wrapper(SPATIAL_COLLECTION *dead)
 
 /** @} */ /* end of documentation group spatial_collection_i */
 
+void
+sc_sampling_engine(SPATIAL_COLLECTION *source,
+		           rt_raster result)
+{
+	uint16_t width ;
+	uint16_t height ;
+	VALUE   *collection_val ;
+	int      coll_bands ;
+	int      raster_bands ;
+	int      i,j ;
+	LWPOINT *sample_pt ;
+	POINT4D  sample_pt_p4d ;
+
+	if (source == NULL || result == NULL) return ;
+	if (source->type == SPATIAL_ONLY) {
+		rterror("sc_sampling_engine: cannot sample a collection with no values.");
+		return ;
+	}
+	if (source->evaluator == NULL) return ;
+	if (source->evaluator->result == NULL) return ;
+
+	/* get dimensions of the result. */
+	width = result->width ;
+	height = result->height;
+
+	/* get number of bands */
+	collection_val = source->evaluator->result ;
+	coll_bands = collection_val->length ;
+	raster_bands = rt_raster_get_num_bands(result) ;
+
+	/* is the raster ready to receive values from the collection? */
+	if ((raster_bands != 0) && (raster_bands != coll_bands)) {
+		rterror("sc_sampling_engine: non-empty raster must have same number of bands as the sampled collection.") ;
+		return ;
+	}
+
+	/* maybe we have to add the bands ourselves */
+	if (raster_bands == 0) {
+		int band ;
+		for (band=0; band < coll_bands; band++) {
+			uint8_t *band_data ;
+			rt_band empty ;
+			int     pix_size ;
+			rt_pixtype band_type ;
+
+			/* note: need to make VALUE keep track of datatype */
+			band_type = PT_64BF ;
+			pix_size = rt_pixtype_size(band_type) ;
+			band_data = rtalloc(pix_size * width * height) ;
+			if (band_data == NULL) {
+				rterror("sc_sampling_engine: cannot allocate memory for band") ;
+
+				/* free up successfully allocated bands */
+				band -- ;
+				while (band >= 0) {
+					empty = rt_raster_get_band(result, band) ;
+					band_data = (uint8_t *)rt_band_get_data(empty);
+					rt_band_destroy(empty) ;
+					band -- ;
+				}
+				return ;
+			}
+
+			/* make the new band and add it to the raster. */
+			empty = rt_band_new_inline(width, height, band_type, 0, 0.0, band_data);
+			rt_raster_add_band(result, empty, band) ;
+		}
+	}
+
+	/* now sample the raster */
+	sample_pt = lwpoint_make2d(SRID_UNKNOWN, 0,0) ;
+	for (j=0; j<height; j++) {
+		for (i=0; i<width; i++) {
+			int band_num ;
+
+			/* set up the sample point */
+			sample_pt_p4d.x = i ;
+			sample_pt_p4d.y = j ;
+			ptarray_set_point4d(sample_pt->point,0,&sample_pt_p4d) ;
+
+			/* evaluate the collection */
+			collection_val = sc_evaluateIndex(source, sample_pt) ;
+
+			/* copy the values to the raster */
+			for (band_num=0; band_num < coll_bands; band_num++) {
+				rt_band band ;
+
+				band = rt_raster_get_band(result, band_num) ;
+				rt_band_set_pixel(band, i, j, collection_val->data[band_num]) ;
+			}
+		}
+	}
+
+}
