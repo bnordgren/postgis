@@ -695,7 +695,7 @@ gbox_to_lwpoly(GBOX *bbox)
 	POINTARRAY *pts ;
 	POINT4D     p4d ;
 
-    rings = (POINTARRAY **) rtalloc(sizeof (POINTARRAY*));
+    rings = (POINTARRAY **) lwalloc(sizeof (POINTARRAY*));
     if (!rings) {
         return NULL ;
     }
