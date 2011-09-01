@@ -48,12 +48,22 @@ typedef struct
 ** infrastructure like the VARSIZE() macros.
 */
 
+/* allocate a new gidx object on the heap */
+GIDX* gidx_new(int ndims) ;
+
 /* Convert a gidx to a gbox */
 void gbox_from_gidx(GIDX *gidx, GBOX *gbox);
 /* Convert a gbox to a new gidx */
 GIDX* gidx_from_gbox(GBOX box);
 /* Increase the size of a GIDX */
 void gidx_expand(GIDX *a, float d);
+
+
+/* Generate human readable form for GIDX. */
+#if POSTGIS_DEBUG_LEVEL > 0
+char* gidx_to_string(GIDX *a) ; 
+#endif
+
 
 /* Returns number of dimensions for this GIDX */
 #define GIDX_NDIMS(gidx) ((VARSIZE((gidx)) - VARHDRSZ) / (2 * sizeof(float)))
@@ -85,7 +95,7 @@ GSERIALIZED* gserialized_set_gidx(GSERIALIZED *g, GIDX *gidx);
 /* Pull out a gbox bounding box as fast as possible. */
 int gserialized_datum_get_gbox_p(Datum gsdatum, GBOX *gbox);
 /* Given two datums, do they overlap? Computed very fast using embedded boxes. */
-int gserialized_datum_overlaps(Datum gs1, Datum gs2);
+/* int gserialized_datum_overlaps(Datum gs1, Datum gs2); */
 /* Remove the box from a disk serialization */
 GSERIALIZED* gserialized_drop_gidx(GSERIALIZED *g);
 
