@@ -276,6 +276,131 @@ sc_destroy_raster_nodata_includes(INCLUDES *dead)
 
 /** @} */ /* end of documentation group rt_nodata_inc */
 
+/**
+ * \defgroup rt_align_inc Wraps an Include interface, allowing access by raster indices.
+ *
+ * @{
+ * Given a collection and a raster grid definition, this method wraps the
+ * collection with includesIndex() and evaluateIndex() methods. Access to
+ * the collection using the provided raster grid definition is then possible.
+ * The provided raster may be empty, however, the raster and the collection
+ * must have the same srid.
+ */
+
+
+struct rasterwrap_inc_s {
+	INCLUDES *wrapped_inc ;
+	rt_raster align_raster ;
+};
+
+/**
+ * An implementation of the includes method which merely calls the
+ * includes method of the wrapped object. This is reasonable because
+ * we require that the raster's geocoordinates and the wrapped
+ * includes have the same srid. (The collection makes sure of this.)
+ */
+int
+collection_rasterwrap_includes(INCLUDES *inc, LWPOINT *point)
+{
+	struct rasterwrap_inc_s *params ;
+	INCLUDES *wrapped ;
+
+	if (inc == NULL) return 0 ;
+	if (inc->params == NULL) return 0 ;
+
+	params = (struct rasterwrap_inc_s *)(inc->params) ;
+	wrapped = params->wrapped_inc ;
+	if (wrapped == NULL || wrapped->includes == NULL) return 0 ;
+
+	return wrapped->includes(wrapped, point) ;
+}
+
+
+/**
+ * An implementation of includesIndex() which allows the user to
+ * access the collection using the pixel indices of the supplied
+ * raster.
+ */
+int
+collection_rasterwrap_includes_idx(INCLUDES *inc, LWPOINT *point)
+{
+	struct rasterwrap_inc_s *params ;
+	POINT2D   idx;
+	POINT2D   geo ;
+	LWPOINT   *geo_point ;
+	int result ;
+
+	if (inc == NULL || point==NULL) return 0 ;
+	if (inc->params == NULL) return 0 ;
+	if (inc->collection == NULL) return 0 ;
+
+	params = (struct rasterwrap_inc_s *)(inc->params) ;
+	if (params->align_raster == NULL) return 0;
+	if (params->wrapped_inc == NULL) return 0 ;
+	if (params->wrapped_inc->includes == NULL) return 0 ;
+
+	/* compute geocoordinates using the raster's affine transform */
+	lwpoint_getPoint2d_p(point, &idx) ;
+	rt_raster_cell_to_geopoint(params->align_raster,
+			idx.x, idx.y, &(geo.x), &(geo.y)) ;
+
+	/* construct an LWPOINT with the geocoordinates */
+	geo_point = lwpoint_make2d(inc->collection->srid, geo.x, geo.y) ;
+	if (geo_point == NULL) return 0 ;
+
+	/* call the includes method of the wrapped Includes interface */
+	result = params->wrapped_inc->includes(params->wrapped_inc, geo_point) ;
+	lwpoint_free(geo_point) ;
+
+	return result ;
+}
+
+/**
+ * Augments any Includes object with the ability to be accessed by
+ * the indices of the specified raster. Note that the resultant object
+ * returns whether the collection includes the specified raster indices,
+ * not whether the raster includes the indices...
+ *
+ * @param inc the Includes object to augment
+ * @param alignTo the raster containing the desired grid definition
+ */
+INCLUDES *
+sc_create_rasterwrap_includes(INCLUDES *inc, rt_raster alignTo)
+{
+	struct rasterwrap_inc_s *params ;
+	INCLUDES *wrapper ;
+
+	if (inc == NULL || alignTo == NULL) return NULL ;
+
+	params = (struct rasterwrap_inc_s *)rtalloc(sizeof(struct rasterwrap_inc_s)) ;
+	if (params == NULL) return NULL ;
+
+	params->wrapped_inc = inc ;
+	params->align_raster = alignTo ;
+
+	wrapper = inc_create(params,
+			collection_rasterwrap_includes,
+			collection_rasterwrap_includes_idx) ;
+
+	if (wrapper == NULL) {
+		rtdealloc(params) ;
+		return NULL ;
+	}
+
+	return wrapper ;
+}
+
+void sc_destroy_rasterwrap_includes(INCLUDES *dead)
+{
+	if (dead != NULL) {
+		if (dead->params != NULL) {
+			rtdealloc(dead->params) ;
+		}
+		inc_destroy(dead) ;
+	}
+}
+
+/** @} */ /* end of documentation group rt_align_inc */
 /** @} */ /* end of documentation group includes_i */
 
 /**
@@ -452,6 +577,126 @@ sc_destroy_raster_bands_evaluator(EVALUATOR *dead)
 
 /** @} */ /* end of documentation group raster_eval */
 
+/**
+ * \defgroup rt_align_eval Provides access to a collection using a raster's indicies.
+ *
+ * @{
+ */
+
+struct rasterwrap_eval_s {
+	EVALUATOR *wrapped_eval ;
+	rt_raster align_raster ;
+};
+
+/**
+ * An implementation of the evaluate method of the Evaluator interface
+ * which simply calls the evaluate method of the wrapped object. This requires
+ * that the srid of this object, the srid of the wrapped object, and the srid
+ * of the raster's geocoordinates all be identical.
+ */
+VALUE *
+collection_rasterwrap_evaluate(EVALUATOR *eval, LWPOINT *point)
+{
+	struct rasterwrap_eval_s *params ;
+	EVALUATOR *wrapped ;
+	VALUE *wrapped_result ;
+
+	if (eval == NULL ) return NULL ;
+	if (eval->params == NULL) return NULL ;
+
+	params = (struct rasterwrap_eval_s *)(eval->params) ;
+	wrapped = params->wrapped_eval ;
+
+	if (wrapped == NULL || wrapped->evaluate == NULL) return NULL ;
+
+	wrapped_result = wrapped->evaluate(wrapped, point) ;
+	val_copy(eval->result, wrapped_result) ;
+
+	return eval->result ;
+}
+
+/**
+ * An implementation of evaluateIndex() which allows the user to
+ * access the collection using the pixel indices of the supplied
+ * raster.
+ */
+VALUE *
+collection_rasterwrap_evaluate_idx(EVALUATOR *eval, LWPOINT *point)
+{
+	struct rasterwrap_eval_s *params ;
+	POINT2D   idx;
+	POINT2D   geo ;
+	LWPOINT   *geo_point ;
+	VALUE     *wrapped_result ;
+
+	if (eval == NULL || point==NULL) return NULL ;
+	if (eval->params == NULL) return NULL ;
+	if (eval->collection == NULL) return NULL ;
+
+	params = (struct rasterwrap_eval_s *)(eval->params) ;
+	if (params->align_raster == NULL) return NULL;
+	if (params->wrapped_eval == NULL) return NULL ;
+	if (params->wrapped_eval->evaluate == NULL) return NULL ;
+
+	/* compute geocoordinates using the raster's affine transform */
+	lwpoint_getPoint2d_p(point, &idx) ;
+	rt_raster_cell_to_geopoint(params->align_raster,
+			idx.x, idx.y, &(geo.x), &(geo.y)) ;
+
+	/* construct an LWPOINT with the geocoordinates */
+	geo_point = lwpoint_make2d(eval->collection->srid, geo.x, geo.y) ;
+	if (geo_point == NULL) return NULL ;
+
+	/* call the evaluate method of the wrapped Evaluator interface */
+	wrapped_result = params->wrapped_eval->evaluate(params->wrapped_eval, geo_point) ;
+	val_copy(eval->result, wrapped_result) ;
+	lwpoint_free(geo_point) ;
+
+	return eval->result ;
+}
+
+EVALUATOR *
+sc_create_rasterwrap_evaluator(EVALUATOR *eval, rt_raster alignTo)
+{
+	struct rasterwrap_eval_s *params ;
+	EVALUATOR *wrapper ;
+
+	if (eval == NULL || alignTo == NULL) return NULL ;
+	if (eval->result == NULL) return NULL ;
+
+
+	params = (struct rasterwrap_eval_s *)rtalloc(sizeof(struct rasterwrap_eval_s)) ;
+	if (params == NULL) return NULL ;
+
+	params->wrapped_eval = eval ;
+	params->align_raster = alignTo ;
+
+	wrapper = eval_create(params,
+			collection_rasterwrap_evaluate,
+			collection_rasterwrap_evaluate_idx,
+			eval->result->length) ;
+
+	if (wrapper == NULL) {
+		rtdealloc(params) ;
+		return NULL ;
+	}
+
+	return wrapper ;
+}
+
+void
+sc_destroy_rasterwrap_evaluator(EVALUATOR *dead)
+{
+	if (dead != NULL) {
+		if (dead->params != NULL) {
+			rtdealloc(dead->params) ;
+		}
+		eval_destroy(dead) ;
+	}
+}
+
+/** @} */ /* end of documentation group rt_align_eval */
+
 /** @} */ /* end of documentation group evaluator_i */
 
 /**
@@ -551,6 +796,64 @@ sc_destroy_raster_nodata_wrapper(SPATIAL_COLLECTION *dead)
 		sc_destroy(dead) ;
 	}
 }
+
+/**
+ * \defgroup collection_rasterwrap Spatial collection providing access via the indices of the provided raster.
+ *
+ * @{
+ * This spatial collection passes the includes() and evaluates() calls thru to the
+ * wrapped collection. The includesIndex() and evaluateIndex() calls use coordinates
+ * aligned to the grid defined by the provided raster.
+ */
+
+SPATIAL_COLLECTION *
+sc_create_raster_aligned_collection(SPATIAL_COLLECTION *wrapped, rt_raster alignTo)
+{
+	EVALUATOR *eval ;
+	INCLUDES *inc ;
+	SPATIAL_COLLECTION *wrapper ;
+	if (wrapped == NULL || alignTo==NULL) return NULL  ;
+	if (wrapped->inclusion == NULL) return NULL ;
+
+	inc = sc_create_rasterwrap_includes(wrapped->inclusion, alignTo) ;
+	if (inc == NULL) return NULL ;
+
+	eval = NULL  ;
+	if (wrapped->evaluator != NULL) {
+		eval = sc_create_rasterwrap_evaluator(wrapped->evaluator, alignTo) ;
+	}
+
+	wrapper = sc_create(wrapped->type,
+			wrapped->srid,
+			&(wrapped->extent),
+			NULL, inc, eval) ;
+
+	if (wrapper == NULL) {
+		sc_destroy_rasterwrap_includes(inc) ;
+		if (eval != NULL) {
+			sc_destroy_rasterwrap_evaluator(eval) ;
+		}
+		return NULL ;
+	}
+
+	return wrapper ;
+
+}
+
+void
+sc_destroy_raster_aligned_collection(SPATIAL_COLLECTION *dead)
+{
+	if (dead != NULL) {
+		sc_destroy_rasterwrap_includes(dead->inclusion) ;
+		if (dead->evaluator != NULL) {
+			sc_destroy_rasterwrap_evaluator(dead->evaluator) ;
+		}
+		sc_destroy(dead) ;
+	}
+}
+
+/** @} */  /* end of collection_rasterwrap documentation group */
+
 
 /** @} */ /* end of documentation group spatial_collection_i */
 

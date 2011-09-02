@@ -140,8 +140,6 @@ void sc_destroy_relation_includes(INCLUDES *dead) ;
 INCLUDES *sc_create_projection_includes(INCLUDES *wrapped, projPJ source, projPJ dest) ;
 void sc_destroy_projection_includes(INCLUDES *dead);
 
-INCLUDES *sc_create_passthru_includes(INCLUDES *wrapped) ;
-void sc_destroy_passthru_includes(INCLUDES *dead);
 
 
 
@@ -156,9 +154,6 @@ void sc_destroy_first_value_evaluator(EVALUATOR *dead);
 EVALUATOR *sc_create_projection_eval(EVALUATOR *wrapped, projPJ source, projPJ dest) ;
 void sc_destroy_projection_eval(EVALUATOR *dead);
 
-EVALUATOR *sc_create_passthru_evaluator(EVALUATOR *wrapped);
-void sc_destroy_passthru_evaluator(EVALUATOR *dead);
-
 
 
 
@@ -171,9 +166,6 @@ sc_create_projection_wrapper(SPATIAL_COLLECTION *wrapped,
 		                     int32_t desired_srid,
 		                     projPJ wrapped_proj, projPJ desired_proj );
 void sc_destroy_projection_wrapper(SPATIAL_COLLECTION *dead);
-
-SPATIAL_COLLECTION *sc_create_passthru_wrapper(SPATIAL_COLLECTION *wrapped);
-void sc_destroy_passthru_wrapper(SPATIAL_COLLECTION *dead) ;
 
 
 /**

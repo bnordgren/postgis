@@ -229,45 +229,6 @@ sc_destroy_relation_includes(INCLUDES *dead)
 
 /** @}*/ /* end of sc_relation_include documentation group */
 
-/**
- * \defgroup sc_passthru_include Wrapper functions to just pass the call along
- *
- * @{
- * An implementation of the include wrapper which merely passes the
- * "includes" call along to the wrapped "includes".  This is necessary
- * for the case where a raster must override the includesIndex function
- * but needs to leave the includes function alone.
- */
-
-int
-passthru_includes(INCLUDES *inc, LWPOINT *point)
-{
-	INCLUDES *wrapped ;
-
-	if (inc == NULL) return 0 ;
-
-	wrapped = (INCLUDES *)(inc->params) ;
-	if (wrapped == NULL || wrapped->includes == NULL) return 0 ;
-
-	return wrapped->includes(wrapped, point) ;
-}
-
-INCLUDES *
-sc_create_passthru_includes(INCLUDES *wrapped)
-{
-	if (wrapped == NULL) return NULL ;
-	return inc_create((PARAMETERS *)wrapped, passthru_includes, NULL) ;
-}
-
-void
-sc_destroy_passthru_includes(INCLUDES *dead)
-{
-	if (dead != NULL) {
-		inc_destroy(dead) ;
-	}
-}
-
-/** @}*/ /* end of sc_passthru_include documentation group */
 
 /** @}*/ /* end of includes_i documentation group */
 
@@ -647,48 +608,6 @@ sc_destroy_first_value_evaluator(EVALUATOR *dead)
 
 /** @} */ /* end of firstval_evaluator_i documentation group */
 
-/**
- * \defgroup passthru_eval Wrapper which just calls the wrapped object's evaluate method.
- *
- * @{
- * This implementation of the evaluator interface just calls the
- * evaluate() method on the wrapped object. This is necessary when
- * raster needs to override the evaluateIndex method without affecting
- * the evaluate function.
- */
-
-VALUE *
-passthru_evaluate(EVALUATOR *eval, LWPOINT *point)
-{
-	EVALUATOR *wrapped ;
-
-	if (eval == NULL ) return NULL ;
-	wrapped = (EVALUATOR *)(eval->params) ;
-
-	if (wrapped == NULL || wrapped->evaluate == NULL) return NULL ;
-
-	return wrapped->evaluate(wrapped, point) ;
-}
-
-EVALUATOR *
-sc_create_passthru_evaluator(EVALUATOR *wrapped)
-{
-	if (wrapped == NULL) return NULL ;
-	if (wrapped->result == NULL) return NULL ;
-
-	return eval_create((PARAMETERS *)wrapped, passthru_evaluate,
-			NULL, wrapped->result->length) ;
-}
-
-void
-sc_destroy_passthru_evaluator(EVALUATOR *dead)
-{
-	if (dead != NULL) {
-		eval_destroy(dead) ;
-	}
-}
-
-/** @} */ /* end of passthru_eval documentation group */
 /** @} */ /* end of evaluator_i documentation group */
 
 /**
@@ -1070,50 +989,5 @@ sc_destroy_relation_op_proj(SPATIAL_COLLECTION *dead)
 
 /** @} */ /* end of relation_collection documentation group */
 
-/**
- * \defgroup passthru_collection Spatial collection which passes thru includes and evaluate calls to the wrapped object.
- *
- * @{
- * This spatial collection passes the includes() and evaluates() calls thru to the
- * wrapped collection. This is necessary when raster needs to override the
- * index methods but needs to leave the "normal" methods untouched.
- */
-
-SPATIAL_COLLECTION *
-sc_create_passthru_wrapper(SPATIAL_COLLECTION *wrapped)
-{
-	EVALUATOR *eval ;
-	INCLUDES *inc ;
-	if (wrapped == NULL) return NULL  ;
-	if (wrapped->inclusion == NULL) return NULL ;
-
-	inc = sc_create_passthru_includes(wrapped->inclusion) ;
-	if (inc == NULL) return NULL ;
-
-	eval = NULL  ;
-	if (wrapped->evaluator != NULL) {
-		eval = sc_create_passthru_evaluator(wrapped->evaluator) ;
-	}
-
-	return sc_create(wrapped->type,
-			wrapped->srid,
-			&(wrapped->extent),
-			NULL, inc, eval) ;
-
-}
-
-void
-sc_destroy_passthru_wrapper(SPATIAL_COLLECTION *dead)
-{
-	if (dead != NULL) {
-		sc_destroy_passthru_includes(dead->inclusion) ;
-		if (dead->evaluator != NULL) {
-			sc_destroy_passthru_evaluator(dead->evaluator) ;
-		}
-		sc_destroy(dead) ;
-	}
-}
-
-/** @} */  /* end of passthru_collection documentation group */
 /** @} */  /* end of spatial_collection_i documentation group */
 
