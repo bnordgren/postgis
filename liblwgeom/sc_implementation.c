@@ -891,6 +891,41 @@ GBOX *relation_env_symdifference(LWPOLY *r1, LWPOLY *r2)
  * @{
  */
 
+
+/**
+ * A collection implementation encapsulating the spatial relationship
+ * of two input collections. The user may specify an existing
+ * #ENVELOPE_PREP_OP to calculate the spatial extent of the result.
+ * A #RELATION_FN may also be provided to determine whether an
+ * individual point is included in the result. An arbitrary
+ * #EVALUATOR may also be provided (which must be compatible with
+ * the inputs).
+ *
+ * The result and the two inputs must be in the same projection
+ * (same srid).
+ *
+ * This constructor is probably not what you want, unless you have
+ * written a custom #ENVELOPE_PREP_OP or #RELATION_FN (or need to
+ * specify some nonstandard combination.) See the #sc_create_sync_relation_op
+ * for a constructor which synchronizes the #ENVELOPE_PREP_OP and
+ * #RELATION_FN to an enumerated #RELATION_TYPE.
+ *
+ * When the result is expressed in a different projection than
+ * one or both inputs, see #sc_create_relation_op_proj or
+ * #sc_create_sync_relation_op_proj.
+ *
+ * @returns the resultant collection
+ * @param t type of the collection (#SPATIAL_ONLY or #SPATIAL_PLUS_VALUE).
+ * @param sc1 the first input collection
+ * @param sc2 the second input collection
+ * @param env_fn an #ENVELOPE_PREP_OP to calculate the extent of the result
+ *               given sc1 and sc2
+ * @param inc_fn a #RELATION_FN to calculate whether an individual point
+ *               is included in the result, given sc1 and sc2
+ * @param eval   an #EVALUATOR which provides a resultant value given
+ *               the values of sc1 and/or sc2. May be NULL if t is
+ *               #SPATIAL_ONLY
+ */
 SPATIAL_COLLECTION *
 sc_create_relation_op(COLLECTION_TYPE t,
 		              SPATIAL_COLLECTION *sc1,
@@ -944,6 +979,29 @@ sc_create_relation_op(COLLECTION_TYPE t,
 	return result ;
 }
 
+/**
+ * A collection implementation encapsulating the spatial relationship
+ * of two input collections. The user specifies the relation by supplying
+ * a #RELATION_TYPE value.  An arbitrary
+ * #EVALUATOR may also be provided (which must be compatible with
+ * the inputs).
+ *
+ * The result and the two inputs must be in the same projection
+ * (same srid).
+ *
+ * When the result is expressed in a different projection than
+ * one or both inputs, see #sc_create_relation_op_proj or
+ * #sc_create_sync_relation_op_proj.
+ *
+ * @returns the resultant collection
+ * @param t type of the collection (#SPATIAL_ONLY or #SPATIAL_PLUS_VALUE).
+ * @param sc1 the first input collection
+ * @param sc2 the second input collection
+ * @param relation specifies a supported, predefined spatial relationship
+ * @param eval   an #EVALUATOR which provides a resultant value given
+ *               the values of sc1 and/or sc2. May be NULL if t is
+ *               #SPATIAL_ONLY
+ */
 SPATIAL_COLLECTION *
 sc_create_sync_relation_op(COLLECTION_TYPE t,
 		              SPATIAL_COLLECTION *sc1,
@@ -988,6 +1046,48 @@ sc_destroy_relation_op(SPATIAL_COLLECTION *dead)
  * @{
  */
 
+
+/**
+ * A collection implementation encapsulating the spatial relationship
+ * of two input collections. The user may specify an existing
+ * #ENVELOPE_PREP_OP to calculate the spatial extent of the result.
+ * A #RELATION_FN may also be provided to determine whether an
+ * individual point is included in the result. An arbitrary
+ * #EVALUATOR may also be provided (which must be compatible with
+ * the inputs).
+ *
+ * Projection information must be specified for the result and
+ * both inputs. If necessary, each input is wrapped with a
+ * projection wrapper into the destination projection.
+ *
+ * This constructor is probably not what you want, unless you have
+ * written a custom #ENVELOPE_PREP_OP or #RELATION_FN (or need to
+ * specify some nonstandard combination.) See the #sc_create_sync_relation_op
+ * for a constructor which synchronizes the #ENVELOPE_PREP_OP and
+ * #RELATION_FN to an enumerated #RELATION_TYPE.
+ *
+ *
+ * When the result and the two inputs are known to be in the same
+ * projection, see #sc_create_relation_op or
+ * #sc_create_sync_relation_op.
+ *
+ * @returns the resultant collection
+ * @param t type of the collection (#SPATIAL_ONLY or #SPATIAL_PLUS_VALUE).
+ * @param sc1 the first input collection
+ * @param sc2 the second input collection
+ * @param proj_sc1 projection information for first input
+ * @param proj_sc2 projection information for second input
+ * @param srid     srid of the result
+ * @param proj_dest projection information for the result
+ * @param env_fn an #ENVELOPE_PREP_OP to calculate the extent of the result
+ *               given sc1 and sc2
+ * @param inc_fn a #RELATION_FN to calculate whether an individual point
+ *               is included in the result, given sc1 and sc2
+ * @param eval   an #EVALUATOR which provides a resultant value given
+ *               the values of sc1 and/or sc2. May be NULL if t is
+ *               #SPATIAL_ONLY
+ */
+
 SPATIAL_COLLECTION *
 sc_create_relation_op_proj(COLLECTION_TYPE t,
 		              SPATIAL_COLLECTION *sc1,
@@ -1021,6 +1121,33 @@ sc_create_relation_op_proj(COLLECTION_TYPE t,
 	return sc_create_relation_op(t, sc1_wrap, sc2_wrap, env_fn, inc_fn, eval) ;
 }
 
+/**
+ * A collection implementation encapsulating the spatial relationship
+ * of two input collections. The user may specifies a supported,
+ * predefined spatial operation using the #RELATION_TYPE enumeration.
+ * An arbitrary
+ * #EVALUATOR may also be provided (which must be compatible with
+ * the inputs).
+ *
+ * Projection information must be specified for
+ * both inputs. The projection of the first input is used as the
+ * projection of the result.
+ *
+ * When the result and the two inputs are known to be in the same
+ * projection, see #sc_create_relation_op or
+ * #sc_create_sync_relation_op.
+ *
+ * @returns the resultant collection
+ * @param t type of the collection (#SPATIAL_ONLY or #SPATIAL_PLUS_VALUE).
+ * @param sc1 the first input collection
+ * @param sc2 the second input collection
+ * @param proj_sc1 projection information for first input
+ * @param proj_sc2 projection information for second input
+ * @param relation the desired predefined spatial relationship
+ * @param eval   an #EVALUATOR which provides a resultant value given
+ *               the values of sc1 and/or sc2. May be NULL if t is
+ *               #SPATIAL_ONLY
+ */
 SPATIAL_COLLECTION *
 sc_create_sync_relation_op_proj(COLLECTION_TYPE t,
 		              SPATIAL_COLLECTION *sc1,
@@ -1065,6 +1192,11 @@ sc_destroy_relation_op_proj(SPATIAL_COLLECTION *dead)
 
 /** @} */  /* end of spatial_collection_i documentation group */
 
+
+/**
+ * Converts a #RELATION_TYPE value to a #RELATION_FN.
+ * Returns NULL if the value is not recognized.
+ */
 RELATION_FN
 sc_get_relation_fn(RELATION_TYPE relation)
 {
@@ -1091,6 +1223,11 @@ sc_get_relation_fn(RELATION_TYPE relation)
 	return result ;
 }
 
+/**
+ * Converts a #RELATION_TYPE value to an
+ * #ENVELOPE_PREP_OP function pointer. Returns
+ * NULL if the value is not recognized.
+ */
 ENVELOPE_PREP_OP
 sc_get_envelope_fn(RELATION_TYPE relation)
 {
