@@ -1057,6 +1057,300 @@ WHERE short_name = 'GTiff') As g;
   
   <sect1 id="Raster_Constructors">
   		<title>Raster Constructors</title>
+  			<refentry id="RT_ST_AsRaster">
+			<refnamediv>
+				<refname>ST_AsRaster</refname>
+				<refpurpose>Converts a PostGIS geometry to a PostGIS raster.</refpurpose>
+			</refnamediv>
+		
+			<refsynopsisdiv>
+				<funcsynopsis>
+				  <funcprototype>
+					<funcdef>raster <function>ST_AsRaster</function></funcdef>
+					<paramdef><type>geometry </type> <parameter>geom</parameter></paramdef>
+					<paramdef><type>integer </type> <parameter>width</parameter></paramdef>
+					<paramdef><type>integer </type> <parameter>height</parameter></paramdef>
+					<paramdef><type>double precision </type> <parameter>gridx</parameter></paramdef>
+					<paramdef><type>double precision </type> <parameter>gridy</parameter></paramdef>
+					<paramdef><type>text </type> <parameter>pixeltype</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision </type> <parameter>value=1</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision </type> <parameter>nodataval=0</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision </type> <parameter>skewx=0</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision </type> <parameter>skewy=0</parameter></paramdef>
+				  </funcprototype>
+				  
+				  <funcprototype>
+					<funcdef>raster <function>ST_AsRaster</function></funcdef>
+					<paramdef><type>geometry </type> <parameter>geom</parameter></paramdef>
+					<paramdef><type>integer </type> <parameter>width</parameter></paramdef>
+					<paramdef><type>integer </type> <parameter>height</parameter></paramdef>
+					<paramdef><type>text[] </type> <parameter>pixeltype</parameter></paramdef>
+					<paramdef><type>double precision[] </type> <parameter>value</parameter></paramdef>
+					<paramdef><type>double precision[] </type> <parameter>nodataval=ARRAY[0]</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision </type> <parameter>upperleftx=NULL</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision </type> <parameter>upperlefty=NULL</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision </type> <parameter>skewx=0</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision </type> <parameter>skewy=0</parameter></paramdef>
+				  </funcprototype>
+				  
+				  <funcprototype>
+					<funcdef>raster <function>ST_AsRaster</function></funcdef>
+					<paramdef><type>geometry </type> <parameter>geom</parameter></paramdef>
+					<paramdef><type>integer </type> <parameter>width</parameter></paramdef>
+					<paramdef><type>integer </type> <parameter>height</parameter></paramdef>
+					<paramdef><type>text </type> <parameter>pixeltype</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision </type> <parameter>value=1</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision </type> <parameter>nodataval=0</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision </type> <parameter>upperleftx=NULL</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision </type> <parameter>upperlefty=NULL</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision </type> <parameter>skewx=0</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision </type> <parameter>skewy=0</parameter></paramdef>
+				  </funcprototype>
+				  
+				  <funcprototype>
+					<funcdef>raster <function>ST_AsRaster</function></funcdef>
+					<paramdef><type>geometry </type> <parameter>geom</parameter></paramdef>
+					<paramdef><type>integer </type> <parameter>width</parameter></paramdef>
+					<paramdef><type>integer </type> <parameter>height</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision </type> <parameter>gridx=NULL</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision </type> <parameter>gridy=NULL</parameter></paramdef>
+					<paramdef><type>text[] </type> <parameter>pixeltype=ARRAY[8BUI]</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision[] </type> <parameter>value=ARRAY[1]</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision[] </type> <parameter>nodataval=ARRAY[0]</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision </type> <parameter>skewx=0</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision </type> <parameter>skewy=0</parameter></paramdef>
+				  </funcprototype>
+				  
+				  <funcprototype>
+					<funcdef>raster <function>ST_AsRaster</function></funcdef>
+					<paramdef><type>geometry </type> <parameter>geom</parameter></paramdef>
+					<paramdef><type>double precision </type> <parameter>scalex</parameter></paramdef>
+					<paramdef><type>double precision </type> <parameter>scaley</parameter></paramdef>
+					<paramdef><type>text </type> <parameter>pixeltype</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision </type> <parameter>value=1</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision </type> <parameter>nodataval=0</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision </type> <parameter>upperleftx=NULL</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision </type> <parameter>upperlefty=NULL</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision </type> <parameter>skewx=0</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision </type> <parameter>skewy=0</parameter></paramdef>
+				  </funcprototype>
+				  
+				  <funcprototype>
+					<funcdef>raster <function>ST_AsRaster</function></funcdef>
+					<paramdef><type>geometry </type> <parameter>geom</parameter></paramdef>
+					<paramdef><type>raster </type> <parameter>ref</parameter></paramdef>
+					<paramdef><type>text </type> <parameter>pixeltype</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision </type> <parameter>value=1</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision </type> <parameter>nodataval=0</parameter></paramdef>
+				  </funcprototype>
+				  
+				  <funcprototype>
+					<funcdef>raster <function>ST_AsRaster</function></funcdef>
+					<paramdef><type>geometry </type> <parameter>geom</parameter></paramdef>
+					<paramdef><type>raster </type> <parameter>ref</parameter></paramdef>
+					<paramdef choice='opt'><type>text[] </type> <parameter>pixeltype=ARRAY[8BUI]</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision[] </type> <parameter>value=ARRAY[1]</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision[] </type> <parameter>nodataval=ARRAY[0]</parameter></paramdef>
+				  </funcprototype>
+				  
+				  <funcprototype>
+					<funcdef>raster <function>ST_AsRaster</function></funcdef>
+					<paramdef><type>geometry </type> <parameter>geom</parameter></paramdef>
+					<paramdef><type>double precision </type> <parameter>scalex</parameter></paramdef>
+					<paramdef><type>double precision </type> <parameter>scaley</parameter></paramdef>
+					<paramdef><type>double precision </type> <parameter>gridx</parameter></paramdef>
+					<paramdef><type>double precision </type> <parameter>gridy</parameter></paramdef>
+					<paramdef><type>text </type> <parameter>pixeltype</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision </type> <parameter>value=1</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision </type> <parameter>nodataval=0</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision </type> <parameter>skewx=0</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision </type> <parameter>skewy=0</parameter></paramdef>
+				  </funcprototype>
+				  
+				  <funcprototype>
+					<funcdef>raster <function>ST_AsRaster</function></funcdef>
+					<paramdef><type>geometry </type> <parameter>geom</parameter></paramdef>
+					<paramdef><type>double precision </type> <parameter>scalex</parameter></paramdef>
+					<paramdef><type>double precision </type> <parameter>scaley</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision </type> <parameter>gridx=NULL</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision </type> <parameter>gridy=NULL</parameter></paramdef>
+					<paramdef choice='opt'><type>text[] </type> <parameter>pixeltype=ARRAY[8BUI]</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision[] </type> <parameter>value=ARRAY[1]</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision[] </type> <parameter>nodataval=ARRAY[0]</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision </type> <parameter>skewx=0</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision </type> <parameter>skewy=0</parameter></paramdef>
+				  </funcprototype>
+				 
+				</funcsynopsis>
+			</refsynopsisdiv>
+		
+            <refsection>
+                <title>Description</title>
+                
+                <para>Converts a postgis geometry to a postgis raster.  This is particularly useful for rendering jpegs and pngs of geometries directly from the database when using in combination
+                    with <xref linkend="RT_ST_AsPNG" /> and other <xref linkend="RT_ST_AsGDALRaster" /> family of functions.</para>
+                 <para>To create the postgis raster, the X and Y scale or the width and height of the new raster or a reference raster must be provided.</para>
+                 <para>The output raster will be in the same coordinate system as the source geometry. The only exception is for ST_AsRaster variations with a raster input parameter. </para>
+                 <para>Availability: 2.0.0 - requires GDAL &gt;= 1.6.0. </para>
+                 <note><para>Not yet capable of rendering complex geometry types such as curves, TINS, and PolyhedralSurfaces, but should be
+                 able too once GDAL can.</para></note>
+            </refsection>
+            
+            <refsection>
+                <title>Examples: Output geometries as PNG files</title>
+                <para><informalfigure>
+							<mediaobject>
+							  <imageobject>
+								<imagedata fileref="images/st_asraster01.png" />
+							  </imageobject>
+							  <caption><para>black circle</para></caption>
+							</mediaobject>
+						  </informalfigure></para>
+                <programlisting>
+-- this will output a black circle taking up 150 x 150 pixels --
+SELECT ST_AsPNG(ST_AsRaster(ST_Buffer(ST_Point(1,5),10),150, 150, '2BUI'));</programlisting>
+
+ <para><informalfigure>
+							<mediaobject>
+							  <imageobject>
+								<imagedata fileref="images/st_asraster02.png" />
+							  </imageobject>
+							  <caption><para>example from buffer rendered with just PostGIS</para></caption>
+							</mediaobject>
+						  </informalfigure></para>
+
+                <programlisting>-- the bands map to RGB bands - the value (118,154,118) - teal  --
+SELECT ST_AsPNG(
+	ST_AsRaster(
+		ST_Buffer(
+			ST_GeomFromText('LINESTRING(50 50,150 150,150 50)'), 10,'join=bevel'), 
+			200,200,ARRAY['8BUI', '8BUI', '8BUI'], ARRAY[118,154,118], ARRAY[0,0,0]));</programlisting>
+        
+            </refsection>
+            <!-- Optionally add a "See Also" section -->
+			<refsection>
+				<title>See Also</title>
+				<para><xref linkend="RT_ST_BandPixelType" />, <xref linkend="ST_Buffer" />, <xref linkend="RT_ST_GDALDrivers" />, <xref linkend="RT_ST_AsGDALRaster" />,<xref linkend="RT_ST_AsPNG" /> , <xref linkend="RT_ST_AsJPEG" />, <xref linkend="RT_ST_SRID" /></para>
+			</refsection>
+		</refentry>
+		
+			<refentry id="RT_ST_Band">
+			<refnamediv>
+				<refname>ST_Band</refname>
+				<refpurpose>Returns one or more bands of an existing raster as a new raster.  Useful for building new rasters from existing rasters.</refpurpose>
+			</refnamediv>
+		
+			<refsynopsisdiv>
+				<funcsynopsis>
+				   <funcprototype>
+					<funcdef>raster <function>ST_Band</function></funcdef>
+					<paramdef><type>raster </type> <parameter>rast</parameter></paramdef>
+					<paramdef choice='opt'><type>integer[] </type> <parameter>nbands = ARRAY[1]</parameter></paramdef>
+				  </funcprototype>
+				  
+				  <funcprototype>
+					<funcdef>raster <function>ST_Band</function></funcdef>
+					<paramdef><type>raster </type> <parameter>rast</parameter></paramdef>
+					<paramdef><type>text </type> <parameter>nbands</parameter></paramdef>
+					<paramdef choice='opt'><type>character </type> <parameter>delimiter=,</parameter></paramdef>
+				  </funcprototype>
+				  
+				  <funcprototype>
+					<funcdef>raster <function>ST_Band</function></funcdef>
+					<paramdef><type>raster </type> <parameter>rast</parameter></paramdef>
+					<paramdef><type>integer </type> <parameter>nband</parameter></paramdef>
+				  </funcprototype>
+				</funcsynopsis>
+			</refsynopsisdiv>
+		
+			<refsection>
+				<title>Description</title>
+				
+				<para>Returns a single band of an existing raster as a new raster.  Useful for building new rasters from existing rasters or export of only selected
+				bands of a raster. If no band is specified, band 1 is assumed. Used as a helper function in various functions such as for deleting a band.</para>
+                    
+                 <para>Availability: 2.0.0</para>
+			</refsection>
+				
+				<refsection>
+					<title>Examples</title>
+				
+					<programlisting>-- Make 2 new rasters: 1 containing band 1 of dummy, second containing band 2 of dummy and then reclassified as a 2BUI
+SELECT ST_NumBands(rast1) As numb1, ST_BandPixelType(rast1) As pix1, 
+ ST_NumBands(rast2) As numb2,  ST_BandPixelType(rast2) As pix2
+FROM (
+    SELECT ST_Band(rast) As rast1, ST_Reclass(ST_Band(rast,3), '100-200):1, [200-254:2', '2BUI') As rast2
+        FROM dummy_rast
+        WHERE rid = 2) As foo;
+        
+ numb1 | pix1 | numb2 | pix2
+-------+------+-------+------
+     1 | 8BUI |     1 | 2BUI
+					</programlisting>
+					
+					<programlisting>-- Return bands 2 and 3. Use text to define bands
+SELECT ST_NumBands(ST_Band(rast, '2,3')) As num_bands
+    FROM dummy_rast WHERE rid=2;
+    
+num_bands
+----------
+2
+    
+-- Return bands 2 and 3. Use array to define bands
+SELECT ST_NumBands(ST_Band(rast, ARRAY[2,3])) As num_bands
+    FROM dummy_rast 
+WHERE rid=2;
+					</programlisting>
+<informaltable>
+  <tgroup cols="3">
+	<tbody>
+	  <row>
+		<entry><informalfigure>
+			<mediaobject>
+			  <imageobject>
+				<imagedata fileref="images/st_band01.png" />
+			  </imageobject>
+			  <caption><para>original (column rast)</para></caption>
+			</mediaobject>
+		  </informalfigure>
+		 </entry>
+		<entry><informalfigure>
+			<mediaobject>
+			  <imageobject>
+				<imagedata fileref="images/st_band02.png" />
+			  </imageobject>
+			  <caption><para>dupe_band</para></caption>
+			</mediaobject>
+		  </informalfigure>
+		 </entry>
+		<entry><informalfigure>
+			<mediaobject>
+			  <imageobject>
+				<imagedata fileref="images/st_band03.png" />
+			  </imageobject>
+			  <caption><para>sing_band</para></caption>
+			</mediaobject>
+		  </informalfigure>
+		 </entry>
+		</row>
+	</tbody>
+</tgroup>
+</informaltable>
+		<programlisting>--Make a new raster with 2nd band of original and 1st band repeated twice,
+and another with just the third band
+SELECT rast, ST_Band(rast, ARRAY[2,1,1]) As dupe_band,  
+	ST_Band(rast, 3) As sing_band 
+FROM samples.than_chunked 
+WHERE rid=35;							
+					</programlisting>
+			
+			</refsection>
+
+			<refsection>
+				<title>See Also</title>
+				<para><xref linkend="RT_ST_AddBand" />, <xref linkend="RT_ST_NumBands" />, , <xref linkend="RT_ST_Reclass" /></para>
+			</refsection>
+		</refentry>
   		<refentry id="RT_ST_MakeEmptyRaster">
 			<refnamediv>
 				<refname>ST_MakeEmptyRaster</refname>
@@ -2141,82 +2435,6 @@ FROM (SELECT ST_MetaData(rast) As rmd
 			</refsection>
 		</refentry>
 		
-		<refentry id="RT_ST_Band">
-			<refnamediv>
-				<refname>ST_Band</refname>
-				<refpurpose>Returns one or more bands of an existing raster as a new raster.  Useful for building new rasters from existing rasters.</refpurpose>
-			</refnamediv>
-		
-			<refsynopsisdiv>
-				<funcsynopsis>
-				   <funcprototype>
-					<funcdef>raster <function>ST_Band</function></funcdef>
-					<paramdef><type>raster </type> <parameter>rast</parameter></paramdef>
-					<paramdef choice='opt'><type>integer[] </type> <parameter>nbands = ARRAY[1]</parameter></paramdef>
-				  </funcprototype>
-				  
-				  <funcprototype>
-					<funcdef>raster <function>ST_Band</function></funcdef>
-					<paramdef><type>raster </type> <parameter>rast</parameter></paramdef>
-					<paramdef><type>text </type> <parameter>nbands</parameter></paramdef>
-					<paramdef choice='opt'><type>character </type> <parameter>delimiter=,</parameter></paramdef>
-				  </funcprototype>
-				  
-				  <funcprototype>
-					<funcdef>raster <function>ST_Band</function></funcdef>
-					<paramdef><type>raster </type> <parameter>rast</parameter></paramdef>
-					<paramdef><type>integer </type> <parameter>nband</parameter></paramdef>
-				  </funcprototype>
-				</funcsynopsis>
-			</refsynopsisdiv>
-		
-			<refsection>
-				<title>Description</title>
-				
-				<para>Returns a single band of an existing raster as a new raster.  Useful for building new rasters from existing rasters or export of only selected
-				bands of a raster. If no band is specified, band 1 is assumed. Used as a helper function in various functions such as for deleting a band.</para>
-                    
-                 <para>Availability: 2.0.0</para>
-			</refsection>
-				
-				<refsection>
-					<title>Examples</title>
-				
-					<programlisting>-- Make 2 new rasters: 1 containing band 1 of dummy, second containing band 2 of dummy and then reclassified as a 2BUI
-SELECT ST_NumBands(rast1) As numb1, ST_BandPixelType(rast1) As pix1, 
- ST_NumBands(rast2) As numb2,  ST_BandPixelType(rast2) As pix2
-FROM (
-    SELECT ST_Band(rast) As rast1, ST_Reclass(ST_Band(rast,3), '100-200):1, [200-254:2', '2BUI') As rast2
-        FROM dummy_rast
-        WHERE rid = 2) As foo;
-        
- numb1 | pix1 | numb2 | pix2
--------+------+-------+------
-     1 | 8BUI |     1 | 2BUI
-					</programlisting>
-					
-					<programlisting>-- Return bands 2 and 3. Use text to define bands
-SELECT ST_NumBands(ST_Band(rast, '2,3')) As num_bands
-    FROM dummy_rast WHERE rid=2;
-    
-num_bands
-----------
-2
-    
--- Return bands 2 and 3. Use array to define bands
-SELECT ST_NumBands(ST_Band(rast, ARRAY[2,3])) As num_bands
-    FROM dummy_rast 
-WHERE rid=2;
-					</programlisting>
-			
-			</refsection>
-
-			<refsection>
-				<title>See Also</title>
-				<para><xref linkend="RT_ST_AddBand" />, <xref linkend="RT_ST_NumBands" />, , <xref linkend="RT_ST_Reclass" /></para>
-			</refsection>
-		</refentry>
-		
 		<refentry id="RT_ST_BandMetaData">
 			<refnamediv>
 				<refname>ST_BandMetaData</refname>
@@ -3253,6 +3471,60 @@ WHERE rid = 2;
 			<refsection>
 				<title>See Also</title>
 				<para><xref linkend="RT_ST_UpperLeftX" />,<xref linkend="RT_ST_UpperLeftY" /></para>
+			</refsection>
+		</refentry>
+		
+		<refentry id="RT_ST_Resample">
+			<refnamediv>
+				<refname>ST_Resample</refname>
+				<refpurpose>Warps a raster in a known spatial reference system using a specified resampling algorithm and reference raster.  The new raster will have the same srid, skew and dimensions as the reference.
+				    Uses NearestNeighbor if no algorithm is specified Options: NearestNeighbor (english or american spelling), Bilinear, Cubic, CubicSpline, Lanczos.</refpurpose>
+			</refnamediv>
+		
+			<refsynopsisdiv>
+				<funcsynopsis>
+				  <funcprototype>
+					<funcdef>raster <function>ST_Resample</function></funcdef>
+					<paramdef><type>raster </type> <parameter>rast</parameter></paramdef>
+					<paramdef><type>raster </type> <parameter>ref</parameter></paramdef>
+					<paramdef choice='opt'><type>text </type> <parameter>algorithm=NearestNeighbour</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision </type> <parameter>maxerr=0.125</parameter></paramdef>
+				  </funcprototype>
+				  
+				  <funcprototype>
+					<funcdef>raster <function>ST_Resample</function></funcdef>
+					<paramdef><type>raster </type> <parameter>rast</parameter></paramdef>
+					<paramdef choice='opt'><type>integer </type> <parameter>srid=NULL</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision </type> <parameter>scalex=0</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision </type> <parameter>scaley=0</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision </type> <parameter>gridx=NULL</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision </type> <parameter>gridy=NULL</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision </type> <parameter>skewx=0</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision </type> <parameter>skewy=0</parameter></paramdef>
+					<paramdef choice='opt'><type>text </type> <parameter>algorithm=NearestNeighbor</parameter></paramdef>
+					<paramdef choice='opt'><type>double precision </type> <parameter>maxerr=0.125</parameter></paramdef>
+				  </funcprototype>
+				</funcsynopsis>
+			</refsynopsisdiv>
+
+			<refsection>
+				<title>Description</title>
+				
+				<para>Warps a raster using specified pixel warping algorithm. 
+				    Uses 'NearestNeighbor' if no algorithm is specified and maxerror percent of 0.125 if no maxerr is specified.</para>
+				<para>Algorithm options are: 'NearestNeighbor', 'Bilinear', 'Cubic', 'CubicSpline', and 'Lanczos'.  Refer to: <ulink url="http://www.gdal.org/gdalwarp.html">GDAL Warp resampling methods</ulink> for more details. NearestNeighbor is the fastest but worst interpoloation</para>
+				<para>Availability: 2.0.0  Requires GDAL 1.6.1+</para>
+			</refsection>
+				
+			<refsection>
+					<title>Examples</title>
+				
+					<programlisting>-- TO DO --</programlisting>
+			</refsection>
+
+			<refsection>
+				<title>See Also</title>
+				<para><xref linkend="RT_ST_Transform" /></para>
 			</refsection>
 		</refentry>
 		
@@ -4310,7 +4582,7 @@ FROM dummy_rast WHERE rid=2;
 		<refentry id="RT_ST_AsJPEG">
 			<refnamediv>
 				<refname>ST_AsJPEG</refname>
-				<refpurpose>Return the raster tile selected bands as a single Joint Photographic Exports Group (JPEG) image (byte array).  If no band is specified, then the first 3 bands are used.</refpurpose>
+				<refpurpose>Return the raster tile selected bands as a single Joint Photographic Exports Group (JPEG) image (byte array).  If no band is specified and 1 or more than 3 bands, then only the first band is used.  If only 3 bands then all 3 bands are used and mapped to RGB.</refpurpose>
 			</refnamediv>
 		
 			<refsynopsisdiv>
@@ -4350,7 +4622,7 @@ FROM dummy_rast WHERE rid=2;
 			<refsection>
 				<title>Description</title>
 				
-				<para>Returns the selected bands of the raster as a single  Joint Photographic Exports Group Image (JPEG).  Use <xref linkend="RT_ST_AsGDALRaster" /> if you need to export as less common raster types. If no band is specified, then the first 3 bands are exported.  There are many variants of the function with many options. These are itemized below:</para>
+				<para>Returns the selected bands of the raster as a single  Joint Photographic Exports Group Image (JPEG).  Use <xref linkend="RT_ST_AsGDALRaster" /> if you need to export as less common raster types. If no band is specified and 1 or more than 3 bands, then only the first band is used.  If 3 bands then all 3 bands are used.  There are many variants of the function with many options. These are itemized below:</para>
                 <itemizedlist>
                     <listitem>
                        <varname>nband</varname> is for single band exports.
@@ -4392,7 +4664,7 @@ SELECT ST_AsJPEG(rast,ARRAY[2,1,3],ARRAY['QUALITY=90','PROGRESSIVE=ON']) As rast
 		<refentry id="RT_ST_AsPNG">
 			<refnamediv>
 				<refname>ST_AsPNG</refname>
-				<refpurpose>Return the raster tile selected bands as a single portable network graphics (PNG) image (byte array).  If no band is specified, then the first 3 bands are used.</refpurpose>
+				<refpurpose>Return the raster tile selected bands as a single portable network graphics (PNG) image (byte array).  If 1,3, or 4 bands in raster and no bands are specified, then all bands are used.  If more 2 or more than 4 bands and no bands specified, then only band 1 is used.  Bands are mapped to RGB or RGBA space.</refpurpose>
 			</refnamediv>
 		
 			<refsynopsisdiv>
@@ -4453,6 +4725,10 @@ SELECT ST_AsJPEG(rast,ARRAY[2,1,3],ARRAY['QUALITY=90','PROGRESSIVE=ON']) As rast
 				
 					<programlisting>SELECT ST_AsPNG(rast) As rastpng
 FROM dummy_rast WHERE rid=2;
+
+-- export the first 3 bands and map band 3 to Red, band 1 to Green, band 2 to blue
+SELECT ST_AsPNG(rast, ARRAY[3,1,2]) As rastpng
+FROM dummy_rast WHERE rid=2;  
 				</programlisting>
 			
 			</refsection>
@@ -4461,183 +4737,6 @@ FROM dummy_rast WHERE rid=2;
 			<refsection>
 				<title>See Also</title>
 				<para><xref linkend="RT_ST_GDALDrivers" />, <xref linkend="RT_ST_AsGDALRaster" /></para>
-			</refsection>
-		</refentry>
-		
-		<refentry id="RT_ST_AsRaster">
-			<refnamediv>
-				<refname>ST_AsRaster</refname>
-				<refpurpose>Converts a PostGIS geometry to a PostGIS raster.</refpurpose>
-			</refnamediv>
-		
-			<refsynopsisdiv>
-				<funcsynopsis>
-				  <funcprototype>
-					<funcdef>raster <function>ST_AsRaster</function></funcdef>
-					<paramdef><type>geometry </type> <parameter>geom</parameter></paramdef>
-					<paramdef><type>integer </type> <parameter>width</parameter></paramdef>
-					<paramdef><type>integer </type> <parameter>height</parameter></paramdef>
-					<paramdef><type>double precision </type> <parameter>gridx</parameter></paramdef>
-					<paramdef><type>double precision </type> <parameter>gridy</parameter></paramdef>
-					<paramdef><type>text </type> <parameter>pixeltype</parameter></paramdef>
-					<paramdef choice='opt'><type>double precision </type> <parameter>value=1</parameter></paramdef>
-					<paramdef choice='opt'><type>double precision </type> <parameter>nodataval=0</parameter></paramdef>
-					<paramdef choice='opt'><type>double precision </type> <parameter>skewx=0</parameter></paramdef>
-					<paramdef choice='opt'><type>double precision </type> <parameter>skewy=0</parameter></paramdef>
-				  </funcprototype>
-				  
-				  <funcprototype>
-					<funcdef>raster <function>ST_AsRaster</function></funcdef>
-					<paramdef><type>geometry </type> <parameter>geom</parameter></paramdef>
-					<paramdef><type>integer </type> <parameter>width</parameter></paramdef>
-					<paramdef><type>integer </type> <parameter>height</parameter></paramdef>
-					<paramdef><type>text[] </type> <parameter>pixeltype</parameter></paramdef>
-					<paramdef><type>double precision[] </type> <parameter>value</parameter></paramdef>
-					<paramdef><type>double precision[] </type> <parameter>nodataval=ARRAY[0]</parameter></paramdef>
-					<paramdef choice='opt'><type>double precision </type> <parameter>upperleftx=NULL</parameter></paramdef>
-					<paramdef choice='opt'><type>double precision </type> <parameter>upperlefty=NULL</parameter></paramdef>
-					<paramdef choice='opt'><type>double precision </type> <parameter>skewx=0</parameter></paramdef>
-					<paramdef choice='opt'><type>double precision </type> <parameter>skewy=0</parameter></paramdef>
-				  </funcprototype>
-				  
-				  <funcprototype>
-					<funcdef>raster <function>ST_AsRaster</function></funcdef>
-					<paramdef><type>geometry </type> <parameter>geom</parameter></paramdef>
-					<paramdef><type>integer </type> <parameter>width</parameter></paramdef>
-					<paramdef><type>integer </type> <parameter>height</parameter></paramdef>
-					<paramdef><type>text </type> <parameter>pixeltype</parameter></paramdef>
-					<paramdef choice='opt'><type>double precision </type> <parameter>value=1</parameter></paramdef>
-					<paramdef choice='opt'><type>double precision </type> <parameter>nodataval=0</parameter></paramdef>
-					<paramdef choice='opt'><type>double precision </type> <parameter>upperleftx=NULL</parameter></paramdef>
-					<paramdef choice='opt'><type>double precision </type> <parameter>upperlefty=NULL</parameter></paramdef>
-					<paramdef choice='opt'><type>double precision </type> <parameter>skewx=0</parameter></paramdef>
-					<paramdef choice='opt'><type>double precision </type> <parameter>skewy=0</parameter></paramdef>
-				  </funcprototype>
-				  
-				  <funcprototype>
-					<funcdef>raster <function>ST_AsRaster</function></funcdef>
-					<paramdef><type>geometry </type> <parameter>geom</parameter></paramdef>
-					<paramdef><type>integer </type> <parameter>width</parameter></paramdef>
-					<paramdef><type>integer </type> <parameter>height</parameter></paramdef>
-					<paramdef choice='opt'><type>double precision </type> <parameter>gridx=NULL</parameter></paramdef>
-					<paramdef choice='opt'><type>double precision </type> <parameter>gridy=NULL</parameter></paramdef>
-					<paramdef><type>text[] </type> <parameter>pixeltype=ARRAY[8BUI]</parameter></paramdef>
-					<paramdef choice='opt'><type>double precision[] </type> <parameter>value=ARRAY[1]</parameter></paramdef>
-					<paramdef choice='opt'><type>double precision[] </type> <parameter>nodataval=ARRAY[0]</parameter></paramdef>
-					<paramdef choice='opt'><type>double precision </type> <parameter>skewx=0</parameter></paramdef>
-					<paramdef choice='opt'><type>double precision </type> <parameter>skewy=0</parameter></paramdef>
-				  </funcprototype>
-				  
-				  <funcprototype>
-					<funcdef>raster <function>ST_AsRaster</function></funcdef>
-					<paramdef><type>geometry </type> <parameter>geom</parameter></paramdef>
-					<paramdef><type>double precision </type> <parameter>scalex</parameter></paramdef>
-					<paramdef><type>double precision </type> <parameter>scaley</parameter></paramdef>
-					<paramdef><type>text </type> <parameter>pixeltype</parameter></paramdef>
-					<paramdef choice='opt'><type>double precision </type> <parameter>value=1</parameter></paramdef>
-					<paramdef choice='opt'><type>double precision </type> <parameter>nodataval=0</parameter></paramdef>
-					<paramdef choice='opt'><type>double precision </type> <parameter>upperleftx=NULL</parameter></paramdef>
-					<paramdef choice='opt'><type>double precision </type> <parameter>upperlefty=NULL</parameter></paramdef>
-					<paramdef choice='opt'><type>double precision </type> <parameter>skewx=0</parameter></paramdef>
-					<paramdef choice='opt'><type>double precision </type> <parameter>skewy=0</parameter></paramdef>
-				  </funcprototype>
-				  
-				  <funcprototype>
-					<funcdef>raster <function>ST_AsRaster</function></funcdef>
-					<paramdef><type>geometry </type> <parameter>geom</parameter></paramdef>
-					<paramdef><type>raster </type> <parameter>ref</parameter></paramdef>
-					<paramdef><type>text </type> <parameter>pixeltype</parameter></paramdef>
-					<paramdef choice='opt'><type>double precision </type> <parameter>value=1</parameter></paramdef>
-					<paramdef choice='opt'><type>double precision </type> <parameter>nodataval=0</parameter></paramdef>
-				  </funcprototype>
-				  
-				  <funcprototype>
-					<funcdef>raster <function>ST_AsRaster</function></funcdef>
-					<paramdef><type>geometry </type> <parameter>geom</parameter></paramdef>
-					<paramdef><type>raster </type> <parameter>ref</parameter></paramdef>
-					<paramdef choice='opt'><type>text[] </type> <parameter>pixeltype=ARRAY[8BUI]</parameter></paramdef>
-					<paramdef choice='opt'><type>double precision[] </type> <parameter>value=ARRAY[1]</parameter></paramdef>
-					<paramdef choice='opt'><type>double precision[] </type> <parameter>nodataval=ARRAY[0]</parameter></paramdef>
-				  </funcprototype>
-				  
-				  <funcprototype>
-					<funcdef>raster <function>ST_AsRaster</function></funcdef>
-					<paramdef><type>geometry </type> <parameter>geom</parameter></paramdef>
-					<paramdef><type>double precision </type> <parameter>scalex</parameter></paramdef>
-					<paramdef><type>double precision </type> <parameter>scaley</parameter></paramdef>
-					<paramdef><type>double precision </type> <parameter>gridx</parameter></paramdef>
-					<paramdef><type>double precision </type> <parameter>gridy</parameter></paramdef>
-					<paramdef><type>text </type> <parameter>pixeltype</parameter></paramdef>
-					<paramdef choice='opt'><type>double precision </type> <parameter>value=1</parameter></paramdef>
-					<paramdef choice='opt'><type>double precision </type> <parameter>nodataval=0</parameter></paramdef>
-					<paramdef choice='opt'><type>double precision </type> <parameter>skewx=0</parameter></paramdef>
-					<paramdef choice='opt'><type>double precision </type> <parameter>skewy=0</parameter></paramdef>
-				  </funcprototype>
-				  
-				  <funcprototype>
-					<funcdef>raster <function>ST_AsRaster</function></funcdef>
-					<paramdef><type>geometry </type> <parameter>geom</parameter></paramdef>
-					<paramdef><type>double precision </type> <parameter>scalex</parameter></paramdef>
-					<paramdef><type>double precision </type> <parameter>scaley</parameter></paramdef>
-					<paramdef choice='opt'><type>double precision </type> <parameter>gridx=NULL</parameter></paramdef>
-					<paramdef choice='opt'><type>double precision </type> <parameter>gridy=NULL</parameter></paramdef>
-					<paramdef choice='opt'><type>text[] </type> <parameter>pixeltype=ARRAY[8BUI]</parameter></paramdef>
-					<paramdef choice='opt'><type>double precision[] </type> <parameter>value=ARRAY[1]</parameter></paramdef>
-					<paramdef choice='opt'><type>double precision[] </type> <parameter>nodataval=ARRAY[0]</parameter></paramdef>
-					<paramdef choice='opt'><type>double precision </type> <parameter>skewx=0</parameter></paramdef>
-					<paramdef choice='opt'><type>double precision </type> <parameter>skewy=0</parameter></paramdef>
-				  </funcprototype>
-				 
-				</funcsynopsis>
-			</refsynopsisdiv>
-		
-            <refsection>
-                <title>Description</title>
-                
-                <para>Converts a postgis geometry to a postgis raster.  This is particularly useful for rendering jpegs and pngs of geometries directly from the database when using in combination
-                    with <xref linkend="RT_ST_AsPNG" /> and other <xref linkend="RT_ST_AsGDALRaster" /> family of functions.</para>
-                 <para>To create the postgis raster, the X and Y scale or the width and height of the new raster or a reference raster must be provided.</para>
-                 <para>The output raster will be in the same coordinate system as the source geometry. The only exception is for ST_AsRaster variations with a raster input parameter. </para>
-                 <para>Availability: 2.0.0 - requires GDAL &gt;= 1.6.0. </para>
-                 <note><para>Not yet capable of rendering complex geometry types such as curves, TINS, and PolyhedralSurfaces, but should be
-                 able too once GDAL can.</para></note>
-            </refsection>
-            
-            <refsection>
-                <title>Examples: Output geometries as PNG files</title>
-                <para><informalfigure>
-							<mediaobject>
-							  <imageobject>
-								<imagedata fileref="images/st_asraster01.png" />
-							  </imageobject>
-							  <caption><para>black circle</para></caption>
-							</mediaobject>
-						  </informalfigure></para>
-                <programlisting>
--- this will output a black circle taking up 150 x 150 pixels --
-SELECT ST_AsPNG(ST_AsRaster(ST_Buffer(ST_Point(1,5),10),150, 150, '2BUI'));</programlisting>
-
- <para><informalfigure>
-							<mediaobject>
-							  <imageobject>
-								<imagedata fileref="images/st_asraster02.png" />
-							  </imageobject>
-							  <caption><para>example from buffer rendered with just PostGIS</para></caption>
-							</mediaobject>
-						  </informalfigure></para>
-
-                <programlisting>-- the bands map to RGB bands - the value (118,154,118) - teal  --
-SELECT ST_AsPNG(
-	ST_AsRaster(
-		ST_Buffer(
-			ST_GeomFromText('LINESTRING(50 50,150 150,150 50)'), 10,'join=bevel'), 
-			200,200,ARRAY['8BUI', '8BUI', '8BUI'], ARRAY[118,154,118], ARRAY[0,0,0]));</programlisting>
-        
-            </refsection>
-            <!-- Optionally add a "See Also" section -->
-			<refsection>
-				<title>See Also</title>
-				<para><xref linkend="RT_ST_BandPixelType" />, <xref linkend="ST_Buffer" />, <xref linkend="RT_ST_GDALDrivers" />, <xref linkend="RT_ST_AsGDALRaster" />,<xref linkend="RT_ST_AsPNG" /> , <xref linkend="RT_ST_AsJPEG" />, <xref linkend="RT_ST_SRID" /></para>
 			</refsection>
 		</refentry>
 		
@@ -5119,7 +5218,48 @@ FROM dummy_rast WHERE rid = 2;
 
  b1pixtyp
 ----------
- 2BUI</programlisting>				
+ 2BUI</programlisting>
+ <informaltable>
+  <tgroup cols="2">
+	<tbody>
+	  <row>
+		<entry><informalfigure>
+			<mediaobject>
+			  <imageobject>
+				<imagedata fileref="images/st_mapalgebra01.png" />
+			  </imageobject>
+			  <caption><para>original (column rast-view)</para></caption>
+			</mediaobject>
+		  </informalfigure>
+		 </entry>
+		<entry><informalfigure>
+			<mediaobject>
+			  <imageobject>
+				<imagedata fileref="images/st_mapalgebra02.png" />
+			  </imageobject>
+			  <caption><para>rast_view_ma</para></caption>
+			</mediaobject>
+		  </informalfigure>
+		 </entry>
+		</row>
+	</tbody>
+</tgroup>
+</informaltable>
+ <para>Create a new 3 band raster same pixel type from our original 3 band raster with first band
+ altered by map algebra and remaining 2 bands unaltered.</para>
+				<programlisting>SELECT ST_AddBand(
+ST_AddBand(
+	ST_AddBand(
+		ST_MakeEmptyRaster(rast_view),
+			ST_MapAlgebra(rast_view,1, 'tan(rast)*rast')
+			), 
+		ST_Band(rast_view,2)
+			),
+	ST_Band(rast_view, 3) As rast_view_ma
+)
+FROM wind
+WHERE rid=167;		
+				</programlisting>			
 			</refsection>
 
 			<refsection>
@@ -5313,10 +5453,26 @@ col | row | ov1 | rv1 | ov2 | rv2 | ov3 | rv3
   2 |   3 | 254 |   0 | 112 |   0 | 108 |   3
   3 |   3 | 254 |   0 | 169 |   0 | 175 |   4</programlisting>		
 			</refsection>
+			<refsection>
+				<title>Example: Advanced Map a single band 32BF raster to multiple viewable bands</title>
+				
+				<para>Create a new 3 band (8BUI,8BUI,8BUI viewable raster) from a raster that has only one 32bf band </para>
+				<programlisting>
+ALTER TABLE wind ADD COLUMN rast_view raster;
+UPDATE wind 
+	SET rast_view = 
+		ST_AddBand(
+			ST_AddBand(
+				ST_AddBand(ST_MakeEmptyRaster(rast), 
+					ST_Reclass(rast, 1,'0.1-5]:1-255,(5-1000:0'::text, '8BUI'::text,0))
+				, ST_Reclass(rast,1, '0-5):0,[5-8:1-255,(8-1000:0'::text, '8BUI'::text,0)),
+				ST_Reclass(rast,1,'0-8]:0,(8-100:200-255'::text, '8BUI'::text,0));</programlisting>		
+			</refsection>
+
 
 			<refsection>
 				<title>See Also</title>
-				<para><xref linkend="RT_ST_Band" />, <xref linkend="RT_ST_BandPixelType" />,  <xref linkend="reclassarg" />, <xref linkend="RT_ST_Value" /></para>
+				<para><xref linkend="RT_ST_AddBand" />,<xref linkend="RT_ST_Band" />, <xref linkend="RT_ST_BandPixelType" />,<xref linkend="RT_ST_MakeEmptyRaster" />,  <xref linkend="reclassarg" />, <xref linkend="RT_ST_Value" /></para>
 			</refsection>
 		</refentry>
 	</sect1>
