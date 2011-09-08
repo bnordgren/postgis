@@ -1294,6 +1294,10 @@ struct quantile_llist {
 	struct quantile_llist_element *tail; /* H index last */
 	uint32_t count; /* # of elements in H */
 
+	/* faster access to elements at specific intervals */
+	struct quantile_llist_index *index;
+	uint32_t index_max; /* max # of elements in index */
+
 	uint64_t sum1; /* N1H */
 	uint64_t sum2; /* N2H */
 };
@@ -1305,6 +1309,12 @@ struct quantile_llist_element {
 	struct quantile_llist_element *prev;
 	struct quantile_llist_element *next;
 };
+
+struct quantile_llist_index {
+        struct quantile_llist_element *element;
+        uint32_t index;
+};
+
 
 /* number of times a value occurs */
 struct rt_valuecount_t {
