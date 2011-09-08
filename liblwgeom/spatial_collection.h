@@ -12,6 +12,17 @@
 typedef enum { SPATIAL_ONLY, SPATIAL_PLUS_VALUE } COLLECTION_TYPE ;
 
 /**
+ * Declares the types of predefined spatial relationship operations.
+ * These are for use with the "relationship operations".
+ */
+typedef enum {
+	UNION,
+	INTERSECTION,
+	DIFFERENCE,
+	SYMDIFFERENCE
+} RELATION_TYPE;
+
+/**
  * Contains a list of numeric values. This is used to represent the value
  * part of a spatial-plus-value collection. For a raster, the "value" of a
  * grid cell is the data in all of the bands at that cell.
@@ -134,6 +145,16 @@ void sc_destroy_geometry_includes(INCLUDES *dead) ;
  */
 typedef int ((*RELATION_FN)(int,int)) ;
 
+/**
+ * A method signature used for functions which calculate the approximate extent
+ * of a result collection. The inputs are polygons representing the outlines
+ * of the two input collections (e.g., the four corners), and the output
+ * approximates the extent of the result. Both input polygons should be in the
+ * same projection.
+ */
+typedef GBOX *((*ENVELOPE_PREP_OP)(LWPOLY *, LWPOLY *)) ;
+
+
 INCLUDES *sc_create_relation_includes(RELATION_FN relation);
 void sc_destroy_relation_includes(INCLUDES *dead) ;
 
@@ -167,15 +188,51 @@ sc_create_projection_wrapper(SPATIAL_COLLECTION *wrapped,
 		                     projPJ wrapped_proj, projPJ desired_proj );
 void sc_destroy_projection_wrapper(SPATIAL_COLLECTION *dead);
 
+SPATIAL_COLLECTION *
+sc_create_relation_op(COLLECTION_TYPE t,
+		              SPATIAL_COLLECTION *sc1,
+		              SPATIAL_COLLECTION *sc2,
+		              ENVELOPE_PREP_OP env_fn,
+		              RELATION_FN inc_fn,
+		              EVALUATOR *eval) ;
+SPATIAL_COLLECTION *
+sc_create_sync_relation_op(COLLECTION_TYPE t,
+		              SPATIAL_COLLECTION *sc1,
+		              SPATIAL_COLLECTION *sc2,
+		              RELATION_TYPE relation,
+		              EVALUATOR *eval);
+void sc_destroy_relation_op(SPATIAL_COLLECTION *dead) ;
 
-/**
- * A method signature used for functions which calculate the approximate extent
- * of a result collection. The inputs are polygons representing the outlines
- * of the two input collections (e.g., the four corners), and the output
- * approximates the extent of the result. Both input polygons should be in the
- * same projection.
- */
-typedef GBOX *((*ENVELOPE_PREP_OP)(LWPOLY *, LWPOLY *)) ;
+
+SPATIAL_COLLECTION *
+sc_create_relation_op_proj(COLLECTION_TYPE t,
+		              SPATIAL_COLLECTION *sc1,
+		              SPATIAL_COLLECTION *sc2,
+		              projPJ proj_sc1, projPJ proj_sc2,
+		              int32_t srid, projPJ proj_dest,
+		              ENVELOPE_PREP_OP env_fn,
+		              RELATION_FN inc_fn,
+		              EVALUATOR *eval) ;
+SPATIAL_COLLECTION *
+sc_create_sync_relation_op_proj(COLLECTION_TYPE t,
+		              SPATIAL_COLLECTION *sc1,
+		              SPATIAL_COLLECTION *sc2,
+		              projPJ proj_sc1, projPJ proj_sc2,
+		              RELATION_TYPE relation,
+		              EVALUATOR *eval);
+void sc_destroy_relation_op_proj(SPATIAL_COLLECTION *dead) ;
+
+
+RELATION_FN sc_get_relation_fn(RELATION_TYPE relation) ;
+ENVELOPE_PREP_OP sc_get_envelope_fn(RELATION_TYPE relation) ;
+
+
+
+
+
+
+
+
 
 
 #endif /* SPATIAL_COLLECTION_H */

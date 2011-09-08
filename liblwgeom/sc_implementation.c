@@ -885,6 +885,12 @@ GBOX *relation_env_symdifference(LWPOLY *r1, LWPOLY *r2)
 	return bounds ;
 }
 
+/**
+ * \defgroup relation_op Relates two input collections in the same projection.
+ *
+ * @{
+ */
+
 SPATIAL_COLLECTION *
 sc_create_relation_op(COLLECTION_TYPE t,
 		              SPATIAL_COLLECTION *sc1,
@@ -938,13 +944,49 @@ sc_create_relation_op(COLLECTION_TYPE t,
 	return result ;
 }
 
+SPATIAL_COLLECTION *
+sc_create_sync_relation_op(COLLECTION_TYPE t,
+		              SPATIAL_COLLECTION *sc1,
+		              SPATIAL_COLLECTION *sc2,
+		              RELATION_TYPE relation,
+		              EVALUATOR *eval)
+{
+	RELATION_FN      inc_fn ;
+	ENVELOPE_PREP_OP env_fn ;
+
+	if (sc1 == NULL || sc2 == NULL) return NULL ;
+
+	/*
+	 * get the envelope and includes functions
+	 * (and make sure they correspond).
+	 */
+	inc_fn = sc_get_relation_fn(relation) ;
+	env_fn = sc_get_envelope_fn(relation) ;
+	if (inc_fn == NULL || env_fn == NULL) return NULL ;
+
+	return sc_create_relation_op(t, sc1, sc2,
+			env_fn, inc_fn, eval) ;
+}
+
+
 void
 sc_destroy_relation_op(SPATIAL_COLLECTION *dead)
 {
 	if (dead != NULL) {
+		if (dead->inclusion != NULL) {
+			sc_destroy_relation_includes(dead->inclusion) ;
+		}
 		sc_twoinput_destroy(dead) ;
 	}
 }
+
+/** @} */ /* end of the relation_op documentation group */
+
+/**
+ * \defgroup relation_proj Wraps each input with a projection wrapper, and installs the specified relationship functions.
+ *
+ * @{
+ */
 
 SPATIAL_COLLECTION *
 sc_create_relation_op_proj(COLLECTION_TYPE t,
@@ -979,15 +1021,98 @@ sc_create_relation_op_proj(COLLECTION_TYPE t,
 	return sc_create_relation_op(t, sc1_wrap, sc2_wrap, env_fn, inc_fn, eval) ;
 }
 
+SPATIAL_COLLECTION *
+sc_create_sync_relation_op_proj(COLLECTION_TYPE t,
+		              SPATIAL_COLLECTION *sc1,
+		              SPATIAL_COLLECTION *sc2,
+		              projPJ proj_sc1, projPJ proj_sc2,
+		              RELATION_TYPE relation,
+		              EVALUATOR *eval)
+{
+	RELATION_FN      inc_fn ;
+	ENVELOPE_PREP_OP env_fn ;
+
+	if (sc1 == NULL || sc2 == NULL) return NULL ;
+
+	/*
+	 * get the envelope and includes functions
+	 * (and make sure they correspond).
+	 */
+	inc_fn = sc_get_relation_fn(relation) ;
+	env_fn = sc_get_envelope_fn(relation) ;
+	if (inc_fn == NULL || env_fn == NULL) return NULL ;
+
+	return sc_create_relation_op_proj(t, sc1, sc2,
+			proj_sc1, proj_sc2,
+			sc1->srid, proj_sc1,
+			env_fn, inc_fn, eval) ;
+}
+
 void
 sc_destroy_relation_op_proj(SPATIAL_COLLECTION *dead)
 {
-	if (dead != NULL) {
-		sc_twoinput_destroy(dead) ;
-	}
+	/* note that this does not deallocate the projection wrapper
+	 * collections _if_ they were made. The central problem here
+	 * is keeping track of if they had to be constructed...
+	 */
+	sc_destroy_relation_op(dead) ;
 }
+
+/** @} */ /* end of the relation_proj documentation group */
+
 
 /** @} */ /* end of relation_collection documentation group */
 
 /** @} */  /* end of spatial_collection_i documentation group */
 
+RELATION_FN
+sc_get_relation_fn(RELATION_TYPE relation)
+{
+	RELATION_FN result ;
+
+	result = NULL ;
+	switch (relation) {
+	case INTERSECTION :
+		result = relation_intersection ;
+		break ;
+	case UNION :
+		result = relation_union ;
+		break ;
+	case DIFFERENCE :
+		result = relation_difference ;
+		break ;
+	case SYMDIFFERENCE :
+		result = relation_symdifference ;
+		break ;
+	default:
+		; /* leave it null */
+	}
+
+	return result ;
+}
+
+ENVELOPE_PREP_OP
+sc_get_envelope_fn(RELATION_TYPE relation)
+{
+	ENVELOPE_PREP_OP result ;
+
+	result = NULL ;
+	switch (relation) {
+	case INTERSECTION :
+		result = relation_env_intersection ;
+		break ;
+	case UNION :
+		result = relation_env_union ;
+		break ;
+	case DIFFERENCE :
+		result = relation_env_difference ;
+		break ;
+	case SYMDIFFERENCE :
+		result = relation_env_symdifference ;
+		break ;
+	default:
+		; /* leave it null */
+	}
+
+	return result ;
+}
