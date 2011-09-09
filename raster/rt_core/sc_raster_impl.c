@@ -704,13 +704,46 @@ sc_destroy_rasterwrap_evaluator(EVALUATOR *dead)
  * @{
  */
 
+
+/**
+ * \defgroup sc_rasterwrap Raster Wrapper
+ *
+ * @{
+ * An implementation of #SPATIAL_COLLECTION which is backed by a raster.
+ * The raster is assumed to lack a "nodata" value, which means that its
+ * spatial extent is identical to its convex hull. (e.g., every grid cell
+ * has a value). The value returned by the collection is the value of one or
+ * more of the bands at the evaluation point.
+ */
+
+struct raster_wrap_s {
+	rt_raster raster ;
+	int       owned ;
+};
+
+/**
+ * Constructs a #SPATIAL_COLLECTION backed by a raster without a nodata
+ * value. The evaluate method on this collection returns the specified
+ * bands.
+ *
+ * The collection returned by this constructor should be freed by
+ * #sc_destroy_raster_wrapper.
+ *
+ * @param raster the raster to wrap
+ * @param owned  if TRUE, the wrapper takes ownership of the raster and
+ *               will free it when the wrapper is destroyed
+ * @param bands  a list of the bands, in order, which should be returned
+ *               from the evaluate method.
+ * @param num_bands the length of bands
+ */
 SPATIAL_COLLECTION *
-sc_create_raster_wrapper(rt_raster raster, int *bands, int num_bands)
+sc_create_raster_wrapper(rt_raster raster, int owned, int *bands, int num_bands)
 {
 	INCLUDES *inc ;
 	EVALUATOR *eval ;
 	LWPOLY *outline ;
 	SPATIAL_COLLECTION *sc ;
+	struct raster_wrap_s *params ;
 
 	if (raster==NULL) return NULL ;
 
@@ -723,13 +756,22 @@ sc_create_raster_wrapper(rt_raster raster, int *bands, int num_bands)
 		return NULL ;
 	}
 
+	params = (struct raster_wrap_s *)rtalloc(sizeof(struct raster_wrap_s));
+	if (params == NULL) {
+		sc_destroy_raster_env_includes(inc) ;
+		sc_destroy_raster_bands_evaluator(eval) ;
+		return NULL ;
+	}
+	params->raster = raster ;
+	params->owned  = owned ;
+
 	outline = rt_raster_get_convex_hull(raster) ;
 	lwgeom_add_bbox(lwpoly_as_lwgeom(outline)) ;
 
 	sc = sc_create(SPATIAL_PLUS_VALUE,
 			rt_raster_get_srid(raster),
 			outline->bbox,
-			NULL, inc, eval) ;
+			params, inc, eval) ;
 
 	if (sc == NULL) {
 		sc_destroy_raster_env_includes(inc) ;
@@ -740,25 +782,65 @@ sc_create_raster_wrapper(rt_raster raster, int *bands, int num_bands)
 	return sc ;
 }
 
+/**
+ * Destroys a #SPATIAL_COLLECTION object which was constructed by
+ * #sc_create_raster_wrapper or #sc_create_pgraster_wrapper.
+ * Pass no other objects to this function.
+ */
 void
 sc_destroy_raster_wrapper(SPATIAL_COLLECTION *dead)
 {
+	struct raster_wrap_s *params ;
 	if (dead != NULL) {
 		sc_destroy_raster_env_includes(dead->inclusion) ;
 		sc_destroy_raster_bands_evaluator(dead->evaluator) ;
+
+		if (dead->params != NULL) {
+			params = (struct raster_wrap_s *)(dead->params) ;
+			if ((params->raster != NULL) && params->owned) {
+				rt_raster_destroy(params->raster) ;
+			}
+			rtdealloc(params) ;
+		}
+
 		sc_destroy(dead) ;
 	}
 }
 
+/** @} */ /* end of sc_rasterwrap documentation group */
 
+/**
+ * \defgroup sc_rasterwrap_nodata Raster Wrapper w/Nodata
+ *
+ * @{
+ */
+
+/**
+ * Constructs a #SPATIAL_COLLECTION backed by a raster with a nodata
+ * value. The evaluate method on this collection returns the specified
+ * bands.
+ *
+ * The collection returned by this constructor should be freed by
+ * #sc_destroy_raster_nodata_wrapper.
+ *
+ * @param raster the raster to wrap
+ * @param owned  if TRUE, the wrapper takes ownership of the raster and
+ *               will free it when the wrapper is destroyed
+ * @param bands  a list of the bands, in order, which should be returned
+ *               from the evaluate method.
+ * @param num_bands the length of bands
+ * @param nodata_band the index of the band which will be used to test
+ *               for a nodata value.
+ */
 SPATIAL_COLLECTION *
-sc_create_raster_nodata_wrapper(rt_raster raster, int *bands, int num_bands,
-		int nodata_band)
+sc_create_raster_nodata_wrapper(rt_raster raster, int owned,
+		int *bands, int num_bands, int nodata_band)
 {
 	INCLUDES *inc ;
 	EVALUATOR *eval ;
 	LWPOLY *outline ;
 	SPATIAL_COLLECTION *sc ;
+	struct raster_wrap_s *params ;
 
 	if (raster==NULL) return NULL ;
 
@@ -771,12 +853,21 @@ sc_create_raster_nodata_wrapper(rt_raster raster, int *bands, int num_bands,
 		return NULL ;
 	}
 
+	params = (struct raster_wrap_s *)rtalloc(sizeof(struct raster_wrap_s)) ;
+	if (params == NULL) {
+		sc_destroy_raster_nodata_includes(inc) ;
+		sc_destroy_raster_bands_evaluator(eval) ;
+		return NULL ;
+	}
+	params->raster = raster ;
+	params->owned  = owned ;
+
 	outline = rt_raster_get_convex_hull(raster) ;
 	lwgeom_add_bbox(lwpoly_as_lwgeom(outline)) ;
 
 	sc = sc_create(SPATIAL_PLUS_VALUE,
 			rt_raster_get_srid(raster), outline->bbox,
-			NULL, inc, eval) ;
+			params, inc, eval) ;
 
 	if (sc == NULL) {
 		sc_destroy_raster_nodata_includes(inc) ;
@@ -796,6 +887,8 @@ sc_destroy_raster_nodata_wrapper(SPATIAL_COLLECTION *dead)
 		sc_destroy(dead) ;
 	}
 }
+
+/** @} */ /* end of documentation group sc_rasterwrap_nodata */
 
 /**
  * \defgroup collection_rasterwrap Spatial collection providing access via the indices of the provided raster.

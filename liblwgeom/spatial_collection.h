@@ -179,7 +179,9 @@ void sc_destroy_projection_eval(EVALUATOR *dead);
 
 
 /* implementations of the spatial collection interface */
-SPATIAL_COLLECTION *sc_create_geometry_wrapper(LWGEOM *geom, double inside, double outside);
+SPATIAL_COLLECTION *
+sc_create_geometry_wrapper(LWGEOM *geom, int owned,
+		double inside, double outside) ;
 void sc_destroy_geometry_wrapper(SPATIAL_COLLECTION *dead) ;
 
 SPATIAL_COLLECTION *

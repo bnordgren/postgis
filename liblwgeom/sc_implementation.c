@@ -624,33 +624,54 @@ sc_destroy_first_value_evaluator(EVALUATOR *dead)
  */
 
 /**
+ * Structure allows the geometry wrapper to take ownership of the
+ * wrapped geometry, freeing it when done.
+ */
+struct geo_wrap_s {
+	LWGEOM *geom ;
+	int     owned ;
+};
+
+/**
  * Constructor to create a geometry wrapper collection object.
  *
  * @param geom the geometry to wrap
+ * @param owned flag indicates that the collection should take ownership
+ *              of the wrapped geometry object (e.g., geometry will be
+ *              freed when collection is destroyed).
  * @param inside the "value" associated with the geometry's interior
  * @param outside the "value" associated with the geometry's exterior
  */
 SPATIAL_COLLECTION *
-sc_create_geometry_wrapper(LWGEOM *geom, double inside, double outside)
+sc_create_geometry_wrapper(LWGEOM *geom, int owned,
+		double inside, double outside)
 {
 	INCLUDES *inclusion ;
 	EVALUATOR *evaluator ;
+	struct geo_wrap_s *params ;
 
 
 	inclusion = sc_create_geometry_includes(geom) ;
 	evaluator = sc_create_mask_evaluator(inside, outside, 0) ;
+	params = (struct geo_wrap_s *)lwalloc(sizeof(struct geo_wrap_s)) ;
 
-	if ( inclusion == NULL || evaluator==NULL )
+	if ( inclusion == NULL || evaluator==NULL || params == NULL )
 	{
 		if (inclusion != NULL ) sc_destroy_geometry_includes(inclusion) ;
 		if (evaluator != NULL ) sc_destroy_mask_evaluator(evaluator) ;
+		if (params != NULL ) lwfree(params) ;
 		return NULL ;
 	}
+
+	/* record the geometry */
+	params->geom = geom ;
+	params->owned = owned ;
 
 	/* ensure the geometry has an extent */
 	lwgeom_add_bbox(geom);
 
-	return sc_create(SPATIAL_ONLY, geom->srid, geom->bbox, NULL, inclusion, evaluator) ;
+	return sc_create(SPATIAL_ONLY, geom->srid, geom->bbox,
+			params, inclusion, evaluator) ;
 }
 
 /**
@@ -661,10 +682,18 @@ sc_create_geometry_wrapper(LWGEOM *geom, double inside, double outside)
 void
 sc_destroy_geometry_wrapper(SPATIAL_COLLECTION *dead)
 {
+	struct geo_wrap_s *params ;
 	if (dead == NULL) return ;
 
 	sc_destroy_geometry_includes(dead->inclusion) ;
 	sc_destroy_mask_evaluator(dead->evaluator) ;
+	if (dead->params != NULL) {
+		params = (struct geo_wrap_s *)(dead->params) ;
+		if ((params->geom != NULL) && params->owned) {
+			lwgeom_free(params->geom) ;
+		}
+		lwfree(params) ;
+	}
 	sc_destroy(dead) ;
 }
 
