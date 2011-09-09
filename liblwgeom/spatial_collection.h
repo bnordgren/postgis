@@ -137,7 +137,7 @@ INCLUDES *sc_create_geometry_includes(LWGEOM *geom) ;
 void sc_destroy_geometry_includes(INCLUDES *dead) ;
 
 /**
- * RELATION_FN is a function pointer typedef which describes a function
+ * A function pointer typedef which describes a function
  * capable of evaluating a spatial relationship at a point. The arguments
  * are boolean values which reflect the value of the includes function
  * for the first and second inputs, respectively. The return value is
