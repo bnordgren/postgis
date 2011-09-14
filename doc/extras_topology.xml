@@ -4,7 +4,7 @@
 	<para>The PostGIS Topology types and functions are used to manage topological objects such as faces, edges and nodes. </para>
 	<para>Sandro Santilli's presentation at PostGIS Day Paris 2011  conference gives a good synopsis of PostGIS Topology and where it is headed <ulink url="http://strk.keybit.net/projects/postgis/Paris2011_TopologyWithPostGIS_2_0.pdf">Topology with PostGIS 2.0 slide deck</ulink>.</para>
 	<para>Vincent Picavet provides a good synopsis and overview of what is Topology, how is it used, and various FOSS4G tools that support it in <ulink url="http://2010.foss4g.org/presentations/3555.pdf">State of the art of FOSS4G for topology and network analysis</ulink>.</para>
-	<para>An example of a topologically based GIS database is the <ulink url="http://www.census.gov/geo/www/tiger/overview.html">US Census Topologically Integrated Geographic Encoding and Reference System (TIGER)</ulink> database.</para>
+	<para>An example of a topologically based GIS database is the <ulink url="http://www.census.gov/geo/www/tiger/overview.html">US Census Topologically Integrated Geographic Encoding and Reference System (TIGER)</ulink> database. If you want to experiment with PostGIS topology and need some data, check out <xref linkend="Topology_Load_Tiger" />.</para>
 	<para>The PostGIS topology module has existed in prior versions of PostGIS but was never part of the Official PostGIS documentation.
 	    In PostGIS 2.0.0 major cleanup is going on to remove use of all deprecated functions in it, fix known usability issues, better document the features and functions, add new functions, and enhance to closer conform to SQL-MM standards.</para>
 	<para>Details of this project can be found at <ulink url="http://trac.osgeo.org/postgis/wiki/UsersWikiPostgisTopology">PostGIS Topology Wiki</ulink></para>
@@ -164,27 +164,28 @@ ERROR:  value for domain topology.topoelement violates check constraint "dimensi
 		  <refsection>
 			<title>Description</title>
 			<para>An array of 1 or more topoelements ( a bidimensional array of integers: '{{id,type}, {id,type}, ...}').  So an array of 1 or more arrays each having 2 integers generally used to return an array of sets of element id and element type of a topology relation.</para>
+			<para>For types currrently only 3 types are supported: <varname>node</varname>=1, <varname>edge</varname>=2, <varname>face</varname>=3</para>
 		  </refsection>
             <refsection>
                 <title>Examples</title>
-                 <programlisting>SELECT '{{1,2},{3,4}}'::topology.topoelementarray As tea;
+                 <programlisting>SELECT '{{1,2},{4,3}}'::topology.topoelementarray As tea;
   tea
 -------
-{{1,2},{3,4}}
+{{1,2},{4,3}}
 
 -- more verbose equivalent --
-SELECT ARRAY[ARRAY[1,2], ARRAY[3,4]]::topology.topoelementarray As tea;
+SELECT ARRAY[ARRAY[1,2], ARRAY[4,3]]::topology.topoelementarray As tea;
 
   tea
 -------
-{{1,2},{3,4}}
+{{1,2},{4,3}}
 
 --using the array agg function packaged with topology --
 SELECT topology.TopoElementArray_Agg(ARRAY[e,t]) As tea
-  FROM generate_series(1,3) As e CROSS JOIN generate_series(1,4) As t;
+  FROM generate_series(1,4) As e CROSS JOIN generate_series(1,3) As t;
   tea
 --------------------------------------------------------------------------
-{{1,1},{1,2},{1,3},{1,4},{2,1},{2,2},{2,3},{2,4},{3,1},{3,2},{3,3},{3,4}}
+{{1,1},{1,2},{1,3},{2,1},{2,2},{2,3},{3,1},{3,2},{3,3},{4,1},{4,2},{4,3}}
                  </programlisting>
                  <programlisting>SELECT '{{1,2,4},{3,4,5}}'::topology.topoelementarray As tea;
 ERROR:  value for domain topology.topoelementarray violates check constraint "dimensions"
@@ -360,7 +361,7 @@ topoid
 			<refsection>
 				<title>See Also</title>
 			
-				<para><xref linkend="spatial_ref_sys"/>, <xref linkend="ST_InitTopoGeo" /></para>
+				<para><xref linkend="spatial_ref_sys"/>, <xref linkend="ST_InitTopoGeo" />, <xref linkend="Topology_Load_Tiger" /></para>
 			</refsection>
 		</refentry>
 		<refentry id="DropTopology">
@@ -580,6 +581,11 @@ This example makes a backup of a topology called ma_topo
   Hierarchy level 1, child layer 2
   Deploy: features.big_signs.feature</programlisting>
 			</refsection>
+			<!-- Optionally add a "See Also" section -->
+			<refsection>
+				<title>See Also</title>
+				<para><xref linkend="Topology_Load_Tiger" /></para>
+			</refsection>
 		</refentry>
 		
 		<refentry id="ValidateTopology">
@@ -623,7 +629,7 @@ face without edges |   0 |
 			<!-- Optionally add a "See Also" section -->
 			<refsection>
 				<title>See Also</title>
-				<para><xref linkend="validatetopology_returntype"/></para>
+				<para><xref linkend="validatetopology_returntype"/>, <xref linkend="Topology_Load_Tiger" /></para>
 			</refsection>
 		</refentry>
 	</sect1>
