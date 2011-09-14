@@ -224,7 +224,7 @@ sc_create_sync_relation_op_proj(COLLECTION_TYPE t,
 		              EVALUATOR *eval);
 void sc_destroy_relation_op_proj(SPATIAL_COLLECTION *dead) ;
 
-
+int sc_get_relation_code(char *string, RELATION_TYPE *code) ;
 RELATION_FN sc_get_relation_fn(RELATION_TYPE relation) ;
 ENVELOPE_PREP_OP sc_get_envelope_fn(RELATION_TYPE relation) ;
 

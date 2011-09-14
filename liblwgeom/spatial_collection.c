@@ -273,3 +273,38 @@ sc_get_srid(SPATIAL_COLLECTION *sc)
 	if (sc == NULL) return -1 ;
 	return sc->srid ;
 }
+
+
+/**
+ * Sets the relation type code given a string. Returns true
+ * if the code was successfully set and false if not. Acceptable
+ * strings are: "union", "intersection", "difference" and "symdifference".
+ *
+ * @param string the string used to select a #RELATION_TYPE code.
+ * @param code pointer to the code to set.
+ * @returns true if code successfully set, false if not.
+ */
+int
+sc_get_relation_code(char *string, RELATION_TYPE *code)
+{
+	int success ;
+
+	if (code == NULL) return 0 ;
+
+	success = 0 ;
+	if (strcmp(string, "intersection")) {
+		*code = INTERSECTION ;
+		success = 1;
+	} else if (strcmp(string, "difference")) {
+		*code = DIFFERENCE ;
+		success = 1;
+	} else if (strcmp(string, "symdifference")) {
+		*code = SYMDIFFERENCE ;
+		success = 1;
+	} else if (strcmp(string, "union")) {
+		*code = UNION ;
+		success = 1;
+	}
+
+	return success ;
+}
