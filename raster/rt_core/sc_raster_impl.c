@@ -950,15 +950,34 @@ sc_destroy_raster_aligned_collection(SPATIAL_COLLECTION *dead)
 
 /** @} */ /* end of documentation group spatial_collection_i */
 
+/**
+ * Samples a #SPATIAL_COLLECTION at each grid cell in the provided
+ * raster. The raster must have a grid definition but if it lacks bands,
+ * the bands will be created. If the raster does have bands, the number of
+ * bands must be the same as the length of the #VALUE object returned by the
+ * evaluate method on the spatial collection.
+ *
+ * The user may provide a nodata vector to be written in each cell of
+ * the raster not included in the result. If the user does not provide
+ * a nodata #VALUE, then zero will be written to all bands.
+ *
+ * @param source The spatial collection to be sampled
+ * @param result The raster containing grid points at which the sampling
+ *               takes place.
+ * @param nodata_val (optional) The value to write to a grid cell if
+ *                   the cell is not included in the result.
+ */
 void
 sc_sampling_engine(SPATIAL_COLLECTION *source,
-		           rt_raster result)
+		           rt_raster result,
+		           VALUE *nodata_val)
 {
 	uint16_t width ;
 	uint16_t height ;
 	VALUE   *collection_val ;
 	int      coll_bands ;
 	int      raster_bands ;
+	int      local_nodata ;
 	int      i,j ;
 	LWPOINT *sample_pt ;
 	POINT4D  sample_pt_p4d ;
@@ -984,6 +1003,21 @@ sc_sampling_engine(SPATIAL_COLLECTION *source,
 	if ((raster_bands != 0) && (raster_bands != coll_bands)) {
 		rterror("sc_sampling_engine: non-empty raster must have same number of bands as the sampled collection.") ;
 		return ;
+	}
+
+	/* did the user specify a nodata value? */
+	local_nodata = (nodata_val == NULL) ;
+	if (local_nodata) {
+		int nd_band ;
+
+		nodata_val = val_create(coll_bands) ;
+		rterror("sc_sampling_engine: cannot create NODATA vector and none specified") ;
+		if (nodata_val == NULL) return ;
+
+		/* initialize nodata vector to all zeros */
+		for (nd_band=0; nd_band < coll_bands; nd_band++) {
+			nodata_val->data[nd_band] = 0.0 ;
+		}
 	}
 
 	/* maybe we have to add the bands ourselves */
@@ -1024,6 +1058,7 @@ sc_sampling_engine(SPATIAL_COLLECTION *source,
 	for (j=0; j<height; j++) {
 		for (i=0; i<width; i++) {
 			int band_num ;
+			VALUE *store_val ;
 
 			/* set up the sample point */
 			sample_pt_p4d.x = i ;
@@ -1033,14 +1068,24 @@ sc_sampling_engine(SPATIAL_COLLECTION *source,
 			/* evaluate the collection */
 			collection_val = sc_evaluateIndex(source, sample_pt) ;
 
+			/* store the returned value or the nodata vector */
+			store_val = collection_val ;
+			if (collection_val == NULL) {
+				store_val = nodata_val ;
+			}
+
 			/* copy the values to the raster */
 			for (band_num=0; band_num < coll_bands; band_num++) {
 				rt_band band ;
 
 				band = rt_raster_get_band(result, band_num) ;
-				rt_band_set_pixel(band, i, j, collection_val->data[band_num]) ;
+				rt_band_set_pixel(band, i, j, store_val->data[band_num]) ;
 			}
 		}
+	}
+
+	if (local_nodata) {
+		val_destroy(nodata_val) ;
 	}
 
 }

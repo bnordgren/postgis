@@ -23,13 +23,13 @@ sc_destroy_raster_bands_evaluator(EVALUATOR *dead) ;
 
 
 SPATIAL_COLLECTION *
-sc_create_raster_wrapper(rt_raster raster, int *bands, int num_bands) ;
+sc_create_raster_wrapper(rt_raster raster, int owned, int *bands, int num_bands);
 void
 sc_destroy_raster_wrapper(SPATIAL_COLLECTION *dead);
 
 SPATIAL_COLLECTION *
-sc_create_raster_nodata_wrapper(rt_raster raster, int *bands, int num_bands,
-		int nodata_band) ;
+sc_create_raster_nodata_wrapper(rt_raster raster, int owned,
+		int *bands, int num_bands, int nodata_band) ;
 void
 sc_destroy_raster_nodata_wrapper(SPATIAL_COLLECTION *dead) ;
 

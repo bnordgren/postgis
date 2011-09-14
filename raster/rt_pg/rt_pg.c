@@ -7452,8 +7452,43 @@ Datum RASTER_bandmetadata(PG_FUNCTION_ARGS)
 }
 
 /* ---------------------------------------------------------------- */
-/*  Two-raster spatial operations                                   */
+/*  Spatial collection-based spatial operations                     */
 /* ---------------------------------------------------------------- */
+
+/**
+ * This function accepts two rasters and a "relationship" as input,
+ * and returns a rasterized result. The spatial domain of the result is
+ * determined by the specified relationship. The caller may specify a list of
+ * bands to use for each of the rasters (default is all bands).
+ */
+PG_FUNCTION_INFO_V1(RASTER_relation_rr);
+Datum RASTER_relation_rr(PG_FUNCTION_ARGS)
+{
+	rt_pgraster *r1_pg, *r2_pg, *result_pg ;
+	text *relation ;
+	RELATION_TYPE relation_code ;
+	SPATIAL_COLLECTION *r1_sc, *r2_sc, *relation_sc ;
+
+	/* r1 is null, return null */
+	if (PG_ARGISNULL(0)) PG_RETURN_NULL();
+	r1_pg = (rt_pgraster *) PG_DETOAST_DATUM_SLICE(PG_GETARG_DATUM(0), 0, sizeof(struct rt_raster_serialized_t));
+
+	/* r2 is null, return null */
+	if (PG_ARGISNULL(1)) PG_RETURN_NULL();
+	r2_pg = (rt_pgraster *) PG_DETOAST_DATUM_SLICE(PG_GETARG_DATUM(1), 0, sizeof(struct rt_raster_serialized_t));
+
+	/* relation is null, return null */
+	if (PG_ARGISNULL(2)) PG_RETURN_NULL();
+	relation = PG_GETARG_TEXT_P(2);
+	if (!get_relation_code(relation->vl_dat, &relation_code)) {
+		PG_RETURN_NULL() ;
+	}
+
+	/* wrap the two inputs in a spatial collection */
+	r1_sc =
+
+
+}
 
 
 /**
