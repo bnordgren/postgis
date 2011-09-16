@@ -33,4 +33,14 @@ sc_create_raster_nodata_wrapper(rt_raster raster, int owned,
 void
 sc_destroy_raster_nodata_wrapper(SPATIAL_COLLECTION *dead) ;
 
+void
+fit_raster_to_extent(GBOX *extent, rt_raster raster) ;
+
+void
+sc_sampling_engine(SPATIAL_COLLECTION *source,
+		           rt_raster result,
+		           VALUE *nodata_val) ;
+
+
+
 #endif

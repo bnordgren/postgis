@@ -3,6 +3,9 @@
 #include "spatial_collection.h"
 #include "lwgeom_pg.h"
 #include "rt_collection.h"
+#include "postgres.h"
+#include "fmgr.h"
+#include "utils/array.h"
 
 /**
  * \addtogroup geo_wrap_collection pglwgeom wrapper
@@ -95,4 +98,66 @@ sc_create_pgraster_wrapper_nodata(rt_pgraster *pg_raster,
 }
 
 /** @} */ /* end of sc_rasterwrap_nodata documentation group */
+
+
+/**
+ * This function takes an array from argnum position of the function call
+ * list and sets the pointer to the array of bands as well as the
+ * number of bands. Consider this read only. Free the memory
+ * returned in bands using rtdealloc. This buffer is part of the FunctionCallInfo...
+ *
+ * If the array is NULL, this function returns a list of all the
+ * bands in the provided raster.
+ */
+int
+getarg_bandlist(FunctionCallInfo fcinfo, int argnum,
+		        rt_pgraster *raster, int **bands, int *num_bands)
+{
+
+	if (bands == NULL || num_bands==NULL || raster==NULL) return 0 ;
+	if (PG_ARGISNULL(argnum)) {
+		int i ;
+
+		*num_bands = rt_raster_get_num_bands(raster) ;
+		*bands = (int*)rtalloc(sizeof(int) * (*num_bands)) ;
+		if (*bands == NULL) {
+			rterror("getarg_bandlist: cannot allocate default band list.") ;
+			return 0 ;
+		}
+		for (i=0; i<(*num_bands) ; i++) {
+			(*bands)[i] = i ;
+		}
+
+	} else {
+		ArrayType *pg_bands ;
+
+		/* get the array and check for null */
+		pg_bands = PG_GETARG_ARRAYTYPE_P(argnum) ;
+		if (ARR_HASNULL(pg_bands)) {
+			rterror("getarg_bandlist: NULL values not allowed in band list.") ;
+			return 0 ;
+		}
+
+		/* check that the array is a vector */
+		if (ARR_NDIMS(pg_bands) != 1) {
+			rterror("getarg_bandlist: band list array must be one-dimensional.") ;
+			return 0 ;
+		}
+
+		/* check that the array contains integers */
+		// dunno how to do this
+		// use ARR_ELEMTYPE(), but how to divine the Oid associated with
+		// integers?
+
+		/* get the number of bands in the band list */
+		*num_bands = (ARR_DIMS(pg_bands))[0] ;
+
+		/* allocate the proper amount of memory in the band buffer */
+		*bands = (int *)rtalloc(sizeof(int) * (*num_bands)) ;
+		memcpy(*bands, ARR_DATA_PTR(pg_bands), sizeof(int)* (*num_bands)) ;
+	}
+
+	return 1;
+}
+
 

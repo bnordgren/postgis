@@ -7460,14 +7460,31 @@ Datum RASTER_bandmetadata(PG_FUNCTION_ARGS)
  * and returns a rasterized result. The spatial domain of the result is
  * determined by the specified relationship. The caller may specify a list of
  * bands to use for each of the rasters (default is all bands).
+ *
+ * This function expects the following arguments:
+ * <ol>
+ *  <li> raster1 the first raster </li>
+ *  <li> raster2 the second raster </li>
+ *  <li> relationship a string containing one of "union",
+ *       "intersection", "difference", or "symdifference". </li>
+ *  <li> bands1 an integer list of band indices within the first raster </li>
+ *  <li> bands2 an integer list of band indices within the second raster </li>
+ *  <li> raster1 nodata band </li>
+ *  <li> raster2 nodata band </li>
+ * </ol>
  */
 PG_FUNCTION_INFO_V1(RASTER_relation_rr);
 Datum RASTER_relation_rr(PG_FUNCTION_ARGS)
 {
 	rt_pgraster *r1_pg, *r2_pg, *result_pg ;
+	int *r1_bands, r2_bands ;
+	int r1_bandnum, r2_bandnum ;
+	int r1_nodata, r1_hasnodata, r2_nodata, r2_hasnodata ;
 	text *relation ;
+	rt_raster result ;
 	RELATION_TYPE relation_code ;
 	SPATIAL_COLLECTION *r1_sc, *r2_sc, *relation_sc ;
+	EVALUATOR *eval ;
 
 	/* r1 is null, return null */
 	if (PG_ARGISNULL(0)) PG_RETURN_NULL();
@@ -7480,14 +7497,112 @@ Datum RASTER_relation_rr(PG_FUNCTION_ARGS)
 	/* relation is null, return null */
 	if (PG_ARGISNULL(2)) PG_RETURN_NULL();
 	relation = PG_GETARG_TEXT_P(2);
-	if (!get_relation_code(relation->vl_dat, &relation_code)) {
+	relation_code = INTERSECTION ;
+	if (!sc_get_relation_code(relation->vl_dat, &relation_code)) {
 		PG_RETURN_NULL() ;
 	}
 
-	/* wrap the two inputs in a spatial collection */
-	r1_sc =
+	/* r1 band list */
+	if (!getarg_bandlist(fcinfo, 3, r1_pg, &r1_bands, &r1_bandnum)) {
+		rterror("RASTER_relation_rr: bad band list for raster1");
+		PG_RETURN_NULL() ;
+	}
 
+	/* r2 band list */
+	if (!getarg_bandlist(fcinfo, 4, r2_pg, &r2_bands, &r2_bandnum)) {
+		rterror("RASTER_relation_rr: bad band list for raster2");
+		rtdealloc(r1_bands) ;
+		PG_RETURN_NULL() ;
+	}
 
+	/* r1 nodata band */
+	r1_hasnodata = !PG_ARGISNULL(5) ;
+	r1_nodata = 0 ;
+	if (r1_hasnodata) {
+		r1_nodata = PG_GETARG_INT32(5) ;
+	}
+
+	/* r2 nodata band */
+	r2_hasnodata = !PG_ARGISNULL(6) ;
+	r2_nodata = 0 ;
+	if (r2_hasnodata) {
+		r2_nodata = PG_GETARG_INT32(6) ;
+	}
+
+	/* wrap r1 in a spatial collection */
+	if (r1_hasnodata) {
+		r1_sc = sc_create_pgraster_wrapper_nodata(r1_pg,
+				r1_bands, r1_bandnum, r1_nodata) ;
+	} else {
+		r1_sc = sc_create_pgraster_wrapper(r1_pg, r1_bands, r1_bandnum) ;
+	}
+
+	/* wrap r2 in a spatial collection */
+	if (r2_hasnodata) {
+		r2_sc = sc_create_pgraster_wrapper_nodata(r2_pg,
+				r2_bands, r2_bandnum, r2_nodata) ;
+	} else {
+		r2_sc = sc_create_pgraster_wrapper(r2_pg, r2_bands, r2_bandnum) ;
+	}
+
+	/* create the evaluator */
+	eval = sc_create_first_value_evaluator(r1_sc, r2_sc) ;
+	if (eval != NULL) {
+		/* create the "relation" operator */
+		relation_op = sc_create_sync_relation_op(SPATIAL_PLUS_VALUE,
+				r1_sc, r2_sc, relation, eval) ;
+		if (relation_op != NULL) {
+			GBOX *res_extent ;
+			uint16_t res_width, res_height ;
+
+			res_extent = relation_op->extent ;
+
+			/* I know this is wrong for the moment. Need to get real calculation */
+			res_width = (int)fabs((res_extent->xmax-res_extent->xmin) / r1_pg->scaleX) ;
+			res_height = (int)fabs((res_extent->ymax-res_extent->ymin) / r1_pg->scaleY) ;
+
+			/* make an empty raster to store the result */
+			result = rt_raster_new(res_width, res_height) ;
+
+			/* copy srid and geo transform (except for offsets) */
+			rt_raster_set_srid(result, r1_pg->srid) ;
+			rt_raster_set_scales(result, r1_pg->scaleX, r1_pg->scaleY) ;
+			rt_raster_set_skews(result, r1_pg->skewX, r1_pg->skewY) ;
+
+			/* compute new offsets because raster may be rotated
+			 * w.r.t. the extent.
+			 */
+			fit_raster_to_extent(res_extent, result) ;
+
+			/* sample the relation operator into the raster */
+			sc_sampling_engine(relation_op, result, NULL) ;
+
+			sc_destroy_relation_op(relation_op) ;
+		}
+	}
+
+	sc_destroy_first_value_evaluator(eval) ;
+	if (r1_hasnodata) {
+		sc_destroy_pgraster_wrapper_nodata(r1_sc) ;
+	} else {
+		sc_destroy_pgraster_wrapper(r1_sc) ;
+	}
+	if (r2_hasnodata) {
+		sc_destroy_pgraster_wrapper_nodata(r2_sc) ;
+	} else {
+		sc_destroy_pgraster_wrapper(r2_sc) ;
+	}
+	rtdealloc(r1_bands) ;
+	rtdealloc(r2_bands) ;
+
+	result_pg = rt_raster_serialize(result);
+	rt_raster_destroy(result);
+	PG_FREE_IF_COPY(r1_pg, 0);
+	PG_FREE_IF_COPY(r2_pg, 0);
+	if (NULL == result_pg) PG_RETURN_NULL();
+
+	SET_VARSIZE(result_pg, result_pg->size);
+	PG_RETURN_POINTER(result_pg);
 }
 
 

@@ -1089,3 +1089,71 @@ sc_sampling_engine(SPATIAL_COLLECTION *source,
 	}
 
 }
+
+/**
+ * Assuming the presence of a computed result extent (as in the envelope
+ * of the result of a spatial operation) and a raster having the four
+ * orientation parameters set, this function calculates the offsets required
+ * to place the raster in the desired extent. The method leverages the
+ * fact that the size of the raster's extent will be the same regardless of
+ * where it is. It calculates the xmin, ymin corner of the extent when
+ * the offsets are set to zero (at the origin). Then it translates the
+ * whole raster (including the origin) by the amount necessary to put the
+ * calculated xmin, ymin corner on top of the xmin, ymin corner of the
+ * provided extent.
+ *
+ * This method works for any rotation angle, but requires that the
+ * width, height, and scales of the raster be consistent with the
+ * dimensions of the extent.
+ *
+ * @param extent the extent in which the raster should live
+ * @param raster the raster which needs to be translated into the extent
+ */
+void
+fit_raster_to_extent(GBOX *extent, rt_raster raster)
+{
+	double o11, o12, o21, o22 ;
+	double x[3] ;
+	double y[3] ;
+	double xmin, ymin ;
+	double xoffset, yoffset ;
+	int width, height ;
+	int i;
+
+	if (extent==NULL || raster==NULL) return ;
+
+	width = rt_raster_get_width(raster);
+	height = rt_raster_get_height(raster) ;
+
+	/* get the matrix coefficients */
+	o11 = rt_raster_get_scaleX(raster) ;
+	o12 = rt_raster_get_skewX(raster) ;
+	o21 = rt_raster_get_skewY(raster) ;
+	o22 = rt_raster_get_scaleY(raster) ;
+
+	/* upper-left corner is origin (0,0) */
+
+	/* upper-right corner (pixel (width,0)) */
+	x[0] = o11 * width ;
+	y[0] = o21 * width ;
+
+	/* lower-right corner (pixel (width, height)) */
+	x[1] = o11 * width + o12 * height ;
+	y[1] = o21 * width + o22 * height ;
+
+	/* lower left corner (pixel (0, height)) */
+	x[2] = o12 * height ;
+	y[2] = o22 * height ;
+
+	xmin = ymin = 0 ; /* origin */
+	for (i=0; i<3 ; i++) {
+		xmin = fmin(xmin, x[i]) ;
+		ymin = fmin(ymin, y[i]) ;
+	}
+
+	/* compute the offset of the "extent" box centered around 0,0 */
+	xoffset = extent->xmin - xmin ;
+	yoffset = extent->ymin - ymin ;
+
+	rt_raster_set_offsets(raster, xoffset, yoffset) ;
+}
