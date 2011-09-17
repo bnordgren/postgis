@@ -7483,7 +7483,7 @@ Datum RASTER_relation_rr(PG_FUNCTION_ARGS)
 	text *relation ;
 	rt_raster result ;
 	RELATION_TYPE relation_code ;
-	SPATIAL_COLLECTION *r1_sc, *r2_sc, *relation_sc ;
+	SPATIAL_COLLECTION *r1_sc, *r2_sc, *relation_op ;
 	EVALUATOR *eval ;
 
 	/* r1 is null, return null */
@@ -7552,6 +7552,7 @@ Datum RASTER_relation_rr(PG_FUNCTION_ARGS)
 		relation_op = sc_create_sync_relation_op(SPATIAL_PLUS_VALUE,
 				r1_sc, r2_sc, relation, eval) ;
 		if (relation_op != NULL) {
+			/* make an empty raster covering the expected result area */
 			result = rt_raster_new_inbox(relation_op->extent, pg_r1) ;
 
 			/* sample the relation operator into the raster */
