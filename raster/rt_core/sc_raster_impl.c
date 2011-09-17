@@ -981,6 +981,7 @@ sc_sampling_engine(SPATIAL_COLLECTION *source,
 	int      i,j ;
 	LWPOINT *sample_pt ;
 	POINT4D  sample_pt_p4d ;
+	SPATIAL_COLLECTION *aligned ;
 
 	if (source == NULL || result == NULL) return ;
 	if (source->type == SPATIAL_ONLY) {
@@ -994,8 +995,12 @@ sc_sampling_engine(SPATIAL_COLLECTION *source,
 	width = result->width ;
 	height = result->height;
 
+	/* align the collection to the result raster */
+	aligned = sc_create_raster_aligned_collection(source, result);
+	if (aligned == NULL) return ;
+
 	/* get number of bands */
-	collection_val = source->evaluator->result ;
+	collection_val = aligned->evaluator->result ;
 	coll_bands = collection_val->length ;
 	raster_bands = rt_raster_get_num_bands(result) ;
 
@@ -1066,7 +1071,7 @@ sc_sampling_engine(SPATIAL_COLLECTION *source,
 			ptarray_set_point4d(sample_pt->point,0,&sample_pt_p4d) ;
 
 			/* evaluate the collection */
-			collection_val = sc_evaluateIndex(source, sample_pt) ;
+			collection_val = sc_evaluateIndex(aligned, sample_pt) ;
 
 			/* store the returned value or the nodata vector */
 			store_val = collection_val ;
@@ -1084,6 +1089,7 @@ sc_sampling_engine(SPATIAL_COLLECTION *source,
 		}
 	}
 
+	sc_destroy_raster_aligned_collection(aligned) ;
 	if (local_nodata) {
 		val_destroy(nodata_val) ;
 	}
