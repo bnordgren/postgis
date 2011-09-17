@@ -160,4 +160,41 @@ getarg_bandlist(FunctionCallInfo fcinfo, int argnum,
 	return 1;
 }
 
+/**
+ * Creates a new, empty raster with the same rotation and scale
+ * present in the grid_defn.
+ *
+ * @param extent the area which should be covered by the new raster
+ *               (e.g., a box which should be inscribed in the raster)
+ * @param grid_defn a grid from which we take alignment information.
+ * @returns a raster of the correct size, or null if an error.
+ */
+rt_raster
+rt_raster_new_inbox(GBOX *extent, pg_raster grid_defn)
+{
+	uint16_t res_width, res_height ;
+	rt_raster result ;
+
+	if (extent == NULL || grid_defn == NULL) return NULL ;
+
+	/* I know this is wrong for the moment. Need to get real calculation */
+	res_width = (int)fabs((extent->xmax-extent->xmin) / grid_defn->scaleX) ;
+	res_height = (int)fabs((extent->ymax-extent->ymin) / grid_defn->scaleY) ;
+
+	/* make an empty raster to store the result */
+	result = rt_raster_new(res_width, res_height) ;
+
+	/* copy srid and geo transform (except for offsets) */
+	rt_raster_set_srid(result, grid_defn->srid) ;
+	rt_raster_set_scales(result, grid_defn->scaleX, grid_defn->scaleY) ;
+	rt_raster_set_skews(result, grid_defn->skewX, grid_defn->skewY) ;
+
+	/* compute new offsets because raster may be rotated
+	 * w.r.t. the extent.
+	 */
+	fit_raster_to_extent(extent, result) ;
+
+	return result ;
+}
+
 

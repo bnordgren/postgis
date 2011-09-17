@@ -7552,27 +7552,7 @@ Datum RASTER_relation_rr(PG_FUNCTION_ARGS)
 		relation_op = sc_create_sync_relation_op(SPATIAL_PLUS_VALUE,
 				r1_sc, r2_sc, relation, eval) ;
 		if (relation_op != NULL) {
-			GBOX *res_extent ;
-			uint16_t res_width, res_height ;
-
-			res_extent = relation_op->extent ;
-
-			/* I know this is wrong for the moment. Need to get real calculation */
-			res_width = (int)fabs((res_extent->xmax-res_extent->xmin) / r1_pg->scaleX) ;
-			res_height = (int)fabs((res_extent->ymax-res_extent->ymin) / r1_pg->scaleY) ;
-
-			/* make an empty raster to store the result */
-			result = rt_raster_new(res_width, res_height) ;
-
-			/* copy srid and geo transform (except for offsets) */
-			rt_raster_set_srid(result, r1_pg->srid) ;
-			rt_raster_set_scales(result, r1_pg->scaleX, r1_pg->scaleY) ;
-			rt_raster_set_skews(result, r1_pg->skewX, r1_pg->skewY) ;
-
-			/* compute new offsets because raster may be rotated
-			 * w.r.t. the extent.
-			 */
-			fit_raster_to_extent(res_extent, result) ;
+			result = rt_raster_new_inbox(relation_op->extent, pg_r1) ;
 
 			/* sample the relation operator into the raster */
 			sc_sampling_engine(relation_op, result, NULL) ;

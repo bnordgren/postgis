@@ -19,5 +19,9 @@ sc_create_pglwgeom_wrapper(PG_LWGEOM *pg_geom, double inside, double outside) ;
 int
 getarg_bandlist(FunctionCallInfo fcinfo, int argnum, int **bands, int *num_bands) ;
 
+rt_raster
+rt_raster_new_inbox(GBOX *extent, pg_raster grid_defn) ;
+
+
 
 #endif
