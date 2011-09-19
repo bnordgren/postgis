@@ -220,8 +220,9 @@ sc_create_sync_relation_op_proj(COLLECTION_TYPE t,
 		              SPATIAL_COLLECTION *sc1,
 		              SPATIAL_COLLECTION *sc2,
 		              projPJ proj_sc1, projPJ proj_sc2,
+		              int dest_srid, projPJ proj_dest,
 		              RELATION_TYPE relation,
-		              EVALUATOR *eval);
+		              EVALUATOR *eval) ;
 void sc_destroy_relation_op_proj(SPATIAL_COLLECTION *dead) ;
 
 int sc_get_relation_code(char *string, RELATION_TYPE *code) ;

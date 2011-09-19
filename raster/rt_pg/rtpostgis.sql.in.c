@@ -3304,11 +3304,53 @@ CREATE OR REPLACE FUNCTION DropRasterTable(table_name varchar)
 -----------------------------------------------------------------------
 -- Raster Operations
 -----------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION ST_Intersection(r1 raster, r2 raster, 
-									mask boolean DEFAULT TRUE, 
-									srid INT DEFAULT NULL)
+
+CREATE OR REPLACE FUNCTION _RT_relation_rr(r1 raster, r2 raster,
+		relation text, r1_bands integer array, r2_bands integer array,
+		r1_nodata integer, r2_nodata integer)
 	RETURNS raster 
-    AS 'MODULE_PATHNAME','RASTER_intersection_rr2r'
+    AS 'MODULE_PATHNAME','RASTER_relation_rr'
     LANGUAGE 'C' IMMUTABLE;
+
+CREATE OR REPLACE FUNCTION ST_Intersection(r1 raster, r2 raster,
+		r1_bands integer ARRAY, r2_bands integer array,
+		r1_nodata integer, r2_nodata integer)
+	RETURNS raster AS
+	$$
+	RETURN _RT_relation_rr(r1, r2, 'intersection', r1_bands, r2_bands,
+			r1_nodata, r2_nodata) ;
+	$$
+	LANGUAGE 'plpgsql' VOLATILE STRICT ;
+
+CREATE OR REPLACE FUNCTION ST_Union(r1 raster, r2 raster,
+		r1_bands integer ARRAY, r2_bands integer array,
+		r1_nodata integer, r2_nodata integer)
+	RETURNS raster AS
+	$$
+	RETURN _RT_relation_rr(r1, r2, 'union', r1_bands, r2_bands,
+			r1_nodata, r2_nodata) ;
+	$$
+	LANGUAGE 'plpgsql' VOLATILE STRICT ;
+
+CREATE OR REPLACE FUNCTION ST_Difference(r1 raster, r2 raster,
+		r1_bands integer ARRAY, r2_bands integer array,
+		r1_nodata integer, r2_nodata integer)
+	RETURNS raster AS
+	$$
+	RETURN _RT_relation_rr(r1, r2, 'difference', r1_bands, r2_bands,
+			r1_nodata, r2_nodata) ;
+	$$
+	LANGUAGE 'plpgsql' VOLATILE STRICT ;
+
+CREATE OR REPLACE FUNCTION ST_SymDifference(r1 raster, r2 raster,
+		r1_bands integer ARRAY, r2_bands integer array,
+		r1_nodata integer, r2_nodata integer)
+	RETURNS raster AS
+	$$
+	RETURN _RT_relation_rr(r1, r2, 'symdifference', r1_bands, r2_bands,
+			r1_nodata, r2_nodata) ;
+	$$
+	LANGUAGE 'plpgsql' VOLATILE STRICT ;
+
 
 -- COMMIT;

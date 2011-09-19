@@ -920,6 +920,63 @@ GBOX *relation_env_symdifference(LWPOLY *r1, LWPOLY *r2)
  * @{
  */
 
+/**
+ * performs the heavy lifting for #sc_create_relation_op and
+ * #sc_create_relation_op_proj.
+ */
+static SPATIAL_COLLECTION *
+sc_create_relation_op_internal(COLLECTION_TYPE t,
+		              SPATIAL_COLLECTION *sc1,
+		              SPATIAL_COLLECTION *sc2,
+		              PARAMETERS *params,
+		              ENVELOPE_PREP_OP env_fn,
+		              RELATION_FN inc_fn,
+		              EVALUATOR *eval)
+{
+	SPATIAL_COLLECTION *result ;
+	INCLUDES *inc ;
+	LWPOLY *sc1_outline ;
+	LWPOLY *sc2_outline ;
+	GBOX *result_env ;
+
+	/* sanity checks on inputs */
+	if (sc1 == NULL || sc2==NULL) return NULL ;
+	if (env_fn == NULL || inc_fn == NULL) return NULL ;
+	if (eval == NULL) return NULL ;
+
+	/* something which should print out an error */
+	if (sc1->srid != sc2->srid) return NULL ;
+
+	/* create the INCLUDES given the desired function */
+	inc = sc_create_relation_includes(inc_fn) ;
+	if (inc == NULL) return NULL ;
+
+	/* calculate an approximate envelope for the result */
+	sc1_outline = gbox_to_lwpoly(&(sc1->extent)) ;
+	sc2_outline = gbox_to_lwpoly(&(sc2->extent)) ;
+	if (sc1_outline == NULL || sc2_outline == NULL) {
+		sc_destroy_relation_includes(inc) ;
+		if (sc1_outline != NULL) lwpoly_free(sc1_outline) ;
+		if (sc2_outline != NULL) lwpoly_free(sc2_outline) ;
+		return NULL ;
+	}
+	result_env = env_fn(sc1_outline, sc2_outline) ;
+	lwpoly_free(sc1_outline) ;
+	lwpoly_free(sc2_outline) ;
+	if (result_env == NULL) {
+		sc_destroy_relation_includes(inc) ;
+		return NULL ;
+	}
+
+	/* create the two-input collection */
+	result = sc_twoinput_create(t, params, result_env, inc, eval, sc1, sc2) ;
+	if (result == NULL) {
+		sc_destroy_relation_includes(inc) ;
+		return NULL ;
+	}
+
+	return result ;
+}
 
 /**
  * A collection implementation encapsulating the spatial relationship
@@ -963,50 +1020,11 @@ sc_create_relation_op(COLLECTION_TYPE t,
 		              RELATION_FN inc_fn,
 		              EVALUATOR *eval)
 {
-	SPATIAL_COLLECTION *result ;
-	INCLUDES *inc ;
-	LWPOLY *sc1_outline ;
-	LWPOLY *sc2_outline ;
-	GBOX *result_env ;
-
-	/* sanity checks on inputs */
-	if (sc1 == NULL || sc2==NULL) return NULL ;
-	if (env_fn == NULL || inc_fn == NULL) return NULL ;
-	if (eval == NULL) return NULL ;
-
-	/* something which should print out an error */
-	if (sc1->srid != sc2->srid) return NULL ;
-
-	/* create the INCLUDES given the desired function */
-	inc = sc_create_relation_includes(inc_fn) ;
-	if (inc == NULL) return NULL ;
-
-	/* calculate an approximate envelope for the result */
-	sc1_outline = gbox_to_lwpoly(&(sc1->extent)) ;
-	sc2_outline = gbox_to_lwpoly(&(sc2->extent)) ;
-	if (sc1_outline == NULL || sc2_outline == NULL) {
-		sc_destroy_relation_includes(inc) ;
-		if (sc1_outline != NULL) lwpoly_free(sc1_outline) ;
-		if (sc2_outline != NULL) lwpoly_free(sc2_outline) ;
-		return NULL ;
-	}
-	result_env = env_fn(sc1_outline, sc2_outline) ;
-	lwpoly_free(sc1_outline) ;
-	lwpoly_free(sc2_outline) ;
-	if (result_env == NULL) {
-		sc_destroy_relation_includes(inc) ;
-		return NULL ;
-	}
-
-	/* create the two-input collection */
-	result = sc_twoinput_create(t, NULL, result_env, inc, eval, sc1, sc2) ;
-	if (result == NULL) {
-		sc_destroy_relation_includes(inc) ;
-		return NULL ;
-	}
-
-	return result ;
+	return sc_create_relation_op_internal(t, sc1, sc2, NULL,
+			env_fn, inc_fn, eval) ;
 }
+
+
 
 /**
  * A collection implementation encapsulating the spatial relationship
@@ -1075,6 +1093,11 @@ sc_destroy_relation_op(SPATIAL_COLLECTION *dead)
  * @{
  */
 
+struct relation_op_proj_s {
+	SPATIAL_COLLECTION *sc1_wrap ;
+	SPATIAL_COLLECTION *sc2_wrap ;
+};
+
 
 /**
  * A collection implementation encapsulating the spatial relationship
@@ -1127,27 +1150,47 @@ sc_create_relation_op_proj(COLLECTION_TYPE t,
 		              RELATION_FN inc_fn,
 		              EVALUATOR *eval)
 {
-	SPATIAL_COLLECTION *sc1_wrap ;
-	SPATIAL_COLLECTION *sc2_wrap ;
+	SPATIAL_COLLECTION *sc1_used ;
+	SPATIAL_COLLECTION *sc2_used ;
+	struct relation_op_proj_s *params ;
 
 	if (sc1 == NULL || sc2 == NULL) return NULL ;
 	if (proj_sc1 == NULL || proj_sc2 == NULL || proj_dest == NULL) return NULL ;
 
+	params = (struct relation_op_proj_s *)lwalloc(sizeof(struct relation_op_proj_s));
+	if (params==NULL) return NULL ;
+	params->sc1_wrap = NULL ;
+	params->sc2_wrap = NULL ;
+
 	/* wrap sc1 if necessary */
-	sc1_wrap = sc1 ;
+	sc1_used = sc1 ;
 	if (sc1->srid != srid) {
-		sc1_wrap = sc_create_projection_wrapper(sc1, srid, proj_sc1, proj_dest) ;
-		if (sc1_wrap == NULL) return NULL ;
+		params->sc1_wrap =
+				sc_create_projection_wrapper(sc1, srid, proj_sc1, proj_dest) ;
+		if (params->sc1_wrap == NULL) {
+			lwfree(params) ;
+			return NULL ;
+		}
+		sc1_used = params->sc1_wrap ;
 	}
 
 	/* wrap sc2 if necessary */
-	sc2_wrap = sc2 ;
+	sc2_used = sc2 ;
 	if (sc2->srid != srid) {
-		sc2_wrap = sc_create_projection_wrapper(sc2, srid, proj_sc2, proj_dest) ;
-		if (sc2_wrap == NULL) return NULL ;
+		params->sc2_wrap =
+				sc_create_projection_wrapper(sc2, srid, proj_sc2, proj_dest) ;
+		if (params->sc2_wrap == NULL) {
+			if (params->sc1_wrap != NULL) {
+				sc_destroy_projection_wrapper(params->sc1_wrap) ;
+			}
+			lwfree(params) ;
+			return NULL ;
+		}
+		sc2_used = params->sc2_wrap ;
 	}
 
-	return sc_create_relation_op(t, sc1_wrap, sc2_wrap, env_fn, inc_fn, eval) ;
+	return sc_create_relation_op_internal(t, sc1_used, sc2_used,
+			params, env_fn, inc_fn, eval) ;
 }
 
 /**
@@ -1182,6 +1225,7 @@ sc_create_sync_relation_op_proj(COLLECTION_TYPE t,
 		              SPATIAL_COLLECTION *sc1,
 		              SPATIAL_COLLECTION *sc2,
 		              projPJ proj_sc1, projPJ proj_sc2,
+		              int dest_srid, projPJ proj_dest,
 		              RELATION_TYPE relation,
 		              EVALUATOR *eval)
 {
@@ -1200,17 +1244,25 @@ sc_create_sync_relation_op_proj(COLLECTION_TYPE t,
 
 	return sc_create_relation_op_proj(t, sc1, sc2,
 			proj_sc1, proj_sc2,
-			sc1->srid, proj_sc1,
+			dest_srid, proj_dest,
 			env_fn, inc_fn, eval) ;
 }
 
 void
 sc_destroy_relation_op_proj(SPATIAL_COLLECTION *dead)
 {
-	/* note that this does not deallocate the projection wrapper
-	 * collections _if_ they were made. The central problem here
-	 * is keeping track of if they had to be constructed...
-	 */
+	if (dead != NULL) {
+		if (dead->params != NULL) {
+			struct relation_op_proj_s *p ;
+			p = (struct relation_op_proj_s *)(dead->params) ;
+			if (p->sc1_wrap != NULL) {
+				sc_destroy_projection_wrapper(p->sc1_wrap) ;
+			}
+			if (p->sc2_wrap != NULL) {
+				sc_destroy_projection_wrapper(p->sc2_wrap) ;
+			}
+		}
+	}
 	sc_destroy_relation_op(dead) ;
 }
 

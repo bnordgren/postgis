@@ -2,6 +2,7 @@
 #include "rt_api.h"
 #include "spatial_collection.h"
 #include "lwgeom_pg.h"
+#include "sc_raster.h"
 #include "rt_collection.h"
 #include "postgres.h"
 #include "fmgr.h"
@@ -24,7 +25,7 @@
 SPATIAL_COLLECTION *
 sc_create_pglwgeom_wrapper(PG_LWGEOM *pg_geom, double inside, double outside)
 {
-	LWGEOM geom ;
+	LWGEOM *geom ;
 
 	if (pg_geom == NULL) return NULL ;
 	geom = pglwgeom_deserialize(pg_geom) ;
@@ -118,7 +119,7 @@ getarg_bandlist(FunctionCallInfo fcinfo, int argnum,
 	if (PG_ARGISNULL(argnum)) {
 		int i ;
 
-		*num_bands = rt_raster_get_num_bands(raster) ;
+		*num_bands = raster->numBands ;
 		*bands = (int*)rtalloc(sizeof(int) * (*num_bands)) ;
 		if (*bands == NULL) {
 			rterror("getarg_bandlist: cannot allocate default band list.") ;
@@ -139,7 +140,7 @@ getarg_bandlist(FunctionCallInfo fcinfo, int argnum,
 		}
 
 		/* check that the array is a vector */
-		if (ARR_NDIMS(pg_bands) != 1) {
+		if (ARR_NDIM(pg_bands) != 1) {
 			rterror("getarg_bandlist: band list array must be one-dimensional.") ;
 			return 0 ;
 		}
@@ -170,7 +171,7 @@ getarg_bandlist(FunctionCallInfo fcinfo, int argnum,
  * @returns a raster of the correct size, or null if an error.
  */
 rt_raster
-rt_raster_new_inbox(GBOX *extent, pg_raster grid_defn)
+rt_raster_new_inbox(GBOX *extent, rt_pgraster *grid_defn)
 {
 	uint16_t res_width, res_height ;
 	rt_raster result ;
@@ -186,7 +187,7 @@ rt_raster_new_inbox(GBOX *extent, pg_raster grid_defn)
 
 	/* copy srid and geo transform (except for offsets) */
 	rt_raster_set_srid(result, grid_defn->srid) ;
-	rt_raster_set_scales(result, grid_defn->scaleX, grid_defn->scaleY) ;
+	rt_raster_set_scale(result, grid_defn->scaleX, grid_defn->scaleY) ;
 	rt_raster_set_skews(result, grid_defn->skewX, grid_defn->skewY) ;
 
 	/* compute new offsets because raster may be rotated

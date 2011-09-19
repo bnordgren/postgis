@@ -52,6 +52,7 @@
 #include "rt_pg.h"
 #include "pgsql_compat.h"
 #include "rt_api.h"
+#include "sc_raster.h"
 #include "rt_collection.h"
 
 #include <utils/lsyscache.h> /* for get_typlenbyvalalign */
@@ -7476,8 +7477,10 @@ Datum RASTER_bandmetadata(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(RASTER_relation_rr);
 Datum RASTER_relation_rr(PG_FUNCTION_ARGS)
 {
+	Proj4Cache proj_cache ;
+	projPJ r1_proj, r2_proj ;
 	rt_pgraster *r1_pg, *r2_pg, *result_pg ;
-	int *r1_bands, r2_bands ;
+	int *r1_bands, *r2_bands ;
 	int r1_bandnum, r2_bandnum ;
 	int r1_nodata, r1_hasnodata, r2_nodata, r2_hasnodata ;
 	text *relation ;
@@ -7545,182 +7548,70 @@ Datum RASTER_relation_rr(PG_FUNCTION_ARGS)
 		r2_sc = sc_create_pgraster_wrapper(r2_pg, r2_bands, r2_bandnum) ;
 	}
 
+	/* projections */
+	proj_cache = GetPROJ4Cache(fcinfo) ;
+	r1_proj = GetProjectionFromPROJ4Cache(proj_cache, r1_pg->srid) ;
+	r2_proj = GetProjectionFromPROJ4Cache(proj_cache, r2_pg->srid) ;
+	if (r1_proj==NULL || r2_proj==NULL) {
+		if (r1_proj==NULL) {
+			rterror("cannot find srid %d for raster1", r1_pg->srid) ;
+		}
+		if (r2_proj==NULL) {
+			rterror("cannot find srid %d for raster1", r2_pg->srid) ;
+		}
+		PG_RETURN_NULL() ;
+	}
+
 	/* create the evaluator */
 	eval = sc_create_first_value_evaluator(r1_sc, r2_sc) ;
+	result = NULL ;
 	if (eval != NULL) {
 		/* create the "relation" operator */
-		relation_op = sc_create_sync_relation_op(SPATIAL_PLUS_VALUE,
-				r1_sc, r2_sc, relation, eval) ;
+		relation_op = sc_create_sync_relation_op_proj(SPATIAL_PLUS_VALUE,
+				r1_sc, r2_sc, r1_proj, r2_proj,
+				r1_pg->srid, r1_proj,
+				relation_code, eval) ;
 		if (relation_op != NULL) {
 			/* make an empty raster covering the expected result area */
-			result = rt_raster_new_inbox(relation_op->extent, pg_r1) ;
+			result = rt_raster_new_inbox(&(relation_op->extent), r1_pg) ;
 
 			/* sample the relation operator into the raster */
 			sc_sampling_engine(relation_op, result, NULL) ;
 
-			sc_destroy_relation_op(relation_op) ;
+			sc_destroy_relation_op_proj(relation_op) ;
 		}
 	}
 
 	sc_destroy_first_value_evaluator(eval) ;
 	if (r1_hasnodata) {
-		sc_destroy_pgraster_wrapper_nodata(r1_sc) ;
+		sc_destroy_raster_nodata_wrapper(r1_sc) ;
 	} else {
-		sc_destroy_pgraster_wrapper(r1_sc) ;
+		sc_destroy_raster_wrapper(r1_sc) ;
 	}
 	if (r2_hasnodata) {
-		sc_destroy_pgraster_wrapper_nodata(r2_sc) ;
+		sc_destroy_raster_nodata_wrapper(r2_sc) ;
 	} else {
-		sc_destroy_pgraster_wrapper(r2_sc) ;
+		sc_destroy_raster_wrapper(r2_sc) ;
 	}
 	rtdealloc(r1_bands) ;
 	rtdealloc(r2_bands) ;
 
-	result_pg = rt_raster_serialize(result);
-	rt_raster_destroy(result);
-	PG_FREE_IF_COPY(r1_pg, 0);
-	PG_FREE_IF_COPY(r2_pg, 0);
-	if (NULL == result_pg) PG_RETURN_NULL();
-
-	SET_VARSIZE(result_pg, result_pg->size);
-	PG_RETURN_POINTER(result_pg);
-}
-
-
-/**
- * Perform the intersection between two rasters, returning a raster.
- * The result is represented either by a mask (a raster having only
- * true/false values)
- * or by an "image" (a raster having valid pixel values over the result
- * and "nodata" over the area which is to be excluded.)
- */
-PG_FUNCTION_INFO_V1(RASTER_intersection_rr2r);
-Datum RASTER_intersection_rr2r(PG_FUNCTION_ARGS)
-{
-	/* arguments & return val */
-	rt_pgraster *r1_pg, *r2_pg, *result_pg ;
-	bool        mask ; /* true/false flag */
-	int32_t     dest_srid ; /* SRS of the destination */
-
-	rt_raster   r1, r2, result ;  /* deserialized rasters */
-	projPJ      r1_srs, r2_srs, result_srs ; /* Proj4 projection descriptors */
-	Proj4Cache proj_cache ;       /* projection cache */
-
-	/* properties of the result */
-	double nodata = 0.;
-	uint32_t hasnodata = 0;
-	two_raster_value_op pixel_calculator ;
-
-	POSTGIS_RT_DEBUG(3, "RASTER_intersection_rr2r: Starting");
-
-	/* r1 is null, return null */
-	if (PG_ARGISNULL(0)) PG_RETURN_NULL();
-	r1_pg = (rt_pgraster *) PG_DETOAST_DATUM_SLICE(PG_GETARG_DATUM(0), 0, sizeof(struct rt_raster_serialized_t));
-
-	/* raster */
-	r1 = rt_raster_deserialize(r1_pg, FALSE);
-	if (!r1) {
-		elog(ERROR, "RASTER_intersection_rr2r: Could not deserialize r1");
-		PG_RETURN_NULL();
-	}
-
-	/* r2 is null, return null */
-	if (PG_ARGISNULL(1)) PG_RETURN_NULL();
-	r2_pg = (rt_pgraster *) PG_DETOAST_DATUM_SLICE(PG_GETARG_DATUM(1), 0, sizeof(struct rt_raster_serialized_t));
-
-	/* raster */
-	r2 = rt_raster_deserialize(r2_pg, FALSE);
-	if (!r2) {
-		elog(ERROR, "RASTER_intersection_rr2r: Could not deserialize r2");
-		PG_RETURN_NULL();
-	}
-
-	/* mask/image flag */
-	mask = PG_GETARG_BOOL(2) ;
-
-	/* destination SRID (if not specified, use r1) */
-	if (!PG_ARGISNULL(3)) {
-		dest_srid = PG_GETARG_INT32(3) ;
-	} else {
-		dest_srid = rt_raster_get_srid(r1) ;
-	}
-
-	POSTGIS_RT_DEBUG(3, "RASTER_intersection_rr2r: Fetching projections");
-	/* get the projection descriptions */
-	proj_cache = GetPROJ4Cache(fcinfo) ;
-	if (!IsInPROJ4Cache(proj_cache, dest_srid)) {
-		AddToPROJ4Cache(proj_cache, dest_srid, SRID_UNKNOWN) ;
-	}
-	if (!IsInPROJ4Cache(proj_cache, rt_raster_get_srid(r1))) {
-		AddToPROJ4Cache(proj_cache, rt_raster_get_srid(r1), dest_srid) ;
-	}
-	if (!IsInPROJ4Cache(proj_cache, rt_raster_get_srid(r2))) {
-		AddToPROJ4Cache(proj_cache, rt_raster_get_srid(r2), dest_srid) ;
-	}
-	result_srs = GetProjectionFromPROJ4Cache(proj_cache, dest_srid) ;
-	r1_srs = GetProjectionFromPROJ4Cache(proj_cache, rt_raster_get_srid(r1)) ;
-	r2_srs = GetProjectionFromPROJ4Cache(proj_cache, rt_raster_get_srid(r2)) ;
-
-	/* calculate geometry of result raster */
-	POSTGIS_RT_DEBUG(3, "RASTER_intersection_rr2r: Calculating extent of result");
-	result = rt_raster_raster_prep(
-			r1, r1_srs,
-			r2, r2_srs,
-			dest_srid, result_srs,
-			rt_raster_prep_intersection_grid) ;
-
-	/* add a band (bands) to store result */
-	POSTGIS_RT_DEBUG(3, "RASTER_intersection_rr2r: Generating bands for result");
-	if (mask) {
-		rt_raster_generate_new_band(result, PT_1BB, 0., 0, 0., 0) ;
-		pixel_calculator = rt_raster_mask_value ;
-	} else {
-		int nbands = rt_raster_get_num_bands(r1) ;
-		int band ;
-		for (band = 0; band < nbands; band++) {
-			rt_band cur_band = rt_raster_get_band(r1, band) ;
-
-			/* assume that all bands have same nodata value */
-			if (band==0) {
-				hasnodata = rt_band_get_hasnodata_flag(cur_band) ;
-				if (hasnodata) {
-					nodata = rt_band_get_nodata(cur_band) ;
-				}
-			}
-
-			/* create the band */
-			rt_raster_generate_new_band(result,
-					rt_band_get_pixtype(cur_band),
-					0., hasnodata, nodata, band) ;
+	result_pg = NULL ;
+	if (result != NULL) {
+		result_pg = rt_raster_serialize(result);
+		rt_raster_destroy(result);
+		if (result_pg != NULL) {
+			SET_VARSIZE(result_pg, result_pg->size);
 		}
-		pixel_calculator = rt_raster_copy_first ;
 	}
-
-	/* iterate over the result raster */
-	POSTGIS_RT_DEBUG(3, "RASTER_intersection_rr2r: Iterating over result");
-	rt_raster_raster_op_engine(
-			r1, pj_get_def(r1_srs,0),
-			r2, pj_get_def(r2_srs,0),
-			result, pj_get_def(result_srs,0),
-			mask,
-			rt_raster_raster_intersection,
-			pixel_calculator) ;
-
-
-	POSTGIS_RT_DEBUG(3, "RASTER_intersection_rr2r: Cleanup and Exit");
-	result_pg = rt_raster_serialize(result);
-	rt_raster_destroy(result);
 	PG_FREE_IF_COPY(r1_pg, 0);
 	PG_FREE_IF_COPY(r2_pg, 0);
-	pj_free(r1_srs) ;
-	pj_free(r2_srs) ;
-	pj_free(result_srs) ;
-
 	if (NULL == result_pg) PG_RETURN_NULL();
 
-	SET_VARSIZE(result_pg, result_pg->size);
 	PG_RETURN_POINTER(result_pg);
 }
+
+
 
 /* ---------------------------------------------------------------- */
 /*  Memory allocation / error reporting hooks                       */
