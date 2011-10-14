@@ -819,26 +819,6 @@ void rt_raster_cell_to_geopoint(rt_raster raster,
                                 double x, double y,
                                 double* x1, double* y1);
 
-
-/**
- * Convert an x,y point on map to an x1,y1 raster point, if the
- * inverse transform is valid. The transform from geopoint to
- * cell is computed given the transform from cell to geopoint, and
- * there is at least the possibility that the transform is not
- * invertible.
- *
- * @param raster : the raster to get info from
- * @param x : the X ordinate of the geographical point
- * @param y : the Y ordinate of the geographical point
- * @param x1 : output parameter, the pixel's column
- * @param y1 : output parameter, the pixel's row
- * @return TRUE if the transform was performed, FALSE otherwise.
- */
-int
-rt_raster_geopoint_to_cell(rt_raster raster,
-        double x, double y,
-        double* x1, double* y1) ;
-
 /**
  * Get raster's polygon convex hull.
  *
@@ -1069,16 +1049,6 @@ extern void *rtrealloc(void *mem, size_t size);
 extern void rtdealloc(void *mem);
 
 
-/*
- * Header de/serialization functions
- */
-struct rt_raster_serialized_t;
-void rt_raster_serialize_header(rt_raster raster,
-		struct rt_raster_serialized_t *s_raster);
-void rt_raster_deserialize_header(rt_raster raster,
-		struct rt_raster_serialized_t *s_raster);
-
-
 
 /* Set of functions to clamp double to int of different size
  */
@@ -1150,13 +1120,6 @@ rt_util_pixtype_to_gdal_datatype(rt_pixtype pt);
 */
 #define ROUND(x, y) (((x > 0.0) ? floor((x * pow(10, y) + 0.5)) : ceil((x * pow(10, y) - 0.5))) / pow(10, y));
 
-/**
- * This enum describes the ordering of a six-element array of doubles
- * which may be passed to GDAL as a transform array.
- */
-typedef enum
-        {X_OFFSET=0, X_SCALE, X_SKEW, Y_OFFSET, Y_SKEW, Y_SCALE}
-        rt_geo_param;
 
 /**
  * Struct definitions
@@ -1207,10 +1170,13 @@ struct rt_raster_t {
      * and georeference */
     uint16_t numBands;
 
-    /* affine transformations for georeferencing */
-    double idx_to_geo[6] ;
-    double geo_to_idx[6] ;
-    int g2i_valid ;
+    /* Georeference (in projection units) */
+    double scaleX; /* pixel width */
+    double scaleY; /* pixel height */
+    double ipX; /* geo x ordinate of the corner of upper-left pixel */
+    double ipY; /* geo y ordinate of the corner of bottom-right pixel */
+    double skewX; /* skew about the X axis*/
+    double skewY; /* skew about the Y axis */
 
     int32_t srid; /* spatial reference id */
     uint16_t width; /* pixel columns - max 65535 */
