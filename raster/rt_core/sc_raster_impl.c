@@ -24,6 +24,7 @@
 struct raster_inc_s {
 	rt_raster source ;
 	int band_num ;
+	double igt[6] ;
 };
 
 
@@ -59,6 +60,10 @@ raster_envelope_includes_idx(INCLUDES *inc, LWPOINT *point)
  * same coordinate system as the raster. The point is then transformed
  * into image indices and checked using the includesIndex() function. This
  * is a means of wrapping the index function.
+ *
+ * This function requires that the "params" field of the includes
+ * implementation be a #raster_inc_s structure.
+ *
  * @param inc pointer to the includes structure
  * @param point the point to evaluate (must be in same srid as the raster)
  * @return true if point is within the bounds of the raster.
@@ -94,7 +99,8 @@ raster_idxwrap_includes(INCLUDES *inc, LWPOINT *point)
 	lwpoint_getPoint2d_p(point, &world) ;
 	rt_raster_geopoint_to_cell(p->source,
 			              world.x, world.y,
-			              &(indices.x),&(indices.y)) ;
+			              &(indices.x),&(indices.y),
+			              p->igt) ;
 
 	/* check whether the index is "in range" */
 	idx_point = lwpoint_make2d(SRID_UNKNOWN, indices.x, indices.y) ;
@@ -117,11 +123,20 @@ sc_create_raster_env_includes(rt_raster raster)
 {
 	struct raster_inc_s *params ;
 	INCLUDES *inc ;
+	double gt[6] = {0.0} ;
 
 	params = (struct raster_inc_s *)(rtalloc(sizeof(struct raster_inc_s)));
 	if (params == NULL) return NULL ;
 
 	params->source = raster ;
+	params->band_num = -1 ;
+    rt_raster_get_geotransform_matrix(raster, gt);
+	if (!GDALInvGeoTransform(gt, params->igt)) {
+		rterror("sc_create_raster_env_includes: Unable to compute inverse geotransform matrix");
+		rtdealloc(params);
+		return NULL;
+	}
+
 	inc = inc_create(params, raster_idxwrap_includes, raster_envelope_includes_idx);
 	if (inc == NULL) {
 		rtdealloc(params) ;
@@ -238,6 +253,7 @@ sc_create_raster_nodata_includes(rt_raster r, int band)
 	INCLUDES *inc ;
 	struct raster_inc_s *params ;
 	rt_band test_band ;
+	double gt[6] = {0.0};
 
 	if (r == NULL) return NULL ;
 
@@ -252,6 +268,13 @@ sc_create_raster_nodata_includes(rt_raster r, int band)
 	if (params == NULL) return NULL ;
 	params->source = r ;
 	params->band_num = band ;
+    rt_raster_get_geotransform_matrix(r, gt);
+	if (!GDALInvGeoTransform(gt, params->igt)) {
+		rterror("sc_create_raster_nodata_includes: Unable to compute inverse geotransform matrix");
+		rtdealloc(params);
+		return NULL;
+	}
+
 
 	inc = inc_create(params, raster_idxwrap_includes, raster_nodata_includes_idx) ;
 
@@ -291,6 +314,7 @@ sc_destroy_raster_nodata_includes(INCLUDES *dead)
 struct rasterwrap_inc_s {
 	INCLUDES *wrapped_inc ;
 	rt_raster align_raster ;
+	double gt[6] ;
 };
 
 /**
@@ -342,7 +366,7 @@ collection_rasterwrap_includes_idx(INCLUDES *inc, LWPOINT *point)
 	/* compute geocoordinates using the raster's affine transform */
 	lwpoint_getPoint2d_p(point, &idx) ;
 	rt_raster_cell_to_geopoint(params->align_raster,
-			idx.x, idx.y, &(geo.x), &(geo.y)) ;
+			idx.x, idx.y, &(geo.x), &(geo.y), params->gt) ;
 
 	/* construct an LWPOINT with the geocoordinates */
 	geo_point = lwpoint_make2d(inc->collection->srid, geo.x, geo.y) ;
@@ -377,6 +401,7 @@ sc_create_rasterwrap_includes(INCLUDES *inc, rt_raster alignTo)
 
 	params->wrapped_inc = inc ;
 	params->align_raster = alignTo ;
+    rt_raster_get_geotransform_matrix(alignTo, params->gt);
 
 	wrapper = inc_create(params,
 			collection_rasterwrap_includes,
@@ -421,6 +446,7 @@ struct raster_eval_s {
 	rt_raster source ;
 	int num_bands ;
 	int *bands ;
+	double igt[6] ; /* inverse xform to compute pixel from geocoord */
 };
 
 VALUE *
@@ -495,7 +521,8 @@ raster_idxwrap_evaluate(EVALUATOR *eval, LWPOINT *point)
 	lwpoint_getPoint2d_p(point, &world) ;
 	rt_raster_geopoint_to_cell(p->source,
 			              world.x, world.y,
-			              &(indices.x),&(indices.y)) ;
+			              &(indices.x),&(indices.y),
+			              p->igt) ;
 
 	/* evaluate the given index */
 	idx_point = lwpoint_make2d(SRID_UNKNOWN, indices.x, indices.y) ;
@@ -512,6 +539,7 @@ sc_create_raster_bands_evaluator(rt_raster raster, int *bands, int num_bands)
 	struct raster_eval_s *params ;
 	EVALUATOR *eval ;
 	int i ;
+	double gt[6] = {0.0};
 
 	if (raster == NULL) return NULL ;
 
@@ -544,6 +572,16 @@ sc_create_raster_bands_evaluator(rt_raster raster, int *bands, int num_bands)
 	for (i=0; i<num_bands; i++) {
 		params->bands[i] = (bands==NULL) ? i : bands[i] ;
 	}
+
+
+
+    rt_raster_get_geotransform_matrix(raster, gt);
+	if (!GDALInvGeoTransform(gt, params->igt)) {
+		rterror("sc_create_raster_bands_evaluator: Unable to compute inverse geotransform matrix");
+		rtdealloc(params);
+		return NULL;
+	}
+
 
 	eval = eval_create(params,
 			raster_idxwrap_evaluate, raster_bands_evaluate_idx,
@@ -586,6 +624,7 @@ sc_destroy_raster_bands_evaluator(EVALUATOR *dead)
 struct rasterwrap_eval_s {
 	EVALUATOR *wrapped_eval ;
 	rt_raster align_raster ;
+	double gt[6] ;
 };
 
 /**
@@ -641,7 +680,7 @@ collection_rasterwrap_evaluate_idx(EVALUATOR *eval, LWPOINT *point)
 	/* compute geocoordinates using the raster's affine transform */
 	lwpoint_getPoint2d_p(point, &idx) ;
 	rt_raster_cell_to_geopoint(params->align_raster,
-			idx.x, idx.y, &(geo.x), &(geo.y)) ;
+			idx.x, idx.y, &(geo.x), &(geo.y), params->gt) ;
 
 	/* construct an LWPOINT with the geocoordinates */
 	geo_point = lwpoint_make2d(eval->collection->srid, geo.x, geo.y) ;
@@ -670,6 +709,8 @@ sc_create_rasterwrap_evaluator(EVALUATOR *eval, rt_raster alignTo)
 
 	params->wrapped_eval = eval ;
 	params->align_raster = alignTo ;
+    rt_raster_get_geotransform_matrix(alignTo, params->gt);
+
 
 	wrapper = eval_create(params,
 			collection_rasterwrap_evaluate,
@@ -1132,10 +1173,10 @@ fit_raster_to_extent(GBOX *extent, rt_raster raster)
 	height = rt_raster_get_height(raster) ;
 
 	/* get the matrix coefficients */
-	o11 = rt_raster_get_scaleX(raster) ;
-	o12 = rt_raster_get_skewX(raster) ;
-	o21 = rt_raster_get_skewY(raster) ;
-	o22 = rt_raster_get_scaleY(raster) ;
+	o11 = rt_raster_get_x_scale(raster) ;
+	o12 = rt_raster_get_x_skew(raster) ;
+	o21 = rt_raster_get_y_skew(raster) ;
+	o22 = rt_raster_get_y_scale(raster) ;
 
 	/* upper-left corner is origin (0,0) */
 

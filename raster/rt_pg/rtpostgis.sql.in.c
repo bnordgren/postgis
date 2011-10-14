@@ -3351,8 +3351,10 @@ CREATE OR REPLACE FUNCTION ST_Intersection(r1 raster, r2 raster,
 		r1_nodata integer, r2_nodata integer)
 	RETURNS raster AS
 	$$
-	RETURN _RT_relation_rr(r1, r2, 'intersection', r1_bands, r2_bands,
+	BEGIN
+		RETURN _RT_relation_rr(r1, r2, 'intersection', r1_bands, r2_bands,
 			r1_nodata, r2_nodata) ;
+	END;
 	$$
 	LANGUAGE 'plpgsql' VOLATILE STRICT ;
 
@@ -3361,8 +3363,10 @@ CREATE OR REPLACE FUNCTION ST_Union(r1 raster, r2 raster,
 		r1_nodata integer, r2_nodata integer)
 	RETURNS raster AS
 	$$
-	RETURN _RT_relation_rr(r1, r2, 'union', r1_bands, r2_bands,
+	BEGIN
+		RETURN _RT_relation_rr(r1, r2, 'union', r1_bands, r2_bands,
 			r1_nodata, r2_nodata) ;
+	END;
 	$$
 	LANGUAGE 'plpgsql' VOLATILE STRICT ;
 
@@ -3371,8 +3375,10 @@ CREATE OR REPLACE FUNCTION ST_Difference(r1 raster, r2 raster,
 		r1_nodata integer, r2_nodata integer)
 	RETURNS raster AS
 	$$
-	RETURN _RT_relation_rr(r1, r2, 'difference', r1_bands, r2_bands,
+	BEGIN
+		RETURN _RT_relation_rr(r1, r2, 'difference', r1_bands, r2_bands,
 			r1_nodata, r2_nodata) ;
+	END;
 	$$
 	LANGUAGE 'plpgsql' VOLATILE STRICT ;
 
@@ -3381,8 +3387,10 @@ CREATE OR REPLACE FUNCTION ST_SymDifference(r1 raster, r2 raster,
 		r1_nodata integer, r2_nodata integer)
 	RETURNS raster AS
 	$$
-	RETURN _RT_relation_rr(r1, r2, 'symdifference', r1_bands, r2_bands,
+	BEGIN
+		RETURN _RT_relation_rr(r1, r2, 'symdifference', r1_bands, r2_bands,
 			r1_nodata, r2_nodata) ;
+	END ;
 	$$
 	LANGUAGE 'plpgsql' VOLATILE STRICT ;
 
