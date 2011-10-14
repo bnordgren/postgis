@@ -1,11 +1,12 @@
 /**********************************************************************
- * $Id: liblwgeom_internal.h 4497 2009-09-14 18:33:54Z pramsey $
  *
  * PostGIS - Spatial Types for PostgreSQL
  * http://postgis.refractions.net
- * Copyright 2001-2006 Refractions Research Inc.
- * Copyright 2007-2008 Mark Cave-Ayland
- * Copyright 2008 Paul Ramsey <pramsey@cleverelephant.ca>
+ *
+ * Copyright (C) 2001-2006 Refractions Research Inc.
+ * Copyright (C) 2007-2008 Mark Cave-Ayland
+ * Copyright (C) 2008 Paul Ramsey <pramsey@cleverelephant.ca>
+ * Copyright (C) 2011 Sandro Santilli <strk@keybit.net>
  *
  * This is free software; you can redistribute and/or modify it under
  * the terms of the GNU General Public Licence. See the COPYING file.
@@ -17,6 +18,7 @@
 
 #include <assert.h>
 #include "liblwgeom.h"
+#include <stdarg.h>
 #include <string.h>
 #include <math.h>
 #include <stdint.h>
@@ -112,6 +114,14 @@
 #define SIZE_GET(varsize) (((varsize) >> 2) & 0x3FFFFFFF)
 #define SIZE_SET(varsize, size) (((varsize) & 0x00000003)|(((size) & 0x3FFFFFFF) << 2 ))
 
+
+/*
+ * Return a valid srid from an arbitrary integerj
+ * Raises a notice if what comes out is different from
+ * what went in.
+ * Raises an error if srid value is out of bounds.
+ */
+int clamp_srid(int srid);
 
 /*
 * Internal prototypes
@@ -257,6 +267,7 @@ void ptarray_affine(POINTARRAY *pa, const AFFINE *affine);
 * PointArray
 */
 char ptarray_isccw(const POINTARRAY *pa);
+
 
 
 #endif /* _LIBLWGEOM_INTERNAL_H */

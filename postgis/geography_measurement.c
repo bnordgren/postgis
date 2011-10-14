@@ -2,7 +2,8 @@
  * $Id: geography_inout.c 4535 2009-09-28 18:16:21Z colivier $
  *
  * PostGIS - Spatial Types for PostgreSQL
- * Copyright 2009 Paul Ramsey <pramsey@cleverelephant.ca>
+ *
+ * Copyright (C) 2009 Paul Ramsey <pramsey@cleverelephant.ca>
  *
  * This is free software; you can redistribute and/or modify it under
  * the terms of the GNU General Public Licence. See the COPYING file.
@@ -23,6 +24,7 @@
 #include "liblwgeom_internal.h"         /* For FP comparators. */
 #include "lwgeom_pg.h"       /* For debugging macros. */
 #include "geography.h"	     /* For utility functions. */
+#include "../libpgcommon/lwgeom_transform.h"
 
 Datum geography_distance(PG_FUNCTION_ARGS);
 Datum geography_dwithin(PG_FUNCTION_ARGS);
@@ -402,15 +404,15 @@ Datum geography_point_outside(PG_FUNCTION_ARGS)
 	if ( gserialized_get_gbox_p(g, &gbox) == LW_FAILURE )
 	{
 		LWGEOM *lwgeom = lwgeom_from_gserialized(g);
-		LWDEBUGF(4,"unable to read gbox from gserialized, calculating from lwgeom (%p)", lwgeom);
+		POSTGIS_DEBUGF(4,"unable to read gbox from gserialized, calculating from lwgeom (%p)", lwgeom);
 		if ( lwgeom_calculate_gbox(lwgeom, &gbox) == LW_FAILURE )
 		{
-			LWDEBUG(4,"lwgeom_calculate_gbox returned LW_FAILURE");
+			POSTGIS_DEBUG(4,"lwgeom_calculate_gbox returned LW_FAILURE");
 			elog(ERROR, "Error in lwgeom_calculate_gbox calculation.");
 			PG_RETURN_NULL();
 		}
 	}
-	LWDEBUGF(4, "got gbox %s", gbox_to_string(&gbox));
+	POSTGIS_DEBUGF(4, "got gbox %s", gbox_to_string(&gbox));
 
 	/* Get an exterior point, based on this gbox */
 	gbox_pt_outside(&gbox, &pt);
@@ -521,7 +523,7 @@ Datum geography_bestsrid(PG_FUNCTION_ARGS)
 	if ( ! empty1 && lwgeom_calculate_gbox_cartesian(lwgeom1, &gbox1) == LW_FAILURE )
 		elog(ERROR, "Error in geography_bestsrid calling lwgeom_calculate_gbox(lwgeom1, &gbox1)");
 
-	LWDEBUGF(4, "calculated gbox = %s", gbox_to_string(&gbox1));
+	POSTGIS_DEBUGF(4, "calculated gbox = %s", gbox_to_string(&gbox1));
 
 	/* If we have a unique second argument, fill in all the necessarily variables. */
 	if ( d1 != d2 )
@@ -558,19 +560,20 @@ Datum geography_bestsrid(PG_FUNCTION_ARGS)
 	/* Are these data arctic? Lambert Azimuthal Equal Area North. */
 	if ( gbox1.ymin > 65.0 && gbox2.ymin > 65.0 )
 	{
-		PG_RETURN_INT32(-3574);
+		PG_RETURN_INT32(SRID_NORTH_LAMBERT);
 	}
 
 	/* Are these data antarctic? Lambert Azimuthal Equal Area South. */
 	if ( gbox1.ymin < -65.0 && gbox2.ymin < -65.0 )
 	{
-		PG_RETURN_INT32(-3409);
+		PG_RETURN_INT32(SRID_SOUTH_LAMBERT); 
 	}
 
 	/*
-	** Can we fit these data into one UTM zone? We will assume we can push things as
-	** far as a half zone past a zone boundary. Note we have no handling for the
-	** date line in here.
+	** Can we fit these data into one UTM zone?
+	** We will assume we can push things as
+	** far as a half zone past a zone boundary.
+	** Note we have no handling for the date line in here.
 	*/
 	if ( fabs(FP_MAX(gbox1.xmax, gbox2.xmax) - FP_MIN(gbox1.xmin, gbox2.xmin)) < 6.0 )
 	{
@@ -581,19 +584,20 @@ Datum geography_bestsrid(PG_FUNCTION_ARGS)
 		/* Are these data below the equator? UTM South. */
 		if ( gbox1.ymax < 0.0 && gbox2.ymax < 0.0 )
 		{
-			PG_RETURN_INT32( -32700 - zone );
+			PG_RETURN_INT32( SRID_SOUTH_UTM_START + zone );
 		}
 		/* Are these data above the equator? UTM North. */
 		else
 		{
-			PG_RETURN_INT32( -32600 - zone );
+			PG_RETURN_INT32( SRID_NORTH_UTM_START + zone );
 		}
 	}
 
 	/*
-	** Running out of options... fall-back to Mercator and hope for the best.
+	** Running out of options... fall-back to Mercator
+	** and hope for the best.
 	*/
-	PG_RETURN_INT32(-3395);
+	PG_RETURN_INT32(SRID_WORLD_MERCATOR);
 
 }
 

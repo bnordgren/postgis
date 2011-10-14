@@ -15,9 +15,17 @@
 #include "lwgeom_geos.h"
 #include "liblwgeom_internal.h"
 #include "lwgeom_rtree.h"
-#include "lwgeom_geos_prepared.h" /* for PREPARED_GEOM define */
 #include "lwgeom_functions_analytic.h" /* for point_in_polygon */
 #include "funcapi.h"
+
+/*
+** GEOS prepared geometry is only available from GEOS 3.1 onwards
+*/
+#define PREPARED_GEOM
+
+#ifdef PREPARED_GEOM
+#include "lwgeom_geos_prepared.h" 
+#endif
 
 #include <string.h>
 #include <assert.h>
@@ -88,8 +96,6 @@ Datum postgis_geos_version(PG_FUNCTION_ARGS)
 }
 
 
-#if POSTGIS_GEOS_VERSION >= 32
-
 /**
  *  @brief Compute the Hausdorff distance thanks to the corresponding GEOS function
  *  @example hausdorffdistance {@link #hausdorffdistance} - SELECT st_hausdorffdistance(
@@ -100,6 +106,13 @@ Datum postgis_geos_version(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(hausdorffdistance);
 Datum hausdorffdistance(PG_FUNCTION_ARGS)
 {
+#if POSTGIS_GEOS_VERSION < 32
+	lwerror("The GEOS version this postgis binary "
+	        "was compiled against (%d) doesn't support "
+	        "'ST_HausdorffDistance' function (3.2.0+ required)",
+	        POSTGIS_GEOS_VERSION);
+	PG_RETURN_NULL();
+#else
 	PG_LWGEOM *geom1;
 	PG_LWGEOM *geom2;
 	GEOSGeometry *g1;
@@ -146,6 +159,7 @@ Datum hausdorffdistance(PG_FUNCTION_ARGS)
 	PG_FREE_IF_COPY(geom2, 1);
 
 	PG_RETURN_FLOAT8(result);
+#endif
 }
 
 /**
@@ -158,6 +172,13 @@ Datum hausdorffdistance(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(hausdorffdistancedensify);
 Datum hausdorffdistancedensify(PG_FUNCTION_ARGS)
 {
+#if POSTGIS_GEOS_VERSION < 32
+	lwerror("The GEOS version this postgis binary "
+	        "was compiled against (%d) doesn't support "
+	        "'ST_HausdorffDistance' function (3.2.0+ required)",
+	        POSTGIS_GEOS_VERSION);
+	PG_RETURN_NULL();
+#else
 	PG_LWGEOM *geom1;
 	PG_LWGEOM *geom2;
 	GEOSGeometry *g1;
@@ -205,9 +226,9 @@ Datum hausdorffdistancedensify(PG_FUNCTION_ARGS)
 	PG_FREE_IF_COPY(geom2, 1);
 
 	PG_RETURN_FLOAT8(result);
+#endif
 }
 
-#endif
 
 
 /**

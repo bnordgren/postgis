@@ -1,8 +1,8 @@
 /**********************************************************************
- * $Id$
  *
  * PostGIS - Spatial Types for PostgreSQL
- * Copyright 2009 Paul Ramsey <pramsey@cleverelephant.ca>
+ *
+ * Copyright (C) 2009 Paul Ramsey <pramsey@cleverelephant.ca>
  *
  * This is free software; you can redistribute and/or modify it under
  * the terms of the GNU General Public Licence. See the COPYING file.
@@ -10,6 +10,7 @@
  **********************************************************************/
 
 #include "liblwgeom_internal.h"
+#include "lwgeom_log.h"
 #include <sys/param.h>
 
 static uint8_t* lwgeom_to_wkb_buf(const LWGEOM *geom, uint8_t *buf, uint8_t variant);
@@ -125,7 +126,8 @@ static uint32_t lwgeom_wkb_type(const LWGEOM *geom, uint8_t variant)
 			wkb_type |= WKBZOFFSET;
 		if ( FLAGS_GET_M(geom->flags) )
 			wkb_type |= WKBMOFFSET;
-		if ( geom->srid != SRID_UNKNOWN && ! (variant & WKB_NO_SRID) )
+/*		if ( geom->srid != SRID_UNKNOWN && ! (variant & WKB_NO_SRID) ) */
+		if ( lwgeom_wkb_needs_srid(geom, variant) )
 			wkb_type |= WKBSRIDFLAG;
 	}
 	else if ( variant & WKB_ISO )

@@ -21,6 +21,7 @@ prefix = @prefix@
 exec_prefix = @exec_prefix@
 libdir = @libdir@
 includedir = @includedir@
+SHELL = @SHELL@
 INSTALL = $(SHELL) ../install-sh
 LIBTOOL = @LIBTOOL@
 
@@ -93,6 +94,7 @@ SA_HEADERS = \
 	liblwgeom.h \
 	liblwgeom_internal.h \
 	libtgeom.h \
+	lwgeom_log.h \
 	lwgeom_geos.h
 
 all: liblwgeom.la
@@ -126,10 +128,11 @@ clean:
 	rm -rf .libs
 
 distclean: clean
-	rm -f liblwgeom.h
+	$(MAKE) -C cunit distclean
+	rm -f liblwgeom.h Makefile
 
 check: liblwgeom.la
-	make -C cunit check
+	$(MAKE) -C cunit check
 
 # Command to build each of the .lo files
 $(LT_SA_OBJS): %.lo: %.c

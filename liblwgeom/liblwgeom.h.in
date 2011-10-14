@@ -23,6 +23,13 @@
 #include "proj_api.h"
 
 /**
+* For now, until all the old code is pulled 
+* TODO: remove this
+*/
+#define GSERIALIZED_ON
+
+
+/**
 * @file liblwgeom.h
 *
 * This library is the generic geometry handling section of PostGIS. The geometry
@@ -145,11 +152,12 @@
 * Currently we are using 20 bits (1048575) of storage for SRID.
 */
 #define SRID_MAXIMUM 999999
-#define SRID_UNKNOWN -1
+#define SRID_UNKNOWN 0
+#define SRID_IS_UNKNOWN(x) ((int)x<=0)
 
 /**
-* Global functions for memory/logging handlers.
-*/
+ * Global functions for memory/logging handlers.
+ */
 typedef void* (*lwallocator)(size_t size);
 typedef void* (*lwreallocator)(void *mem, size_t size);
 typedef void (*lwfreeor)(void* mem);
@@ -175,22 +183,29 @@ extern void lwgeom_init_allocators(void);
 extern void lwgeom_install_default_allocators(void);
 
 /**
-* Write a notice out to the notice handler. Uses standard printf() substitutions.
-* Use for messages you always want output. For debugging, use LWDEBUG() or LWDEBUGF().
-* @ingroup logging
-*/
+ * Write a notice out to the notice handler.
+ *
+ * Uses standard printf() substitutions.
+ * Use for messages you always want output.
+ * For debugging, use LWDEBUG() or LWDEBUGF().
+ * @ingroup logging
+ */
 void lwnotice(const char *fmt, ...);
 
 /**
-* Write a notice out to the error handler. Uses standard printf() substitutions.
-* Use for errors you always want output. For debugging, use LWDEBUG() or LWDEBUGF().
-* @ingroup logging
-*/
+ * Write a notice out to the error handler.
+ *
+ * Uses standard printf() substitutions.
+ * Use for errors you always want output.
+ * For debugging, use LWDEBUG() or LWDEBUGF().
+ * @ingroup logging
+ */
 void lwerror(const char *fmt, ...);
 
 /**
-* The default memory/logging handlers installed by lwgeom_install_default_allocators()
-*/
+ * The default memory/logging handlers installed by
+ * lwgeom_install_default_allocators()
+ */
 void *default_allocator(size_t size);
 void *default_reallocator(void *mem, size_t size);
 void default_freeor(void *ptr);
@@ -208,38 +223,7 @@ va_dcl
 #endif
 
 
-/* Debug macros */
-#if POSTGIS_DEBUG_LEVEL > 0
-
-/* Display a notice at the given debug level */
-#define LWDEBUG(level, msg) \
-        do { \
-                if (POSTGIS_DEBUG_LEVEL >= level) \
-                        lwnotice("[%s:%s:%d] " msg, __FILE__, __func__, __LINE__); \
-        } while (0);
-
-/* Display a formatted notice at the given debug level (like printf, with variadic arguments) */
-#define LWDEBUGF(level, msg, ...) \
-        do { \
-                if (POSTGIS_DEBUG_LEVEL >= level) \
-                        lwnotice("[%s:%s:%d] " msg, __FILE__, __func__, __LINE__, __VA_ARGS__); \
-        } while (0);
-
-#else
-
-/* Empty prototype that can be optimised away by the compiler for non-debug builds */
-#define LWDEBUG(level, msg) \
-        ((void) 0)
-
-/* Empty prototype that can be optimised away by the compiler for non-debug builds */
-#define LWDEBUGF(level, msg, ...) \
-        ((void) 0)
-
-#endif
-
 /******************************************************************/
-
-
 
 typedef struct {
 	double afac, bfac, cfac, dfac, efac, ffac, gfac, hfac, ifac, xoff, yoff, zoff;

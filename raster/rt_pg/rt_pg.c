@@ -47,8 +47,9 @@
 #include <executor/executor.h> /* for GetAttributeByName in RASTER_reclass */
 #include <funcapi.h>
 
-/*#include "lwgeom_pg.h"*/
+#include "lwgeom_pg.h"
 #include "liblwgeom.h"
+#include "liblwgeom_internal.h" /* for clamp_srid() */
 #include "rt_pg.h"
 #include "pgsql_compat.h"
 
@@ -135,6 +136,7 @@ static char *getSRTextSPI(int srid);
 /* Utility functions */
 Datum RASTER_lib_version(PG_FUNCTION_ARGS);
 Datum RASTER_lib_build_date(PG_FUNCTION_ARGS);
+Datum RASTER_gdal_version(PG_FUNCTION_ARGS);
 
 /* Input/output and format conversions */
 Datum RASTER_in(PG_FUNCTION_ARGS);
@@ -196,7 +198,7 @@ Datum RASTER_addband(PG_FUNCTION_ARGS);
 Datum RASTER_copyband(PG_FUNCTION_ARGS);
 
 /* Raster analysis */
-Datum RASTER_mapAlgebra(PG_FUNCTION_ARGS);
+Datum RASTER_mapAlgebraExpr(PG_FUNCTION_ARGS);
 
 /* create new raster from existing raster's bands */
 Datum RASTER_band(PG_FUNCTION_ARGS);
@@ -235,6 +237,12 @@ Datum RASTER_metadata(PG_FUNCTION_ARGS);
 
 /* get raster band's meta data */
 Datum RASTER_bandmetadata(PG_FUNCTION_ARGS);
+
+/* determine if two rasters intersect */
+Datum RASTER_intersects(PG_FUNCTION_ARGS);
+
+/* determine if two rasters are aligned */
+Datum RASTER_samealignment(PG_FUNCTION_ARGS);
 
 /* Replace function taken from
  * http://ubuntuforums.org/showthread.php?s=aa6f015109fd7e4c7e30d2fd8b717497&t=141670&page=3
@@ -533,6 +541,14 @@ Datum RASTER_lib_build_date(PG_FUNCTION_ARGS)
     SET_VARSIZE(result, VARHDRSZ + strlen(ver));
     memcpy(VARDATA(result), ver, strlen(ver));
     PG_RETURN_POINTER(result);
+}
+
+PG_FUNCTION_INFO_V1(RASTER_gdal_version);
+Datum RASTER_gdal_version(PG_FUNCTION_ARGS)
+{
+	const char *ver = rt_util_gdal_version("--version");
+	text *result = cstring2text(ver);
+	PG_RETURN_POINTER(result);
 }
 
 /**
@@ -2442,8 +2458,8 @@ Datum RASTER_hasNoBand(PG_FUNCTION_ARGS)
     PG_RETURN_BOOL(hasnoband);
 }
 
-PG_FUNCTION_INFO_V1(RASTER_mapAlgebra);
-Datum RASTER_mapAlgebra(PG_FUNCTION_ARGS)
+PG_FUNCTION_INFO_V1(RASTER_mapAlgebraExpr);
+Datum RASTER_mapAlgebraExpr(PG_FUNCTION_ARGS)
 {
     rt_pgraster *pgraster = NULL;
     rt_raster raster = NULL;
@@ -2459,7 +2475,7 @@ Datum RASTER_mapAlgebra(PG_FUNCTION_ARGS)
     char *initexpr = NULL;
     char *initndvexpr = NULL;
     char *expression = NULL;
-    char *nodatavalueexpr = NULL;
+    char *nodatavaluerepl = NULL;
     rt_pixtype newpixeltype;
     int skipcomputation = 0;
     char strnewnodatavalue[50];
@@ -2473,7 +2489,7 @@ Datum RASTER_mapAlgebra(PG_FUNCTION_ARGS)
     char * strFromText = NULL;
     bool freemem = FALSE;
 
-    POSTGIS_RT_DEBUG(2, "RASTER_mapAlgebra: Starting...");
+    POSTGIS_RT_DEBUG(2, "RASTER_mapAlgebraExpr: Starting...");
 
     /* Check raster */
     if (PG_ARGISNULL(0)) {
@@ -2486,25 +2502,25 @@ Datum RASTER_mapAlgebra(PG_FUNCTION_ARGS)
     pgraster = (rt_pgraster *)PG_DETOAST_DATUM_COPY(PG_GETARG_DATUM(0));
     raster = rt_raster_deserialize(pgraster, FALSE);
     if (NULL == raster) {
-        elog(ERROR, "RASTER_mapAlgebra: Could not deserialize raster");
+        elog(ERROR, "RASTER_mapAlgebraExpr: Could not deserialize raster");
         PG_RETURN_NULL();
     }
 
     /* We don't need this */
     //PG_FREE_IF_COPY(pgraster, 0);
 
-	POSTGIS_RT_DEBUG(3, "RASTER_mapAlgebra: Getting arguments...");
+    POSTGIS_RT_DEBUG(3, "RASTER_mapAlgebraExpr: Getting arguments...");
 
-	if (PG_ARGISNULL(1))
-		nband = 1;
-	else
-		nband = PG_GETARG_INT32(1);
+    if (PG_ARGISNULL(1))
+        nband = 1;
+    else
+        nband = PG_GETARG_INT32(1);
 
-	if (nband < 1)
-		nband = 1;
+    if (nband < 1)
+        nband = 1;
 
 
-    POSTGIS_RT_DEBUG(3, "RASTER_mapAlgebra: Creating new empty raster...");
+    POSTGIS_RT_DEBUG(3, "RASTER_mapAlgebraExpr: Creating new empty raster...");
 
     /**
      * Create a new empty raster with having the same georeference as the
@@ -2516,7 +2532,7 @@ Datum RASTER_mapAlgebra(PG_FUNCTION_ARGS)
     newrast = rt_raster_new(width, height);
 
     if ( NULL == newrast ) {
-        elog(ERROR, "RASTER_mapAlgebra: Could not create a new raster. "
+        elog(ERROR, "RASTER_mapAlgebraExpr: Could not create a new raster. "
                 "Returning NULL");
         PG_RETURN_NULL();
     }
@@ -2548,7 +2564,7 @@ Datum RASTER_mapAlgebra(PG_FUNCTION_ARGS)
         pgraster = rt_raster_serialize(newrast);
         if (NULL == pgraster) {
 
-            elog(ERROR, "RASTER_mapAlgebra: Could not serialize raster. "
+            elog(ERROR, "RASTER_mapAlgebraExpr: Could not serialize raster. "
                     "Returning NULL");
             PG_RETURN_NULL();
         }
@@ -2560,7 +2576,7 @@ Datum RASTER_mapAlgebra(PG_FUNCTION_ARGS)
     }
 
 
-    POSTGIS_RT_DEBUGF(3, "RASTER_mapAlgebra: Getting raster band %d...", nband);
+    POSTGIS_RT_DEBUGF(3, "RASTER_mapAlgebraExpr: Getting raster band %d...", nband);
 
     /**
      * Check if the raster has the required band. Otherwise, return a raster
@@ -2573,7 +2589,7 @@ Datum RASTER_mapAlgebra(PG_FUNCTION_ARGS)
 
         pgraster = rt_raster_serialize(newrast);
         if (NULL == pgraster) {
-            elog(ERROR, "RASTER_mapAlgebra: Could not serialize raster. "
+            elog(ERROR, "RASTER_mapAlgebraExpr: Could not serialize raster. "
                     "Returning NULL");
             PG_RETURN_NULL();
         }
@@ -2593,7 +2609,7 @@ Datum RASTER_mapAlgebra(PG_FUNCTION_ARGS)
 
         pgraster = rt_raster_serialize(newrast);
         if (NULL == pgraster) {
-            elog(ERROR, "RASTER_mapAlgebra: Could not serialize raster. "
+            elog(ERROR, "RASTER_mapAlgebraExpr: Could not serialize raster. "
                     "Returning NULL");
             PG_RETURN_NULL();
         }
@@ -2608,7 +2624,7 @@ Datum RASTER_mapAlgebra(PG_FUNCTION_ARGS)
      /*
      * Get NODATA value
      */
-    POSTGIS_RT_DEBUG(3, "RASTER_mapAlgebra: Getting NODATA value for band...");
+    POSTGIS_RT_DEBUG(3, "RASTER_mapAlgebraExpr: Getting NODATA value for band...");
 
     if (rt_band_get_hasnodata_flag(band)) {
         newnodatavalue = rt_band_get_nodata(band);
@@ -2618,7 +2634,7 @@ Datum RASTER_mapAlgebra(PG_FUNCTION_ARGS)
         newnodatavalue = rt_band_get_min_value(band);
     }
 
-    POSTGIS_RT_DEBUGF(3, "RASTER_mapAlgebra: NODATA value for band: = %f",
+    POSTGIS_RT_DEBUGF(3, "RASTER_mapAlgebraExpr: NODATA value for band: = %f",
         newnodatavalue);
 
     /**
@@ -2631,14 +2647,14 @@ Datum RASTER_mapAlgebra(PG_FUNCTION_ARGS)
     /**
      * Set the new pixeltype
      **/
-    POSTGIS_RT_DEBUG(3, "RASTER_mapAlgebra: Setting pixeltype...");
+    POSTGIS_RT_DEBUG(3, "RASTER_mapAlgebraExpr: Setting pixeltype...");
 
-    if (PG_ARGISNULL(4)) {
+    if (PG_ARGISNULL(2)) {
         newpixeltype = rt_band_get_pixtype(band);
     }
 
     else {
-        strFromText = text_to_cstring(PG_GETARG_TEXT_P(4));
+        strFromText = text_to_cstring(PG_GETARG_TEXT_P(2));
         newpixeltype = rt_pixtype_index_from_name(strFromText);
         lwfree(strFromText);
         if (newpixeltype == PT_END)
@@ -2646,17 +2662,17 @@ Datum RASTER_mapAlgebra(PG_FUNCTION_ARGS)
     }
 
     if (newpixeltype == PT_END) {
-        elog(ERROR, "RASTER_mapAlgebra: Invalid pixeltype. Returning NULL");
+        elog(ERROR, "RASTER_mapAlgebraExpr: Invalid pixeltype. Returning NULL");
         PG_RETURN_NULL();
     }
 
-    POSTGIS_RT_DEBUGF(3, "RASTER_mapAlgebra: Pixeltype set to %s",
+    POSTGIS_RT_DEBUGF(3, "RASTER_mapAlgebraExpr: Pixeltype set to %s",
         rt_pixtype_name(newpixeltype));
 
 
-	/* Construct expression for raster values */
-    if (!PG_ARGISNULL(2)) {
-        expression = text_to_cstring(PG_GETARG_TEXT_P(2));
+    /* Construct expression for raster values */
+    if (!PG_ARGISNULL(3)) {
+        expression = text_to_cstring(PG_GETARG_TEXT_P(3));
         len = strlen("SELECT ") + strlen(expression);
         initexpr = (char *)palloc(len + 1);
 
@@ -2665,7 +2681,7 @@ Datum RASTER_mapAlgebra(PG_FUNCTION_ARGS)
             strlen(expression));
         initexpr[len] = '\0';
 
-        POSTGIS_RT_DEBUGF(3, "RASTER_mapAlgebra: Expression is %s", initexpr);
+        POSTGIS_RT_DEBUGF(3, "RASTER_mapAlgebraExpr: Expression is %s", initexpr);
 
         /* We don't need this memory */
         //lwfree(expression);
@@ -2675,21 +2691,21 @@ Datum RASTER_mapAlgebra(PG_FUNCTION_ARGS)
 
 
     /**
-     * Optimization: If a nodatavalueexpr is provided, recompute the initial
+     * Optimization: If a nodatavaluerepl is provided, recompute the initial
      * value. Then, we can initialize the raster with this value and skip the
      * computation of nodata values one by one in the main computing loop
      **/
-    if (!PG_ARGISNULL(3)) {
-        nodatavalueexpr = text_to_cstring(PG_GETARG_TEXT_P(3));
-        len = strlen("SELECT ") + strlen(nodatavalueexpr);
+    if (!PG_ARGISNULL(4)) {
+        nodatavaluerepl = text_to_cstring(PG_GETARG_TEXT_P(4));
+        len = strlen("SELECT ") + strlen(nodatavaluerepl);
         initndvexpr = (char *)palloc(len + 1);
         strncpy(initndvexpr, "SELECT ", strlen("SELECT "));
-        strncpy(initndvexpr + strlen("SELECT "), strtoupper(nodatavalueexpr),
-                strlen(nodatavalueexpr));
+        strncpy(initndvexpr + strlen("SELECT "), strtoupper(nodatavaluerepl),
+                strlen(nodatavaluerepl));
         initndvexpr[len] = '\0';
 
-        //lwfree(nodatavalueexpr);
-        //nodatavalueexpr = NULL;
+        //lwfree(nodatavaluerepl);
+        //nodatavaluerepl = NULL;
 
         /* Replace RAST, if present, for NODATA value, to eval the expression */
         if (strstr(initndvexpr, "RAST")) {
@@ -2704,7 +2720,7 @@ Datum RASTER_mapAlgebra(PG_FUNCTION_ARGS)
             newexpr = initndvexpr;
         }
 
-        POSTGIS_RT_DEBUGF(3, "RASTER_mapAlgebra: initndvexpr = %s", newexpr);
+        POSTGIS_RT_DEBUGF(3, "RASTER_mapAlgebraExpr: initndvexpr = %s", newexpr);
 
         /* Eval the NODATA expression to get new NODATA. Connect with SPI manager
         * NOTE: This creates a NEW memory context and makes it current.
@@ -2719,7 +2735,7 @@ Datum RASTER_mapAlgebra(PG_FUNCTION_ARGS)
 
         if (ret != SPI_OK_SELECT || SPI_tuptable == NULL ||
                 SPI_processed != 1) {
-            elog(ERROR, "RASTER_mapAlgebra: Invalid construction for nodata "
+            elog(ERROR, "RASTER_mapAlgebraExpr: Invalid construction for nodata "
                 "expression. Aborting");
 
             if (SPI_tuptable)
@@ -2747,7 +2763,7 @@ Datum RASTER_mapAlgebra(PG_FUNCTION_ARGS)
         if (freemem)
             pfree(newexpr);
 
-        POSTGIS_RT_DEBUGF(3, "RASTER_mapAlgebra: new initial value = %f",
+        POSTGIS_RT_DEBUGF(3, "RASTER_mapAlgebraExpr: new initial value = %f",
             newinitialvalue);
 
     }
@@ -2756,12 +2772,12 @@ Datum RASTER_mapAlgebra(PG_FUNCTION_ARGS)
 
     /**
      * Optimization: If the raster is only filled with nodata values return
-     * right now a raster filled with the nodatavalueexpr
+     * right now a raster filled with the nodatavaluerepl
      * TODO: Call rt_band_check_isnodata instead?
      **/
     if (rt_band_get_isnodata_flag(band)) {
 
-        POSTGIS_RT_DEBUG(3, "RASTER_mapAlgebra: Band is a nodata band, returning "
+        POSTGIS_RT_DEBUG(3, "RASTER_mapAlgebraExpr: Band is a nodata band, returning "
                 "a raster filled with nodata");
 
         ret = rt_raster_generate_new_band(newrast, newpixeltype,
@@ -2770,7 +2786,7 @@ Datum RASTER_mapAlgebra(PG_FUNCTION_ARGS)
         /* Serialize created raster */
         pgraster = rt_raster_serialize(newrast);
         if (NULL == pgraster) {
-            elog(ERROR, "RASTER_mapAlgebra: Could not serialize raster. "
+            elog(ERROR, "RASTER_mapAlgebraExpr: Could not serialize raster. "
                     "Returning NULL");
             PG_RETURN_NULL();
         }
@@ -2790,29 +2806,29 @@ Datum RASTER_mapAlgebra(PG_FUNCTION_ARGS)
 
 
     /**
-     * Optimization: If expression resume to 'RAST' and nodatavalueexpr is NULL
+     * Optimization: If expression resume to 'RAST' and nodatavaluerepl is NULL
      * or also equal to 'RAST', we can just return the band from the original
      * raster
      **/
     if (initexpr != NULL && !strcmp(initexpr, "SELECT RAST") &&
-		    (nodatavalueexpr  == NULL || !strcmp(initndvexpr, "SELECT RAST"))) {
+            (nodatavaluerepl  == NULL || !strcmp(initndvexpr, "SELECT RAST"))) {
             //(initndvexpr == NULL || !strcmp(initndvexpr, "SELECT RAST"))) {
 
-        POSTGIS_RT_DEBUGF(3, "RASTER_mapAlgebra: Expression resumes to RAST. "
+        POSTGIS_RT_DEBUGF(3, "RASTER_mapAlgebraExpr: Expression resumes to RAST. "
                 "Returning raster with band %d from original raster", nband);
 
-        POSTGIS_RT_DEBUGF(4, "RASTER_mapAlgebra: New raster has %d bands",
+        POSTGIS_RT_DEBUGF(4, "RASTER_mapAlgebraExpr: New raster has %d bands",
                 rt_raster_get_num_bands(newrast));
 
         rt_raster_copy_band(raster, newrast, nband - 1, 0);
 
-        POSTGIS_RT_DEBUGF(4, "RASTER_mapAlgebra: New raster now has %d bands",
+        POSTGIS_RT_DEBUGF(4, "RASTER_mapAlgebraExpr: New raster now has %d bands",
                 rt_raster_get_num_bands(newrast));
 
         /* Serialize created raster */
         pgraster = rt_raster_serialize(newrast);
         if (NULL == pgraster) {
-            elog(ERROR, "RASTER_mapAlgebra: Could not serialize raster. "
+            elog(ERROR, "RASTER_mapAlgebraExpr: Could not serialize raster. "
                     "Returning NULL");
             PG_RETURN_NULL();
         }
@@ -2841,7 +2857,7 @@ Datum RASTER_mapAlgebra(PG_FUNCTION_ARGS)
         ret = SPI_execute(initexpr, FALSE, 0);
 
         if (ret != SPI_OK_SELECT || SPI_tuptable == NULL || SPI_processed != 1) {
-            elog(ERROR, "RASTER_mapAlgebra: Invalid construction for expression."
+            elog(ERROR, "RASTER_mapAlgebraExpr: Invalid construction for expression."
                     " Aborting");
 
             /* Free memory allocated out of the current context */
@@ -2860,7 +2876,7 @@ Datum RASTER_mapAlgebra(PG_FUNCTION_ARGS)
 
         SPI_freetuptable(tuptable);
 
-        POSTGIS_RT_DEBUGF(3, "RASTER_mapAlgebra: New raster value = %f",
+        POSTGIS_RT_DEBUGF(3, "RASTER_mapAlgebraExpr: New raster value = %f",
                 newval);
 
         SPI_finish();
@@ -2872,7 +2888,7 @@ Datum RASTER_mapAlgebra(PG_FUNCTION_ARGS)
          * new raster
          **/
         //if (initndvexpr == NULL) {
-        if (nodatavalueexpr == NULL) {
+        if (nodatavaluerepl == NULL) {
             newinitialvalue = newval;
             skipcomputation = 2;
         }
@@ -2900,7 +2916,7 @@ Datum RASTER_mapAlgebra(PG_FUNCTION_ARGS)
         /* Serialize created raster */
         pgraster = rt_raster_serialize(newrast);
         if (NULL == pgraster) {
-            elog(ERROR, "RASTER_mapAlgebra: Could not serialize raster. "
+            elog(ERROR, "RASTER_mapAlgebraExpr: Could not serialize raster. "
                     "Returning NULL");
 
             PG_RETURN_NULL();
@@ -2919,7 +2935,7 @@ Datum RASTER_mapAlgebra(PG_FUNCTION_ARGS)
         PG_RETURN_POINTER(pgraster);
     }
 
-    RASTER_DEBUG(3, "RASTER_mapAlgebra: Creating new raster band...");
+    RASTER_DEBUG(3, "RASTER_mapAlgebraExpr: Creating new raster band...");
 
     /* Get the new raster band */
     newband = rt_raster_get_band(newrast, 0);
@@ -2930,7 +2946,7 @@ Datum RASTER_mapAlgebra(PG_FUNCTION_ARGS)
         /* Serialize created raster */
         pgraster = rt_raster_serialize(newrast);
         if (NULL == pgraster) {
-            elog(ERROR, "RASTER_mapAlgebra: Could not serialize raster. "
+            elog(ERROR, "RASTER_mapAlgebraExpr: Could not serialize raster. "
                     "Returning NULL");
 
             PG_RETURN_NULL();
@@ -2949,7 +2965,7 @@ Datum RASTER_mapAlgebra(PG_FUNCTION_ARGS)
         PG_RETURN_POINTER(pgraster);
     }
 
-    POSTGIS_RT_DEBUGF(3, "RASTER_mapAlgebra: Main computing loop (%d x %d)",
+    POSTGIS_RT_DEBUGF(3, "RASTER_mapAlgebraExpr: Main computing loop (%d x %d)",
             width, height);
 
     for (x = 0; x < width; x++) {
@@ -2967,7 +2983,7 @@ Datum RASTER_mapAlgebra(PG_FUNCTION_ARGS)
                     if (initexpr != NULL) {
                         newexpr = replace(initexpr, "RAST", strnewval, &count);
 
-                        POSTGIS_RT_DEBUGF(3, "RASTER_mapAlgebra: (%dx%d), "
+                        POSTGIS_RT_DEBUGF(3, "RASTER_mapAlgebraExpr: (%dx%d), "
                                 "r = %s, newexpr = %s",
                                 x, y, strnewval, newexpr);
 
@@ -2977,7 +2993,7 @@ Datum RASTER_mapAlgebra(PG_FUNCTION_ARGS)
 
                         if (ret != SPI_OK_SELECT || SPI_tuptable == NULL ||
                                 SPI_processed != 1) {
-                            elog(ERROR, "RASTER_mapAlgebra: Invalid construction"
+                            elog(ERROR, "RASTER_mapAlgebraExpr: Invalid construction"
                                     " for expression. Aborting");
 
                             pfree(newexpr);
@@ -3004,7 +3020,7 @@ Datum RASTER_mapAlgebra(PG_FUNCTION_ARGS)
                     else
                         newval = newinitialvalue;
 
-                    POSTGIS_RT_DEBUGF(3, "RASTER_mapAlgebra: new value = %f",
+                    POSTGIS_RT_DEBUGF(3, "RASTER_mapAlgebraExpr: new value = %f",
                         newval);
                 }
 
@@ -3017,7 +3033,7 @@ Datum RASTER_mapAlgebra(PG_FUNCTION_ARGS)
 
     /* The newrast band has been modified */
 
-    POSTGIS_RT_DEBUG(3, "RASTER_mapAlgebra: raster modified, serializing it.");
+    POSTGIS_RT_DEBUG(3, "RASTER_mapAlgebraExpr: raster modified, serializing it.");
     /* Serialize created raster */
 
     pgraster = rt_raster_serialize(newrast);
@@ -3035,7 +3051,7 @@ Datum RASTER_mapAlgebra(PG_FUNCTION_ARGS)
 
     SET_VARSIZE(pgraster, pgraster->size);
 
-    POSTGIS_RT_DEBUG(3, "RASTER_mapAlgebra: raster serialized");
+    POSTGIS_RT_DEBUG(3, "RASTER_mapAlgebraExpr: raster serialized");
 
     /* Free memory */
     if (initndvexpr)
@@ -3046,7 +3062,7 @@ Datum RASTER_mapAlgebra(PG_FUNCTION_ARGS)
     rt_raster_destroy(raster);
     rt_raster_destroy(newrast);
 
-    POSTGIS_RT_DEBUG(4, "RASTER_mapAlgebra: returning raster");
+    POSTGIS_RT_DEBUG(4, "RASTER_mapAlgebraExpr: returning raster");
 
 
     PG_RETURN_POINTER(pgraster);
@@ -3059,7 +3075,7 @@ Datum RASTER_mapAlgebra(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(RASTER_band);
 Datum RASTER_band(PG_FUNCTION_ARGS)
 {
-	rt_pgraster *pgraster;
+    rt_pgraster *pgraster;
 	rt_pgraster *pgrast;
 	rt_raster raster;
 	rt_raster rast;
@@ -6148,7 +6164,7 @@ Datum RASTER_asGDALRaster(PG_FUNCTION_ARGS)
 	char **options = NULL;
 	text *optiontext = NULL;
 	char *option = NULL;
-	int srid = -1;
+	int srid = SRID_UNKNOWN;
 	char *srs = NULL;
 
 	ArrayType *array;
@@ -6266,7 +6282,7 @@ Datum RASTER_asGDALRaster(PG_FUNCTION_ARGS)
 		srid = PG_GETARG_INT32(3);
 
 	/* get srs from srid */
-	if (srid != SRID_UNKNOWN) {
+	if (clamp_srid(srid) != SRID_UNKNOWN) {
 		srs = getSRTextSPI(srid);
 		if (NULL == srs) {
 			elog(ERROR, "RASTER_asGDALRaster: Could not find srtext for SRID (%d)", srid);
@@ -6496,6 +6512,9 @@ Datum RASTER_asRaster(PG_FUNCTION_ARGS)
 	double skew[2] = {0};
 	double *skew_x = NULL;
 	double *skew_y = NULL;
+
+	char **options = NULL;
+	int options_len = 0;
 
 	uint32_t num_bands = 0;
 
@@ -6907,6 +6926,27 @@ Datum RASTER_asRaster(PG_FUNCTION_ARGS)
 	}
 	POSTGIS_RT_DEBUGF(3, "RASTER_asRaster: skew (x, y) = %f, %f", skew[0], skew[1]);
 
+	/* all touched */
+	if (!PG_ARGISNULL(14) && PG_GETARG_BOOL(14) == TRUE) {
+		if (options_len < 1) {
+			options_len = 1;
+			options = (char **) palloc(sizeof(char *) * options_len);
+		}
+		else {
+			options_len++;
+			options = (char **) repalloc(options, sizeof(char *) * options_len);
+		}
+
+		options[options_len - 1] = palloc(sizeof(char*) * (strlen("ALL_TOUCHED=TRUE") + 1));
+		options[options_len - 1] = "ALL_TOUCHED=TRUE";
+	}
+
+	if (options_len) {
+		options_len++;
+		options = (char **) repalloc(options, sizeof(char *) * options_len);
+		options[options_len - 1] = NULL;
+	}
+
 	/* get geometry's srid */
 #ifdef GSERIALIZED_ON
 	srid = gserialized_get_srid(pggeom);
@@ -6915,7 +6955,7 @@ Datum RASTER_asRaster(PG_FUNCTION_ARGS)
 #endif
 
 	POSTGIS_RT_DEBUGF(3, "RASTER_asRaster: srid = %d", srid);
-	if (srid != SRID_UNKNOWN) {
+	if (clamp_srid(srid) != SRID_UNKNOWN) {
 		srs = getSRTextSPI(srid);
 		if (NULL == srs) {
 			elog(ERROR, "RASTER_asRaster: Could not find srtext for SRID (%d)", srid);
@@ -6926,6 +6966,7 @@ Datum RASTER_asRaster(PG_FUNCTION_ARGS)
 				pfree(hasnodatas);
 				pfree(nodatavals);
 			}
+			if (options_len) pfree(options);
 
 			lwgeom_free(geom);
 			PG_FREE_IF_COPY(pggeom, 0);
@@ -6979,7 +7020,8 @@ Datum RASTER_asRaster(PG_FUNCTION_ARGS)
 		scale_x, scale_y,
 		ul_xw, ul_yw,
 		grid_xw, grid_yw,
-		skew_x, skew_y
+		skew_x, skew_y,
+		options
 	);
 
 	if (pixtypes_len) pfree(pixtypes);
@@ -6988,9 +7030,10 @@ Datum RASTER_asRaster(PG_FUNCTION_ARGS)
 		pfree(hasnodatas);
 		pfree(nodatavals);
 	}
+	if (options_len) pfree(options);
 
 	if (!rast) {
-		elog(ERROR, "RASTER_asRaster: Could not create rasterize geometry");
+		elog(ERROR, "RASTER_asRaster: Could not rasterize geometry");
 		PG_RETURN_NULL();
 	}
 
@@ -7071,8 +7114,8 @@ Datum RASTER_resample(PG_FUNCTION_ARGS)
 
 	/* source srid */
 	src_srid = rt_raster_get_srid(raster);
-	if (src_srid == SRID_UNKNOWN) {
-		elog(ERROR, "RASTER_resample: Input raster has unknown (-1) SRID");
+	if (clamp_srid(src_srid) == SRID_UNKNOWN) {
+		elog(ERROR, "RASTER_resample: Input raster has unknown (%d) SRID", src_srid);
 		rt_raster_destroy(raster);
 		PG_RETURN_NULL();
 	}
@@ -7081,8 +7124,8 @@ Datum RASTER_resample(PG_FUNCTION_ARGS)
 	/* target srid */
 	if (!PG_ARGISNULL(3)) {
 		dst_srid = PG_GETARG_INT32(3);
-		if (dst_srid == SRID_UNKNOWN) {
-			elog(ERROR, "RASTER_resample: -1 is an invalid target SRID");
+		if (clamp_srid(dst_srid) == SRID_UNKNOWN) {
+			elog(ERROR, "RASTER_resample: %d is an invalid target SRID", dst_srid);
 			rt_raster_destroy(raster);
 			PG_RETURN_NULL();
 		}
@@ -7129,7 +7172,7 @@ Datum RASTER_resample(PG_FUNCTION_ARGS)
 
 	/* check that at least something is to be done */
 	if (
-		(dst_srid == SRID_UNKNOWN) &&
+		(clamp_srid(dst_srid) == SRID_UNKNOWN) &&
 		(scale_x == NULL) &&
 		(scale_y == NULL) &&
 		(grid_xw == NULL) &&
@@ -7171,7 +7214,7 @@ Datum RASTER_resample(PG_FUNCTION_ARGS)
 	POSTGIS_RT_DEBUGF(4, "src srs: %s", src_srs);
 
 	/* target srs */
-	if (dst_srid != SRID_UNKNOWN) {
+	if (clamp_srid(dst_srid) != SRID_UNKNOWN) {
 		dst_srs = getSRTextSPI(dst_srid);
 		if (NULL == dst_srs) {
 			elog(ERROR, "RASTER_resample: Target SRID (%d) is unknown", dst_srid);
@@ -7444,6 +7487,231 @@ Datum RASTER_bandmetadata(PG_FUNCTION_ARGS)
 	if (bandpath) pfree(bandpath);
 
 	PG_RETURN_DATUM(result);
+}
+
+/**
+ * See if two rasters intersect
+ */
+PG_FUNCTION_INFO_V1(RASTER_intersects);
+Datum RASTER_intersects(PG_FUNCTION_ARGS)
+{
+	const int set_count = 2;
+	rt_pgraster *pgrast;
+	rt_raster rast[2] = {NULL};
+	uint32_t bandindex[2] = {0};
+	uint32_t hasbandindex[2] = {0};
+
+	uint32_t i;
+	uint32_t j;
+	uint32_t k;
+	uint32_t numBands;
+	int rtn;
+	int intersects;
+
+	LWPOLY *hull[2] = {NULL};
+	GEOSGeometry *ghull[2] = {NULL};
+
+	for (i = 0, j = 0; i < set_count; i++) {
+		/* pgrast is null, return null */
+		if (PG_ARGISNULL(j)) {
+			for (k = 0; k < i; k++) rt_raster_destroy(rast[k]);
+			PG_RETURN_NULL();
+		}
+		pgrast = (rt_pgraster *) PG_DETOAST_DATUM(PG_GETARG_DATUM(j));
+		j++;
+
+		/* raster */
+		rast[i] = rt_raster_deserialize(pgrast, FALSE);
+		if (!rast[i]) {
+			elog(ERROR, "RASTER_intersects: Could not deserialize the %s raster", i < 1 ? "first" : "second");
+			for (k = 0; k < i; k++) rt_raster_destroy(rast[k]);
+			PG_RETURN_NULL();
+		}
+
+		/* numbands */
+		numBands = rt_raster_get_num_bands(rast[i]);
+		if (numBands < 1) {
+			elog(NOTICE, "The %s raster provided has no bands", i < 1 ? "first" : "second");
+			for (k = 0; k < i; k++) rt_raster_destroy(rast[k]);
+			PG_RETURN_NULL();
+		}
+
+		/* band index */
+		if (!PG_ARGISNULL(j)) {
+			bandindex[i] = PG_GETARG_INT32(j);
+			if (bandindex[i] < 1 || bandindex[i] > numBands) {
+				elog(NOTICE, "Invalid band index (must use 1-based) for the %s raster. Returning NULL", i < 1 ? "first" : "second");
+				for (k = 0; k < i; k++) rt_raster_destroy(rast[k]);
+				PG_RETURN_NULL();
+			}
+			hasbandindex[i] = 1;
+		}
+		else
+			hasbandindex[i] = 0;
+		POSTGIS_RT_DEBUGF(4, "hasbandindex[%d] = %d", i, hasbandindex[i]);
+		POSTGIS_RT_DEBUGF(4, "bandindex[%d] = %d", i, bandindex[i]);
+		j++;
+	}
+
+	/* hasbandindex must be balanced */
+	if (
+		(hasbandindex[0] && !hasbandindex[1]) ||
+		(!hasbandindex[0] && hasbandindex[1])
+	) {
+		elog(NOTICE, "Missing band index.  Band indices must be provided for both rasters if any one is provided");
+		for (k = 0; k < i; k++) rt_raster_destroy(rast[k]);
+		PG_RETURN_NULL();
+	}
+
+	/* SRID must match */
+	if (rt_raster_get_srid(rast[0]) != rt_raster_get_srid(rast[1])) {
+		elog(NOTICE, "The two rasters provided have different SRIDs");
+		for (k = 0; k < set_count; k++) rt_raster_destroy(rast[k]);
+		PG_RETURN_NULL();
+	}
+
+	/* raster extents need to intersect */
+	do {
+		initGEOS(lwnotice, lwgeom_geos_error);
+
+		rtn = 1;
+		for (i = 0; i < 2; i++) {
+			hull[i] = rt_raster_get_convex_hull(rast[i]);
+			if (NULL == hull[i]) {
+				for (j = 0; j < i; j++) {
+					GEOSGeom_destroy(ghull[j]);
+					lwpoly_free(hull[j]);
+				}
+				rtn = 0;
+				break;
+			}
+			ghull[i] = (GEOSGeometry *) LWGEOM2GEOS((LWGEOM *) hull[i]);
+			if (NULL == ghull[i]) {
+				for (j = 0; j < i; j++) {
+					GEOSGeom_destroy(ghull[j]);
+					lwpoly_free(hull[j]);
+				}
+				lwpoly_free(hull[i]);
+				rtn = 0;
+				break;
+			}
+		}
+		if (!rtn) break;
+
+		rtn = GEOSIntersects(ghull[0], ghull[1]);
+
+		for (i = 0; i < 2; i++) {
+			GEOSGeom_destroy(ghull[i]);
+			lwpoly_free(hull[i]);
+		}
+
+		if (rtn != 2) {
+			if (rtn != 1) {
+				for (k = 0; k < set_count; k++) rt_raster_destroy(rast[k]);
+				PG_RETURN_BOOL(0);
+			}
+			/* band isn't specified */
+			else if (!hasbandindex[0]) {
+				for (k = 0; k < set_count; k++) rt_raster_destroy(rast[k]);
+				PG_RETURN_BOOL(1);
+			}
+		}
+	}
+	while (0);
+
+	rtn = rt_raster_intersects(
+		rast[0], (hasbandindex[0] ? bandindex[0] - 1 : -1),
+		rast[1], (hasbandindex[1] ? bandindex[1] - 1 : -1),
+		&intersects
+	);
+	for (k = 0; k < set_count; k++) rt_raster_destroy(rast[k]);
+
+	if (!rtn) {
+		elog(ERROR, "RASTER_intersects: Unable to test for intersection on the two rasters");
+		PG_RETURN_NULL();
+	}
+
+	PG_RETURN_BOOL(intersects);
+}
+
+/**
+ * See if two rasters are aligned
+ */
+PG_FUNCTION_INFO_V1(RASTER_samealignment);
+Datum RASTER_samealignment(PG_FUNCTION_ARGS)
+{
+	const int set_count = 2;
+	rt_pgraster *pgrast;
+	rt_raster rast[2] = {NULL};
+
+	uint32_t i;
+	uint32_t j;
+	uint32_t k;
+	int rtn;
+	int aligned;
+	int err = 0;
+
+	for (i = 0, j = 0; i < set_count; i++) {
+		/* pgrast is null, return null */
+		if (PG_ARGISNULL(j)) {
+			for (k = 0; k < i; k++) rt_raster_destroy(rast[k]);
+			PG_RETURN_NULL();
+		}
+		pgrast = (rt_pgraster *) PG_DETOAST_DATUM_SLICE(PG_GETARG_DATUM(j), 0, sizeof(struct rt_raster_serialized_t));
+		j++;
+
+		/* raster */
+		rast[i] = rt_raster_deserialize(pgrast, FALSE);
+		if (!rast[i]) {
+			elog(ERROR, "RASTER_samealignment: Could not deserialize the %s raster", i < 1 ? "first" : "second");
+			for (k = 0; k < i; k++) rt_raster_destroy(rast[k]);
+			PG_RETURN_NULL();
+		}
+	}
+
+	err = 0;
+	/* SRID must match */
+	if (rt_raster_get_srid(rast[0]) != rt_raster_get_srid(rast[1])) {
+		elog(NOTICE, "The two rasters provided have different SRIDs");
+		err = 1;
+	}
+	/* scales must match */
+	else if (FLT_NEQ(rt_raster_get_x_scale(rast[0]), rt_raster_get_x_scale(rast[1]))) {
+		elog(NOTICE, "The two rasters provided have different scales on the X axis");
+		err = 1;
+	}
+	else if (FLT_NEQ(rt_raster_get_y_scale(rast[0]), rt_raster_get_y_scale(rast[1]))) {
+		elog(NOTICE, "The two rasters provided have different scales on the Y axis");
+		err = 1;
+	}
+	/* skews must match */
+	else if (FLT_NEQ(rt_raster_get_x_skew(rast[0]), rt_raster_get_x_skew(rast[1]))) {
+		elog(NOTICE, "The two rasters provided have different skews on the X axis");
+		err = 1;
+	}
+	else if (FLT_NEQ(rt_raster_get_y_skew(rast[0]), rt_raster_get_y_skew(rast[1]))) {
+		elog(NOTICE, "The two rasters provided have different skews on the Y axis");
+		err = 1;
+	}
+
+	if (err) {
+		for (k = 0; k < set_count; k++) rt_raster_destroy(rast[k]);
+		PG_RETURN_NULL();
+	}
+
+	rtn = rt_raster_same_alignment(
+		rast[0],
+		rast[1],
+		&aligned
+	);
+	for (k = 0; k < set_count; k++) rt_raster_destroy(rast[k]);
+
+	if (!rtn) {
+		elog(ERROR, "RASTER_samealignment: Unable to test for alignment on the two rasters");
+		PG_RETURN_NULL();
+	}
+
+	PG_RETURN_BOOL(aligned);
 }
 
 /* ---------------------------------------------------------------- */
