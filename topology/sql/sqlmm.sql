@@ -196,7 +196,7 @@ BEGIN
       INTO STRICT e1rec;
     EXCEPTION
       WHEN NO_DATA_FOUND THEN
-        RAISE EXCEPTION 'SQL/MM Spatial exception – non-existent edge %', e1id;
+        RAISE EXCEPTION 'SQL/MM Spatial exception - non-existent edge %', e1id;
       WHEN INVALID_SCHEMA_NAME THEN
         RAISE EXCEPTION 'SQL/MM Spatial exception - invalid topology name';
       WHEN UNDEFINED_TABLE THEN
@@ -210,7 +210,7 @@ BEGIN
       INTO STRICT e2rec;
     EXCEPTION
       WHEN NO_DATA_FOUND THEN
-        RAISE EXCEPTION 'SQL/MM Spatial exception – non-existent edge %', e2id;
+        RAISE EXCEPTION 'SQL/MM Spatial exception - non-existent edge %', e2id;
     -- NOTE: checks for INVALID_SCHEMA_NAME or UNDEFINED_TABLE done before
   END;
 
@@ -237,7 +237,7 @@ BEGIN
     commonnode = e1rec.start_node;
     caseno = 4;
   ELSE
-    RAISE EXCEPTION 'SQL/MM Spatial exception – non-connected edges';
+    RAISE EXCEPTION 'SQL/MM Spatial exception - non-connected edges';
   END IF;
 
   -- Check if any other edge is connected to the common node
@@ -247,7 +247,7 @@ BEGIN
     || commonnode || ' OR end_node = ' || commonnode || ' )'
   LOOP
     RAISE EXCEPTION
-      'SQL/MM Spatial exception – other edges connected (ie: %)', rec.edge_id;
+      'SQL/MM Spatial exception - other edges connected (ie: %)', rec.edge_id;
   END LOOP;
 
   -- NOT IN THE SPECS:
@@ -474,7 +474,7 @@ BEGIN
       INTO STRICT e1rec;
     EXCEPTION
       WHEN NO_DATA_FOUND THEN
-        RAISE EXCEPTION 'SQL/MM Spatial exception – non-existent edge %', e1id;
+        RAISE EXCEPTION 'SQL/MM Spatial exception - non-existent edge %', e1id;
       WHEN INVALID_SCHEMA_NAME THEN
         RAISE EXCEPTION 'SQL/MM Spatial exception - invalid topology name';
       WHEN UNDEFINED_TABLE THEN
@@ -488,7 +488,7 @@ BEGIN
       INTO STRICT e2rec;
     EXCEPTION
       WHEN NO_DATA_FOUND THEN
-        RAISE EXCEPTION 'SQL/MM Spatial exception – non-existent edge %', e2id;
+        RAISE EXCEPTION 'SQL/MM Spatial exception - non-existent edge %', e2id;
     -- NOTE: checks for INVALID_SCHEMA_NAME or UNDEFINED_TABLE done before
   END;
 
@@ -515,7 +515,7 @@ BEGIN
     commonnode = e1rec.start_node;
     caseno = 4;
   ELSE
-    RAISE EXCEPTION 'SQL/MM Spatial exception – non-connected edges';
+    RAISE EXCEPTION 'SQL/MM Spatial exception - non-connected edges';
   END IF;
 
   -- Check if any other edge is connected to the common node
@@ -525,7 +525,7 @@ BEGIN
     || commonnode || ' OR end_node = ' || commonnode || ' )'
   LOOP
     RAISE EXCEPTION
-      'SQL/MM Spatial exception – other edges connected (ie: %)', rec.edge_id;
+      'SQL/MM Spatial exception - other edges connected (ie: %)', rec.edge_id;
   END LOOP;
 
   -- NOT IN THE SPECS:
@@ -673,8 +673,8 @@ LANGUAGE 'plpgsql' VOLATILE;
 -- * Properly set containg_face on nodes that remains isolated by the drop
 -- * Update containg_face for isolated nodes in the dissolved faces
 -- * Update references in the Relation table
--- * Always return a face id (of the face taking up the edge space)
 -- 
+-- }{
 CREATE OR REPLACE FUNCTION topology.ST_RemEdgeNewFace(toponame varchar, e1id integer)
   RETURNS int
 AS
@@ -686,6 +686,7 @@ DECLARE
   topoid int;
   sql text;
   newfaceid int;
+  newfacecreated bool;
   elink int;
 BEGIN
   --
@@ -710,7 +711,7 @@ BEGIN
       INTO STRICT e1rec;
     EXCEPTION
       WHEN NO_DATA_FOUND THEN
-        RAISE EXCEPTION 'SQL/MM Spatial exception – non-existent edge %', e1id;
+        RAISE EXCEPTION 'SQL/MM Spatial exception - non-existent edge %', e1id;
       WHEN INVALID_SCHEMA_NAME THEN
         RAISE EXCEPTION 'SQL/MM Spatial exception - invalid topology name';
       WHEN UNDEFINED_TABLE THEN
@@ -814,7 +815,8 @@ BEGIN
     RAISE NOTICE 'Deletion of edge % affects no face',
                     e1rec.edge_id;
 
-    newfaceid = e1rec.left_face; -- TODO: or what should we return ?
+    newfaceid := e1rec.left_face; -- TODO: or what should we return ?
+    newfacecreated := false;
 
   ELSE -- }{
 
@@ -861,7 +863,8 @@ BEGIN
       -- flood the removed face.
       --
 
-      newfaceid = 0;
+      newfaceid := 0;
+      newfacecreated := false;
 
     ELSE -- }{
 
@@ -874,6 +877,7 @@ BEGIN
         ) || ')';
 
       EXECUTE sql INTO STRICT newfaceid;
+      newfacecreated := true;
 
       sql := 'INSERT INTO '
         || quote_ident(toponame)
@@ -982,11 +986,331 @@ BEGIN
 
   END IF; -- }
 
-  RETURN newfaceid;
+  IF newfacecreated THEN
+    RETURN newfaceid;
+  ELSE
+    RETURN NULL; -- -newfaceid;
+  END IF;
 END
 $$
 LANGUAGE 'plpgsql' VOLATILE;
 --} ST_RemEdgeNewFace
+
+--{
+-- Topo-Geo and Topo-Net 3: Routine Details
+-- X.3.15
+--
+--  ST_RemEdgeModFace(atopology, anedge)
+--
+-- Not in the specs:
+-- * Raise an exception if any TopoGeometry is defined by only one
+--   of the two faces that will dissolve.
+-- * Raise an exception if any TopoGeometry is defined by 
+--   the edge being removed.
+-- * Properly set containg_face on nodes that remains isolated by the drop
+-- * Update containg_face for isolated nodes in the dissolved faces
+-- * Update references in the Relation table
+-- * Return id of the face taking up the removed edge space
+--
+-- }{
+CREATE OR REPLACE FUNCTION topology.ST_RemEdgeModFace(toponame varchar, e1id integer)
+  RETURNS int
+AS
+$$
+DECLARE
+  e1rec RECORD;
+  rec RECORD;
+  fidary int[];
+  topoid int;
+  sql text;
+  floodfaceid int;
+  elink int;
+BEGIN
+  --
+  -- toponame and face_id are required
+  -- 
+  IF toponame IS NULL OR e1id IS NULL THEN
+    RAISE EXCEPTION 'SQL/MM Spatial exception - null argument';
+  END IF;
+
+  -- Get topology id
+  BEGIN
+    SELECT id FROM topology.topology
+      INTO STRICT topoid WHERE name = toponame;
+    EXCEPTION
+      WHEN NO_DATA_FOUND THEN
+        RAISE EXCEPTION 'SQL/MM Spatial exception - invalid topology name';
+  END;
+
+  BEGIN
+    EXECUTE 'SELECT * FROM ' || quote_ident(toponame)
+      || '.edge_data WHERE edge_id = ' || e1id
+      INTO STRICT e1rec;
+    EXCEPTION
+      WHEN NO_DATA_FOUND THEN
+        RAISE EXCEPTION 'SQL/MM Spatial exception - non-existent edge %', e1id;
+      WHEN INVALID_SCHEMA_NAME THEN
+        RAISE EXCEPTION 'SQL/MM Spatial exception - invalid topology name';
+      WHEN UNDEFINED_TABLE THEN
+        RAISE EXCEPTION 'corrupted topology "%" (missing edge_data table)',
+          toponame;
+  END;
+
+  -- Check that no TopoGeometry references the edge being removed
+  sql := 'SELECT r.topogeo_id, r.layer_id'
+      || ', l.schema_name, l.table_name, l.feature_column '
+      || 'FROM topology.layer l INNER JOIN '
+      || quote_ident(toponame)
+      || '.relation r ON (l.layer_id = r.layer_id) '
+      || 'WHERE l.level = 0 AND l.feature_type = 2 '
+      || ' AND l.topology_id = ' || topoid
+      || ' AND abs(r.element_id) = ' || e1id ;
+  RAISE DEBUG 'Checking TopoGeometry definitions: %', sql;
+  FOR rec IN EXECUTE sql LOOP
+    RAISE EXCEPTION 'TopoGeom % in layer % (%.%.%) cannot be represented dropping edge %',
+            rec.topogeo_id, rec.layer_id,
+            rec.schema_name, rec.table_name, rec.feature_column,
+            e1id;
+  END LOOP;
+
+  -- Update next_left_edge and next_right_edge face
+  -- for all edges bounding the new face
+  RAISE NOTICE 'Updating next_{right,left}_face of ring edges...';
+
+  -- TODO: reduce the following to 2 UPDATE rather than 4
+
+  -- Update next_left_edge of previous edges in left face -- {
+
+  elink := e1rec.next_left_edge;
+
+  sql := 'UPDATE ' || quote_ident(toponame)
+    || '.edge_data SET next_left_edge = '
+    || elink
+    || ', abs_next_left_edge = '
+    || abs(elink)
+    || ' WHERE next_left_edge < 0 AND abs(next_left_edge) = '
+    || e1id;
+  RAISE DEBUG 'next_left_edge update: %', sql;
+  EXECUTE sql;
+
+  -- If the edge being removed links to self,
+  -- we use the other face
+  IF e1rec.abs_next_right_edge = e1rec.edge_id THEN
+    elink := e1rec.next_left_edge;
+  ELSE
+    elink := e1rec.next_right_edge;
+  END IF;
+
+  sql := 'UPDATE ' || quote_ident(toponame)
+    || '.edge_data SET next_left_edge = '
+    || elink
+    || ', abs_next_left_edge = '
+    || abs(elink)
+    || ' WHERE next_left_edge > 0 AND abs(next_left_edge) = '
+    || e1id;
+  RAISE DEBUG 'next_left_edge update: %', sql;
+  EXECUTE sql;
+
+  -- }
+
+  -- Update next_right_edge of previous edges in right face -- {
+
+  elink := e1rec.next_left_edge;
+
+  sql := 'UPDATE ' || quote_ident(toponame)
+    || '.edge_data SET next_right_edge = '
+    || elink
+    || ', abs_next_right_edge = '
+    || abs(elink)
+    || ' WHERE next_right_edge < 0 AND abs(next_right_edge) = '
+    || e1id;
+  RAISE DEBUG 'next_right_edge update: %', sql;
+  EXECUTE sql;
+
+  -- If the edge being removed links to self,
+  -- we use the other face
+  IF e1rec.abs_next_right_edge = e1rec.edge_id THEN
+    elink := e1rec.next_left_edge;
+  ELSE
+    elink := e1rec.next_right_edge;
+  END IF;
+
+  sql := 'UPDATE ' || quote_ident(toponame)
+    || '.edge_data SET next_right_edge = '
+    || elink
+    || ', abs_next_right_edge = '
+    || abs(elink)
+    || ' WHERE next_right_edge > 0 AND abs(next_right_edge) = '
+    || e1id;
+  RAISE DEBUG 'next_right_edge update: %', sql;
+  EXECUTE sql;
+
+  -- }
+
+  IF e1rec.left_face = e1rec.right_face THEN -- {
+
+    RAISE NOTICE 'Deletion of edge % affects no face',
+                    e1rec.edge_id;
+
+    floodfaceid = e1rec.left_face; 
+
+  ELSE -- }{
+
+    RAISE NOTICE 'Deletion of edge % joins faces % and %',
+                    e1rec.edge_id, e1rec.left_face, e1rec.right_face;
+
+    -- NOT IN THE SPECS:
+    -- check if any topo_geom is defined only by one of the
+    -- joined faces. In such case there would be no way to adapt
+    -- the definition in case of healing, so we'd have to bail out
+    --
+    -- We do this only when no universal face is involved
+    -- (no surface can be defined by universal face)
+    -- 
+    IF e1rec.left_face != 0 AND e1rec.right_face != 0
+    THEN -- {
+      fidary = ARRAY[e1rec.left_face, e1rec.right_face];
+      sql := 'SELECT t.* from ('
+        || 'SELECT r.topogeo_id, r.layer_id'
+        || ', l.schema_name, l.table_name, l.feature_column'
+        || ', array_agg(r.element_id) as elems '
+        || 'FROM topology.layer l INNER JOIN '
+        || quote_ident(toponame)
+        || '.relation r ON (l.layer_id = r.layer_id) '
+        || 'WHERE l.level = 0 AND l.feature_type = 3 '
+        || ' AND l.topology_id = ' || topoid
+        || ' AND r.element_id IN (' || e1rec.left_face || ',' || e1rec.right_face || ') '
+        || 'group by r.topogeo_id, r.layer_id, l.schema_name, l.table_name, '
+        || ' l.feature_column ) t WHERE NOT t.elems @> '
+        || quote_literal(fidary);
+      RAISE DEBUG 'SQL: %', sql;
+      FOR rec IN EXECUTE sql LOOP
+        RAISE EXCEPTION 'TopoGeom % in layer % (%.%.%) cannot be represented healing faces % and %',
+              rec.topogeo_id, rec.layer_id,
+              rec.schema_name, rec.table_name, rec.feature_column,
+              e1rec.right_face, e1rec.left_face;
+      END LOOP;
+    END IF; -- }
+
+    IF e1rec.left_face = 0 OR e1rec.right_face = 0 THEN -- {
+
+      --
+      -- We won't add any new face, but rather let the universe
+      -- flood the removed face.
+      --
+
+      floodfaceid = 0;
+
+    ELSE -- }{
+
+      -- we choose right face as the face that will remain
+      -- to be symmetric with ST_AddEdgeModFace 
+      floodfaceid = e1rec.right_face;
+
+      sql := 'UPDATE '
+        || quote_ident(toponame)
+        || '.face SET mbr = (SELECT '
+        -- minimum bounding rectangle is the union of the old faces mbr
+        -- (doing this without GEOS would be faster)
+        || 'ST_Envelope(ST_Union(mbr)) FROM '
+        || quote_ident(toponame)
+        || '.face WHERE face_id IN (' 
+        || e1rec.left_face || ',' || e1rec.right_face 
+        || ') ) WHERE face_id = ' || floodfaceid ;
+      RAISE DEBUG 'SQL: %', sql;
+      EXECUTE sql;
+
+    END IF; -- }
+
+    -- Update left_face for all edges still referencing old faces
+    sql := 'UPDATE ' || quote_ident(toponame)
+      || '.edge_data SET left_face = ' || floodfaceid 
+      || ' WHERE left_face IN ('
+      || e1rec.left_face || ',' || e1rec.right_face 
+      || ')';
+    RAISE DEBUG 'left_face update: %', sql;
+    EXECUTE sql;
+
+    -- Update right_face for all edges still referencing old faces
+    sql := 'UPDATE ' || quote_ident(toponame)
+      || '.edge_data SET right_face = ' || floodfaceid 
+      || ' WHERE right_face IN ('
+      || e1rec.left_face || ',' || e1rec.right_face 
+      || ')';
+    RAISE DEBUG 'right_face update: %', sql;
+    EXECUTE sql;
+
+    -- Update containing_face for all nodes still referencing old faces
+    sql := 'UPDATE ' || quote_ident(toponame)
+      || '.node SET containing_face = ' || floodfaceid 
+      || ' WHERE containing_face IN ('
+      || e1rec.left_face || ',' || e1rec.right_face 
+      || ')';
+    RAISE DEBUG 'Isolated nodes update: %', sql;
+    EXECUTE sql;
+
+    -- NOT IN THE SPECS:
+    -- Replace composition rows involving the two
+    -- faces as one involving the new face.
+    -- It takes a single DELETE to do that.
+    sql := 'DELETE FROM ' || quote_ident(toponame)
+      || '.relation r USING topology.layer l '
+      || 'WHERE l.level = 0 AND l.feature_type = 3'
+      || ' AND l.topology_id = ' || topoid
+      || ' AND l.layer_id = r.layer_id AND abs(r.element_id) IN ('
+      || e1rec.left_face || ',' || e1rec.right_face
+      || ') AND abs(r.element_id) != '
+      || floodfaceid; -- could be optimized..
+    RAISE DEBUG 'SQL: %', sql;
+    EXECUTE sql;
+
+  END IF; -- } two faces healed...
+
+  -- Delete the edge
+  sql := 'DELETE FROM ' || quote_ident(toponame)
+    || '.edge_data WHERE edge_id = ' || e1id;
+  RAISE DEBUG 'Edge deletion: %', sql;
+  EXECUTE sql;
+
+  -- Check if any of the edge nodes remains isolated, 
+  -- set containing_face  = floodfaceid in that case
+  sql := 'UPDATE ' || quote_ident(toponame)
+    || '.node n SET containing_face = ' || floodfaceid
+    || ' WHERE node_id IN ('
+    || e1rec.start_node || ','
+    || e1rec.end_node || ') AND NOT EXISTS (SELECT edge_id FROM '
+    || quote_ident(toponame)
+    || '.edge_data WHERE start_node = n.node_id OR end_node = n.node_id)';
+  RAISE DEBUG 'Checking for nodes left isolated: %', sql;
+  EXECUTE sql;
+
+  IF e1rec.right_face != e1rec.left_face THEN -- {
+
+    -- Delete left face, if not universe and not "flood" face
+    IF e1rec.left_face != 0 AND e1rec.left_face != floodfaceid
+    THEN
+      sql := 'DELETE FROM ' || quote_ident(toponame)
+        || '.face WHERE face_id = ' || e1rec.left_face; 
+      RAISE DEBUG 'Left face deletion: %', sql;
+      EXECUTE sql;
+    END IF;
+
+    -- Delete right face, if not universe and not "flood" face
+    IF e1rec.right_face != 0 AND e1rec.right_face != floodfaceid
+    THEN
+      sql := 'DELETE FROM ' || quote_ident(toponame)
+        || '.face WHERE face_id = ' || e1rec.right_face;
+      RAISE DEBUG 'Right face deletion: %', sql;
+      EXECUTE sql;
+    END IF;
+
+  END IF; -- }
+
+  RETURN floodfaceid;
+END
+$$
+LANGUAGE 'plpgsql' VOLATILE;
+--} ST_RemEdgeModFace
 
 
 --{
@@ -2247,6 +2571,11 @@ DECLARE
   sql TEXT;
   newfaces INTEGER[];
   newface INTEGER;
+  p1 GEOMETRY;
+  p2 GEOMETRY;
+  seg GEOMETRY;
+  p1b GEOMETRY;
+  p2b GEOMETRY;
 BEGIN
 
   --
@@ -2790,25 +3119,51 @@ BEGIN
       newedge.edge_id, newedge.left_face;
 
   -- Call topology.AddFace for every face containing the new edge
+  -- 
   -- The ORDER serves predictability of which face is added first
-  FOR rec IN SELECT geom FROM ST_Dump(fan.post)
-             WHERE ST_Contains(
-                ST_Boundary(geom),
-                  ST_MakeLine(
-                    ST_StartPoint(newedge.cleangeom),
-                    ST_PointN(newedge.cleangeom, 2)
-                  )
-                )
-             ORDER BY ST_XMin(geom), ST_YMin(geom)
+  -- See http://trac.osgeo.org/postgis/ticket/1205
+  --
+  p1 := ST_StartPoint(newedge.cleangeom);
+  p2 := ST_PointN(newedge.cleangeom, 2);
+  seg := ST_MakeLine(p1, p2);
+  -- The new rings might start on one of the new edge endpoints
+  -- we we sample two more inner points for the sake of computing
+  -- face side.
+  p1b := ST_Line_Interpolate_Point(seg, 0.1);
+  p2b := ST_Line_Interpolate_Point(seg, 0.9);
+  FOR rec IN
+    WITH faces AS ( SELECT * FROM ST_Dump(ST_ForceRHR(fan.post)) ),
+         rings AS ( SELECT path,
+                      ST_Boundary((ST_DumpRings(geom)).geom) as bnd
+                    FROM faces ),
+         paths AS ( SELECT path,
+                      ST_Line_Locate_Point(bnd, p1b) as pos1,
+                      ST_Line_Locate_Point(bnd, p2b) as pos2,
+                      ST_Line_Locate_Point(bnd, p1b) < 
+                      ST_Line_Locate_Point(bnd, p2b) as right_side
+                    FROM rings
+                    WHERE ST_Contains(bnd, seg) )
+    SELECT
+      CASE WHEN p.right_side THEN 'right' ELSE 'left' END as side,
+      p.pos1, p.pos2,
+      f.geom
+    FROM paths p INNER JOIN faces f ON (p.path = f.path)
+    ORDER BY p.right_side DESC
   LOOP -- {
-    RAISE DEBUG 'Adding face %', ST_AsText(rec.geom);
+    RAISE DEBUG 'Adding % face', rec.side;
     sql :=
       'SELECT topology.AddFace(' || quote_literal(atopology)
       || ', ' || quote_literal(rec.geom::text) || ', true)';
     EXECUTE sql INTO newface;
     newfaces := array_append(newfaces, newface);
   END LOOP; --}
+
   RAISE DEBUG 'Added faces: %', newfaces;
+
+  IF array_upper(newfaces, 1) > 2 THEN
+    -- Sanity check..
+    RAISE EXCEPTION 'More than 2 faces found to be formed by new edge';
+  END IF;
 
   IF newedge.left_face != 0 THEN -- {
 
@@ -3423,7 +3778,12 @@ BEGIN
   RAISE NOTICE 'ST_AddEdgeModFace: edge % splitted face %',
       newedge.edge_id, newedge.left_face;
 
-  -- Call topology.AddFace for every face containing the new edge
+  -- Call topology.AddFace for every face whose boundary contains the new edge
+  --
+  -- TODO: in presence of holes every hole would share a boundary
+  --       with its shell, research on improving performance by avoiding
+  --       the multiple scans.
+  --
   p1 = ST_StartPoint(newedge.cleangeom);
   p2 = ST_PointN(newedge.cleangeom, 2);
   FOR rec IN SELECT geom FROM ST_Dump(fan.post)
@@ -3431,6 +3791,10 @@ BEGIN
                 ST_Boundary(geom),
                 ST_MakeLine(p1, p2)
                 )
+  --
+  -- TODO: order so to have the face on the _right_ side created first,
+  --       see http://trac.osgeo.org/postgis/ticket/1205
+  --
   LOOP -- {
 
     -- NOTE: the only difference with ST_AddEdgeNewFace here is
@@ -3439,7 +3803,7 @@ BEGIN
     --
     IF newedge.left_face != 0 THEN -- {
 
-      RAISE NOTICE 'Checking face %', ST_AsText(rec.geom);
+     RAISE DEBUG 'Checking face %', ST_AsText(rec.geom);
 
      -- Skip this if our edge is on the right side
      IF ST_IsEmpty(ST_GeometryN(
@@ -3456,7 +3820,7 @@ BEGIN
 
     END IF; -- }
 
-    RAISE NOTICE 'Adding face %', ST_AsText(rec.geom);
+    RAISE DEBUG 'Adding face %', ST_AsText(rec.geom);
     sql :=
       'SELECT topology.AddFace(' || quote_literal(atopology)
       || ', ' || quote_literal(rec.geom::text) || ', true)';
@@ -3540,94 +3904,166 @@ LANGUAGE 'plpgsql' VOLATILE;
 -- X.3.18
 --
 --  ST_CreateTopoGeo(atopology, acollection)
---
-CREATE OR REPLACE FUNCTION topology.ST_CreateTopoGeo(varchar, geometry)
+--}{
+CREATE OR REPLACE FUNCTION topology.ST_CreateTopoGeo(atopology varchar, acollection geometry)
 RETURNS text
 AS
 $$
 DECLARE
-  atopology alias for $1;
-  acollection alias for $2;
   typ char(4);
   rec RECORD;
   ret int;
-  schemaoid oid;
+  nodededges GEOMETRY;
+  points GEOMETRY;
+  snode_id int;
+  enode_id int;
+  tolerance FLOAT8;
+  topoinfo RECORD;
 BEGIN
+
   IF atopology IS NULL OR acollection IS NULL THEN
     RAISE EXCEPTION 'SQL/MM Spatial exception - null argument';
   END IF;
 
-  -- Verify existance of the topology schema 
-  FOR rec in EXECUTE 'SELECT oid FROM pg_namespace WHERE '
-    || ' nspname = ' || quote_literal(atopology)
-    || ' GROUP BY oid'
-    
-  LOOP
-    schemaoid := rec.oid;
-  END LOOP;
+  -- Get topology information
+  BEGIN
+    SELECT * FROM topology.topology
+      INTO STRICT topoinfo WHERE name = atopology;
+  EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+      RAISE EXCEPTION 'SQL/MM Spatial exception - invalid topology name';
+  END;
 
-  IF schemaoid IS NULL THEN
-  RAISE EXCEPTION 'SQL/MM Spatial exception - non-existent schema';
+  -- Check SRID compatibility
+  IF ST_SRID(acollection) != topoinfo.SRID THEN
+    RAISE EXCEPTION 'Geometry SRID (%) does not match topology SRID (%)',
+      ST_SRID(acollection), topoinfo.SRID;
   END IF;
 
-  -- Verify existance of the topology views in the topology schema 
-  FOR rec in EXECUTE 'SELECT count(*) FROM pg_class WHERE '
-    || ' relnamespace = ' || schemaoid 
-    || ' and relname = ''node'''
-    || ' OR relname = ''edge'''
-    || ' OR relname = ''face'''
+  -- Verify pre-conditions (valid, empty topology schema exists)
+  BEGIN -- {
+
+    -- Verify the topology views in the topology schema to be empty
+    FOR rec in EXECUTE
+      'SELECT count(*) FROM '
+      || quote_ident(atopology) || '.edge_data '
+      || ' UNION ' ||
+      'SELECT count(*) FROM '
+      || quote_ident(atopology) || '.node '
+    LOOP
+      IF rec.count > 0 THEN
+    RAISE EXCEPTION 'SQL/MM Spatial exception - non-empty view';
+      END IF;
+    END LOOP;
+
+    -- face check is separated as it will contain a single (world)
+    -- face record
+    FOR rec in EXECUTE
+      'SELECT count(*) FROM '
+      || quote_ident(atopology) || '.face '
+    LOOP
+      IF rec.count != 1 THEN
+    RAISE EXCEPTION 'SQL/MM Spatial exception - non-empty face view';
+      END IF;
+    END LOOP;
+
+  EXCEPTION
+    WHEN INVALID_SCHEMA_NAME THEN
+      RAISE EXCEPTION 'SQL/MM Spatial exception - invalid topology name';
+    WHEN UNDEFINED_TABLE THEN
+      RAISE EXCEPTION 'SQL/MM Spatial exception - non-existent view';
+
+  END; -- }
+
+  RAISE DEBUG 'Noding input linework';
+
+  --
+  -- Node input linework with itself
+  --
+  WITH components AS ( SELECT geom FROM ST_Dump(acollection) )
+  SELECT ST_UnaryUnion(ST_Collect(geom)) FROM (
+    SELECT geom FROM components
+      WHERE ST_Dimension(geom) = 1
+    UNION 
+    SELECT ST_Boundary(geom) FROM components
+      WHERE ST_Dimension(geom) = 2
+  ) as linework INTO STRICT nodededges;
+
+  RAISE DEBUG 'Computed % noded edges', ST_NumGeometries(nodededges);
+
+  --
+  -- Linemerge the resulting edges, to reduce the working set
+  --
+  SELECT ST_LineMerge(nodededges) INTO STRICT nodededges;
+
+  RAISE DEBUG 'Merged edges: %', ST_NumGeometries(nodededges);
+
+
+  --
+  -- Collect input points 
+  --
+  SELECT ST_Union(geom) FROM (
+    SELECT geom FROM ST_Dump(acollection)
+      WHERE ST_Dimension(geom) = 0
+  ) as nodes INTO STRICT points;
+
+  RAISE DEBUG 'Collected % input points', ST_NumGeometries(points);
+
+  --
+  -- Further split edges by points
+  --
+  FOR rec IN SELECT geom FROM ST_Dump(points)
   LOOP
-    IF rec.count < 3 THEN
-  RAISE EXCEPTION 'SQL/MM Spatial exception - non-existent view';
-    END IF;
+    -- Use the node to split edges
+    SELECT ST_Union(geom) -- TODO: ST_UnaryUnion ?
+    FROM ST_Dump(ST_Split(nodededges, rec.geom))
+    INTO STRICT nodededges;
   END LOOP;
 
-  -- Verify the topology views in the topology schema to be empty
-  FOR rec in EXECUTE
-    'SELECT count(*) FROM '
-    || quote_ident(atopology) || '.edge_data '
-    || ' UNION ' ||
-    'SELECT count(*) FROM '
-    || quote_ident(atopology) || '.node '
+  RAISE DEBUG 'Noded edges became % after point-split',
+    ST_NumGeometries(nodededges);
+
+  --
+  -- Collect all nodes (from points and noded linework endpoints)
+  --
+
+  WITH edges AS ( SELECT geom FROM ST_Dump(nodededges) )
+  SELECT ST_Union( -- TODO: ST_UnaryUnion ?
+          COALESCE(ST_UnaryUnion(ST_Collect(geom)), 
+            ST_SetSRID('POINT EMPTY'::geometry, topoinfo.SRID)),
+          COALESCE(points,
+            ST_SetSRID('POINT EMPTY'::geometry, topoinfo.SRID))
+         )
+  FROM (
+    SELECT ST_StartPoint(geom) as geom FROM edges
+      UNION
+    SELECT ST_EndPoint(geom) FROM edges
+  ) as endpoints INTO points;
+
+  RAISE DEBUG 'Total nodes count: %', ST_NumGeometries(points);
+
+  --
+  -- Add all nodes as isolated so that 
+  -- later calls to AddEdgeModFace will tweak their being
+  -- isolated or not...
+  --
+  FOR rec IN SELECT geom FROM ST_Dump(points)
   LOOP
-    IF rec.count > 0 THEN
-  RAISE EXCEPTION 'SQL/MM Spatial exception - non-empty view';
-    END IF;
+    PERFORM topology.ST_AddIsoNode(atopology, 0, rec.geom);
   END LOOP;
+  
 
-  -- face check is separated as it will contain a single (world)
-  -- face record
-  FOR rec in EXECUTE
-    'SELECT count(*) FROM '
-    || quote_ident(atopology) || '.face '
+  FOR rec IN SELECT geom FROM ST_Dump(nodededges)
   LOOP
-    IF rec.count != 1 THEN
-  RAISE EXCEPTION 'SQL/MM Spatial exception - non-empty face view';
-    END IF;
-  END LOOP;
-
-  -- 
-  -- LOOP through the elements invoking the specific function
-  -- 
-  FOR rec IN SELECT geom(ST_Dump(acollection))
-  LOOP
-    typ := substring(geometrytype(rec.geom), 1, 3);
-
-    IF typ = 'LIN' THEN
-  SELECT topology.TopoGeo_addLinestring(atopology, rec.geom) INTO ret;
-    ELSIF typ = 'POI' THEN
-  SELECT topology.TopoGeo_AddPoint(atopology, rec.geom) INTO ret;
-    ELSIF typ = 'POL' THEN
-  SELECT topology.TopoGeo_AddPolygon(atopology, rec.geom) INTO ret;
-    ELSE
-  RAISE EXCEPTION 'ST_CreateTopoGeo got unknown geometry type: %', typ;
-    END IF;
-
+    SELECT topology.GetNodeByPoint(atopology, st_startpoint(rec.geom), 0)
+      INTO STRICT snode_id;
+    SELECT topology.GetNodeByPoint(atopology, st_endpoint(rec.geom), 0)
+      INTO STRICT enode_id;
+    PERFORM topology.ST_AddEdgeModFace(atopology, snode_id, enode_id, rec.geom);
   END LOOP;
 
   RETURN 'Topology ' || atopology || ' populated';
 
-  RAISE EXCEPTION 'ST_CreateTopoGeo not implemente yet';
 END
 $$
 LANGUAGE 'plpgsql' VOLATILE;

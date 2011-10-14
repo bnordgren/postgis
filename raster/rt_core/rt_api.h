@@ -93,6 +93,7 @@
 #include <stdlib.h> /* For size_t, srand and rand */
 #include <stdint.h> /* For C99 int types */
 
+#include "lwgeom_geos.h"
 #include "liblwgeom.h"
 
 #include "proj_api.h"
@@ -517,6 +518,7 @@ rt_histogram rt_band_get_histogram(rt_bandstats stats,
 rt_quantile rt_band_get_quantiles(rt_bandstats stats,
 	double *quantiles, int quantiles_count, uint32_t *rtn_count);
 
+struct quantile_llist;
 int quantile_llist_destroy(struct quantile_llist **list,
 	uint32_t list_count);
 
@@ -807,17 +809,48 @@ void rt_raster_set_srid(rt_raster raster, int32_t srid);
 int32_t rt_raster_get_srid(rt_raster raster);
 
 /**
- * Convert an x,y raster point to an x1,y1 point on map
+ * Get 6-element array of raster geotransform matrix
+ *
+ * @param raster : the raster to get matrix of
+ * @param gt : output parameter, 6-element geotransform matrix
+ *
+ */
+void rt_raster_get_geotransform_matrix(rt_raster raster,
+	double *gt);
+
+/**
+ * Convert an xr, yr raster point to an xw, yw point on map
  *
  * @param raster : the raster to get info from
- * @param x : the pixel's column
- * @param y : the pixel's row
- * @param x1 : output parameter, X ordinate of the geographical point
- * @param y1 : output parameter, Y ordinate of the geographical point
+ * @param xr : the pixel's column
+ * @param yr : the pixel's row
+ * @param xw : output parameter, X ordinate of the geographical point
+ * @param yw : output parameter, Y ordinate of the geographical point
+ * @param gt : input/output parameter, 3x2 geotransform matrix
+ *
+ * @return if zero, error occurred in function
  */
-void rt_raster_cell_to_geopoint(rt_raster raster,
-                                double x, double y,
-                                double* x1, double* y1);
+int rt_raster_cell_to_geopoint(rt_raster raster,
+	double xr, double yr,
+	double* xw, double* yw,
+	double *gt);
+
+/**
+ * Convert an xw, yw map point to a xr, yr raster point
+ *
+ * @param raster : the raster to get info from
+ * @param xw : X ordinate of the geographical point
+ * @param yw : Y ordinate of the geographical point
+ * @param xr : output parameter, the pixel's column
+ * @param yr : output parameter, the pixel's row
+ * @param igt : input/output parameter, inverse geotransform matrix
+ *
+ * @return if zero, error occurred in function
+ */
+int rt_raster_geopoint_to_cell(rt_raster raster,
+	double xw, double yw,
+	double *xr, double *yr,
+	double *igt);
 
 /**
  * Get raster's polygon convex hull.
@@ -1025,6 +1058,7 @@ rt_raster rt_raster_gdal_warp(rt_raster raster, const char *src_srs,
  * @param grid_yw : the Y value of point on grid to align raster to
  * @param skew_x : the X skew of the raster
  * @param skew_y : the Y skew of the raster
+ * @param options : array of options.  only option is "ALL_TOUCHED"
  *
  * @return the raster of the provided geometry
  */
@@ -1037,7 +1071,47 @@ rt_raster rt_raster_gdal_rasterize(const unsigned char *wkb,
 	double *scale_x, double *scale_y,
 	double *ul_xw, double *ul_yw,
 	double *grid_xw, double *grid_yw,
-	double *skew_x, double *skew_y);
+	double *skew_x, double *skew_y,
+	char **options
+);
+
+/**
+ * Return zero if error occurred in function.
+ * Parameter intersects returns non-zero if two rasters intersect
+ *
+ * @param rast1 : the first raster whose band will be tested
+ * @param nband1 : the 0-based band of raster rast1 to use
+ *   if value is less than zero, bands are ignored.
+ *   if nband1 gte zero, nband2 must be gte zero
+ * @param rast2 : the second raster whose band will be tested
+ * @param nband2 : the 0-based band of raster rast2 to use
+ *   if value is less than zero, bands are ignored
+ *   if nband2 gte zero, nband1 must be gte zero
+ * @param intersects : non-zero value if the two rasters' bands intersects
+ *
+ * @return if zero, an error occurred in function
+ */
+int rt_raster_intersects(
+	rt_raster rast1, int nband1,
+	rt_raster rast2, int nband2,
+	int *intersects
+);
+
+/*
+ * Return zero if error occurred in function.
+ * Paramter aligned returns non-zero if two rasters are aligned
+ *
+ * @param rast1 : the first raster for alignment test
+ * @param rast2 : the second raster for alignment test
+ * @param aligned : non-zero value if the two rasters are aligned
+ *
+ * @return if zero, an error occurred in function
+ */
+int rt_raster_same_alignment(
+	rt_raster rast1,
+	rt_raster rast2,
+	int *aligned
+);
 
 /*- utilities -------------------------------------------------------*/
 
@@ -1106,6 +1180,12 @@ rt_util_gdal_resample_alg(const char *algname);
 */
 GDALDataType
 rt_util_pixtype_to_gdal_datatype(rt_pixtype pt);
+
+/*
+	get GDAL runtime version information
+*/
+const char*
+rt_util_gdal_version(const char *request);
 
 /*
 	helper macros for consistent floating point equality checks
@@ -1208,9 +1288,8 @@ struct rt_band_t {
 
 };
 
-
-/* WKT string representing each polygon in WKT format acompagned by its
-correspoding value */
+/* WKT string representing each polygon in WKT format accompanied by its
+corresponding value */
 struct rt_geomval_t {
     int srid;
     double val;
@@ -1303,11 +1382,10 @@ struct rt_reclassexpr_t {
 
 /* gdal driver information */
 struct rt_gdaldriver_t {
-    int idx;
-    char *short_name;
-    char *long_name;
-		char *create_options;
+	int idx;
+	char *short_name;
+	char *long_name;
+	char *create_options;
 };
-
 
 #endif /* RT_API_H_INCLUDED */

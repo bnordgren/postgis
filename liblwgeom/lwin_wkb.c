@@ -1,8 +1,8 @@
 /**********************************************************************
- * $Id$
  *
  * PostGIS - Spatial Types for PostgreSQL
- * Copyright 2009 Paul Ramsey <pramsey@cleverelephant.ca>
+ *
+ * Copyright (C) 2009 Paul Ramsey <pramsey@cleverelephant.ca>
  *
  * This is free software; you can redistribute and/or modify it under
  * the terms of the GNU General Public Licence. See the COPYING file.
@@ -10,6 +10,7 @@
  **********************************************************************/
 
 #include "liblwgeom_internal.h"
+#include "lwgeom_log.h"
 #include <sys/param.h>
 
 /**
@@ -208,7 +209,6 @@ static void lwtype_from_wkb_state(wkb_parse_state *s, uint32_t wkb_type)
 	}
 
 	LWDEBUGF(4,"Got lwtype %s (%u)", lwtype_name(s->lwtype), s->lwtype);
-	LWDEBUGF(4,"s->has_srid=%d s->srid=%d", s->has_srid, s->srid);
 
 	return;
 }
@@ -644,7 +644,8 @@ LWGEOM* lwgeom_from_wkb_state(wkb_parse_state *s)
 	/* Read the SRID, if necessary */
 	if( s->has_srid )
 	{
-		s->srid = integer_from_wkb_state(s);
+		s->srid = clamp_srid(integer_from_wkb_state(s));
+		/* TODO: warn on explicit UNKNOWN srid ? */
 		LWDEBUGF(4,"Got SRID: %u", s->srid);
 	}
 	

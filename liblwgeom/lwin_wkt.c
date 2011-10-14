@@ -2,7 +2,7 @@
  *
  * PostGIS - Spatial Types for PostgreSQL
  *
- * Copyright 2010 Paul Ramsey <pramsey@cleverelephant.ca>
+ * Copyright (C) 2010 Paul Ramsey <pramsey@cleverelephant.ca>
  *
  * This is free software; you can redistribute and/or modify it under
  * the terms of the GNU General Public Licence. See the COPYING file.
@@ -13,6 +13,7 @@
 
 #include "lwin_wkt.h"
 #include "lwin_wkt_parse.h"
+#include "lwgeom_log.h"
 
 
 /*
@@ -46,11 +47,14 @@ int wkt_lexer_read_srid(char *str)
 {
 	char *c = str;
 	long i = 0;
+	int srid;
 
 	if( ! str ) return SRID_UNKNOWN;
 	c += 5; /* Advance past "SRID=" */
 	i = strtol(c, NULL, 10);
-	return (int)i;
+	srid = clamp_srid((int)i);
+	/* TODO: warn on explicit UNKNOWN srid ? */
+	return srid;
 };
 
 static uint8_t wkt_dimensionality(char *dimensionality)
