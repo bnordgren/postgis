@@ -7,6 +7,7 @@
 /* Global variables */
 #include "../postgis_config.h"
 #include "liblwgeom_internal.h"
+#include "lwgeom_log.h"
 
 void *init_allocator(size_t size);
 void init_freeor(void *mem);
@@ -367,4 +368,20 @@ error_if_srid_mismatch(int srid1, int srid2)
 	{
 		lwerror("Operation on mixed SRID geometries");
 	}
+}
+
+int
+clamp_srid(int srid)
+{
+	if ( srid <= 0 ) {
+		if ( srid != SRID_UNKNOWN ) {
+			lwnotice("SRID value %d converted to the officially unknown SRID value %d", srid, SRID_UNKNOWN);
+			srid = SRID_UNKNOWN;
+		}
+	} else if ( srid > SRID_MAXIMUM ) {
+		/* should this be a NOTICE instead ? */
+		lwerror("SRID value %d > SRID_MAXIMUM (%d)",srid,SRID_MAXIMUM);
+	}
+	
+	return srid;
 }

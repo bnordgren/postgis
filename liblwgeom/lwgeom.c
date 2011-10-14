@@ -1,9 +1,9 @@
 /**********************************************************************
- * $Id$
  *
  * PostGIS - Spatial Types for PostgreSQL
  * http://postgis.refractions.net
- * Copyright 2001-2006 Refractions Research Inc.
+ *
+ * Copyright (C) 2001-2006 Refractions Research Inc.
  *
  * This is free software; you can redistribute and/or modify it under
  * the terms of the GNU General Public Licence. See the COPYING file.
@@ -15,6 +15,7 @@
 #include <stdarg.h>
 
 #include "liblwgeom_internal.h"
+#include "lwgeom_log.h"
 #include "libtgeom.h"
 
 
@@ -1358,7 +1359,7 @@ int lwgeom_is_empty(const LWGEOM *geom)
 
 int lwgeom_has_srid(const LWGEOM *geom)
 {
-	if ( (int)(geom->srid) > 0 )
+	if ( geom->srid != SRID_UNKNOWN )
 		return LW_TRUE;
 
 	return LW_FALSE;
