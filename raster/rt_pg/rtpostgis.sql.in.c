@@ -1587,7 +1587,7 @@ CREATE OR REPLACE FUNCTION st_snaptogrid(rast raster, gridx double precision, gr
 	LANGUAGE 'sql' STABLE STRICT;
 
 -----------------------------------------------------------------------
--- MapAlgebra
+-- One Raster ST_MapAlgebra
 -----------------------------------------------------------------------
 -- This function can not be STRICT, because nodatavaluerepl can be NULL (could be just '' though)
 -- or pixeltype can not be determined (could be st_bandpixeltype(raster, band) though)
@@ -1605,6 +1605,60 @@ CREATE OR REPLACE FUNCTION st_mapalgebraexpr(rast raster, pixeltype text, expres
     AS $$ SELECT st_mapalgebraexpr($1, 1, $2, $3, $4) $$
     LANGUAGE SQL;
 
+-- All arguments supplied, use the C implementation.
+CREATE OR REPLACE FUNCTION st_mapalgebrafct(rast raster, band integer, 
+        pixeltype text, userfunction regprocedure, variadic args text[]) 
+    RETURNS raster
+    AS 'MODULE_PATHNAME', 'RASTER_mapAlgebraFct'
+    LANGUAGE 'C' IMMUTABLE;
+
+-- Variant 1: missing user args
+CREATE OR REPLACE FUNCTION st_mapalgebrafct(rast raster, band integer,
+        pixeltype text, userfunction regprocedure)
+    RETURNS raster
+    AS $$ SELECT st_mapalgebrafct($1, $2, $3, $4, NULL) $$
+    LANGUAGE SQL;
+
+-- Variant 2: missing pixeltype; default to pixeltype of rast
+CREATE OR REPLACE FUNCTION st_mapalgebrafct(rast raster, band integer,
+        userfunction regprocedure, variadic args text[])
+    RETURNS raster
+    AS $$ SELECT st_mapalgebrafct($1, $2, NULL, $3, VARIADIC $4) $$
+    LANGUAGE SQL;
+ 
+-- Variant 3: missing pixeltype and user args; default to pixeltype of rast
+CREATE OR REPLACE FUNCTION st_mapalgebrafct(rast raster, band integer,
+        userfunction regprocedure)
+    RETURNS raster
+    AS $$ SELECT st_mapalgebrafct($1, $2, NULL, $3, NULL) $$
+    LANGUAGE SQL;
+
+-- Variant 4: missing band; default to band 1
+CREATE OR REPLACE FUNCTION st_mapalgebrafct(rast raster, pixeltype text,
+        userfunction regprocedure, variadic args text[])
+    RETURNS raster
+    AS $$ SELECT st_mapalgebrafct($1, 1, $2, $3, VARIADIC $4) $$
+    LANGUAGE SQL;
+
+-- Variant 5: missing band and user args; default to band 1
+CREATE OR REPLACE FUNCTION st_mapalgebrafct(rast raster, pixeltype text,
+        userfunction regprocedure)
+    RETURNS raster
+    AS $$ SELECT st_mapalgebrafct($1, 1, $2, $3, NULL) $$
+    LANGUAGE SQL;
+
+-- Variant 6: missing band, and pixeltype; default to band 1, pixeltype of rast.
+CREATE OR REPLACE FUNCTION st_mapalgebrafct(rast raster, userfunction regprocedure,
+        variadic args text[])
+    RETURNS raster
+    AS $$ SELECT st_mapalgebrafct($1, 1, NULL, $2, VARIADIC $3) $$
+    LANGUAGE SQL;
+
+-- Variant 7: missing band, pixeltype, and user args; default to band 1, pixeltype of rast.
+CREATE OR REPLACE FUNCTION st_mapalgebrafct(rast raster, userfunction regprocedure)
+    RETURNS raster
+    AS $$ SELECT st_mapalgebrafct($1, 1, NULL, $2, NULL) $$
+    LANGUAGE SQL;
 
 -----------------------------------------------------------------------
 -- Get information about the raster
@@ -1614,15 +1668,10 @@ CREATE OR REPLACE FUNCTION st_isempty(rast raster)
     AS 'MODULE_PATHNAME', 'RASTER_isEmpty'
     LANGUAGE 'C' IMMUTABLE STRICT;
 
-CREATE OR REPLACE FUNCTION st_hasnoband(rast raster, nband int)
+CREATE OR REPLACE FUNCTION st_hasnoband(rast raster, nband int DEFAULT 1)
     RETURNS boolean
     AS 'MODULE_PATHNAME', 'RASTER_hasNoBand'
     LANGUAGE 'C' IMMUTABLE STRICT;
-
-CREATE OR REPLACE FUNCTION st_hasnoband(rast raster)
-    RETURNS boolean
-    AS 'select st_hasnoband($1, 1)'
-    LANGUAGE 'SQL' IMMUTABLE STRICT;
 
 -----------------------------------------------------------------------
 -- Raster Band Accessors
@@ -2523,7 +2572,7 @@ CREATE OPERATOR ~ (
 -----------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION st_samealignment(rastA raster, rastB raster)
 	RETURNS boolean
-	AS 'MODULE_PATHNAME', 'RASTER_samealignment'
+	AS 'MODULE_PATHNAME', 'RASTER_sameAlignment'
 	LANGUAGE 'C' IMMUTABLE STRICT;
 
 CREATE OR REPLACE FUNCTION st_samealignment(
