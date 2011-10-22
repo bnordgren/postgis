@@ -25,6 +25,7 @@ geometry_includes(INCLUDES *inc, LWPOINT *point)
 	if (inc->params == NULL) return 0 ;
 
 	geom = (LWGEOM *)(inc->params) ;
+	if (geom->srid != point->srid) return 0;
 
 	return lwgeom_intersects(geom, lwpoint_as_lwgeom(point)) ;
 }
@@ -93,7 +94,7 @@ projection_includes(INCLUDES *inc, LWPOINT *point)
 	point2d_g = lwpoint_as_lwgeom(point2d) ;
 
 	/* project the point */
-	lwgeom_transform(point2d_g, params->source, params->dest) ;
+	lwgeom_transform(point2d_g, params->dest, params->source) ;
 
 	/* now call the wrapped object with the projected coordinates */
 	result = params->wrapped->includes(params->wrapped, point2d) ;
@@ -518,8 +519,8 @@ first_value_util(EVALUATOR *eval,
 		return NULL ;
 
 	/* ensure all the results have the same number of values */
-	if ( !( (result->length != sc->input1->evaluator->result->length) &&
-			(result->length != sc->input2->evaluator->result->length)) )
+	if ( !((result->length == sc->input1->evaluator->result->length) &&
+		   (result->length == sc->input2->evaluator->result->length)))
 	{
 		return NULL ;
 	}

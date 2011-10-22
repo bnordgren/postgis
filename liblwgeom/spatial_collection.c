@@ -292,16 +292,16 @@ sc_get_relation_code(char *string, RELATION_TYPE *code)
 	if (code == NULL) return 0 ;
 
 	success = 0 ;
-	if (strcmp(string, "intersection")) {
+	if (!strcmp(string, "intersection")) {
 		*code = INTERSECTION ;
 		success = 1;
-	} else if (strcmp(string, "difference")) {
+	} else if (!strcmp(string, "difference")) {
 		*code = DIFFERENCE ;
 		success = 1;
-	} else if (strcmp(string, "symdifference")) {
+	} else if (!strcmp(string, "symdifference")) {
 		*code = SYMDIFFERENCE ;
 		success = 1;
-	} else if (strcmp(string, "union")) {
+	} else if (!strcmp(string, "union")) {
 		*code = UNION ;
 		success = 1;
 	}

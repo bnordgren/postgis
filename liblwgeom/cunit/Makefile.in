@@ -41,7 +41,8 @@ OBJS=	\
 	cu_out_x3d.o \
 	cu_in_wkb.o \
 	cu_in_wkt.o \
-	cu_tester.o 
+	cu_tester.o \
+	cu_spatial_collection.o
 
 # If we couldn't find the cunit library then display a helpful message
 ifeq ($(CUNIT_LDFLAGS),)
