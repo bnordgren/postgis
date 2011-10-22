@@ -814,6 +814,16 @@ void rt_raster_get_geotransform_matrix(rt_raster raster,
 	double *gt);
 
 /**
+ * Set raster's geotransform using 6-element array
+ *
+ * @param raster : the raster to set matrix of
+ * @param gt : intput parameter, 6-element geotransform matrix
+ *
+ */
+void rt_raster_set_geotransform_matrix(rt_raster raster,
+	double *gt);
+
+/**
  * Convert an xr, yr raster point to an xw, yw point on map
  *
  * @param raster : the raster to get info from
@@ -871,7 +881,7 @@ LWPOLY* rt_raster_get_convex_hull(rt_raster raster);
  * the same value) and the value associated with this geometry.
  *
  * @param raster: the raster to get info from.
- * @param nband: the band to polygonize. From 1 to rt_raster_get_num_bands
+ * @param nband: the band to polygonize. 0-based
  *
  * @return A set of "geomval" values, one for each group of pixels
  * sharing the same value for the provided band. The returned values are
@@ -904,26 +914,29 @@ rt_raster rt_raster_deserialize(void* serialized, int header_only);
 
 /**
  * Return TRUE if the raster is empty. i.e. is NULL, width = 0 or height = 0
+ *
  * @param raster: the raster to get info from
+ *
  * @return TRUE if the raster is empty, FALSE otherwise
  */
 int rt_raster_is_empty(rt_raster raster);
 
 /**
  * Return TRUE if the raster do not have a band of this number.
+ *
  * @param raster: the raster to get info from
- * @param nband: the band number.
+ * @param nband: the band number. 0-based
+ *
  * @return TRUE if the raster do not have a band of this number, FALSE otherwise
  */
 int rt_raster_has_no_band(rt_raster raster, int nband);
-
 
 /**
  * Copy one band from one raster to another
  * @param torast: raster to copy band to
  * @param fromrast: raster to copy band from
- * @param fromindex: index of band in source raster
- * @param toindex: index of new band in destination raster
+ * @param fromindex: index of band in source raster, 0-based
+ * @param toindex: index of new band in destination raster, 0-based
  * @return The band index of the second raster where the new band is copied.
  */
 int32_t rt_raster_copy_band(rt_raster torast,
@@ -948,7 +961,7 @@ rt_raster rt_raster_from_band(rt_raster raster, uint32_t *bandNums,
  * 
  * @param raster: raster of band to be replaced
  * @param band : new band to add to raster
- * @param index : index of band to replace (1-based)
+ * @param index : index of band to replace (0-based)
  *
  * @return 0 on error or replaced band
  */
