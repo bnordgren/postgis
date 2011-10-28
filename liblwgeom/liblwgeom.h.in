@@ -323,7 +323,7 @@ POINT4D;
 /******************************************************************
 *  POINTARRAY
 *  Point array abstracts a lot of the complexity of points and point lists.
-*  It handles miss-alignment in the serialized form, 2d/3d translation
+*  It handles 2d/3d translation
 *    (2d points converted to 3d will have z=0 or NaN)
 *  DO NOT MIX 2D and 3D POINTS! EVERYTHING* is either one or the other
 */
@@ -353,10 +353,10 @@ typedef struct
 
 
 /******************************************************************
-* LWGEOM (any type)
+* LWGEOM (any geometry type)
 *
-* Abstract type, note that type, bbox and SRID are available in 
-* all variants.
+* Abstract type, note that 'type', 'bbox' and 'srid' are available in 
+* all geometry variants.
 */
 typedef struct
 {
@@ -653,6 +653,9 @@ BOX2DFLOAT4* box2df_from_gbox(const GBOX *gbox);
 */
 extern int lwgeom_is_collection(const LWGEOM *lwgeom);
 
+/******************************************************************/
+/* Functions that work on type numbers */
+
 /** 
 * Determine whether a type number is a collection or not
 */
@@ -662,6 +665,11 @@ extern int lwtype_is_collection(int type);
 * Given an lwtype number, what homogeneous collection can hold it?
 */
 int lwtype_get_collectiontype(int type);
+
+/* Return a char string with ASCII versionf of type flags */
+extern const char *lwgeom_typeflags(uint8_t type);
+
+extern const char *lwtype_name(uint8_t type);
 
 
 /******************************************************************/
@@ -826,73 +834,11 @@ extern LWGEOM* lwgeom_force_4d(const LWGEOM *geom);
 extern LWGEOM* lwgeom_simplify(const LWGEOM *igeom, double dist);
 
 
-
-extern char lwgeom_hasSRID(uint8_t type); /* true iff S bit is set */
-extern char lwgeom_hasBBOX(uint8_t type); /* true iff B bit set     */
-extern int  lwgeom_hasZ(uint8_t type);    /* has Z ?                */
-extern int  lwgeom_hasM(uint8_t type);    /* has M ?                */
-extern int  lwgeom_getType(uint8_t type); /* returns the tttt value */
-
-extern uint8_t lwgeom_makeType(char hasZ, char hasM, char has_srid, int type);
-extern uint8_t lwgeom_makeType_full(char hasZ, char hasM, char has_srid, int type, char hasBBOX);
-
-/*
- * Compute bbox of serialized geom
- */
-extern BOX3D *compute_serialized_box3d(uint8_t *serialized_form);
-extern int compute_serialized_box3d_p(uint8_t *serialized_form, BOX3D *box);
-
-
-/*
- * Evaluate with an heuristic if the provided PG_LWGEOM is worth
- * caching a bbox
- */
-char is_worth_caching_serialized_bbox(const uint8_t *);
-char is_worth_caching_lwgeom_bbox(const LWGEOM *);
-
-
-/*
- * This function computes the size in bytes
- * of the serialized geometries.
- */
-extern size_t serialized_lwgeom_size(const uint8_t *serialized_form);
-extern size_t lwgeom_size_subgeom(const uint8_t *serialized_form, int geom_number);
-extern size_t lwgeom_size_line(const uint8_t *serialized_line);
-extern size_t lwgeom_size_circstring(const uint8_t *serialized_curve);
-extern size_t lwgeom_size_point(const uint8_t *serialized_point);
-extern size_t lwgeom_size_poly(const uint8_t *serialized_line);
-extern size_t lwgeom_size_triangle(const uint8_t *serialized_line);
-
-
 /*--------------------------------------------------------
  * all the base types (point/line/polygon) will have a
  * basic constructor, basic de-serializer, basic serializer,
  * bounding box finder and (TODO) serialized form size finder.
  *--------------------------------------------------------*/
-
-/*
- * given the LWPOINT serialized form (or a pointer into a muli* one)
- * construct a proper LWPOINT.
- * serialized_form should point to the 8bit type format (with type = 1)
- * Returns NULL if serialized form is not a point.
- * See serialized form doc
- */
-extern LWPOINT *lwpoint_deserialize(uint8_t *serialized_form);
-
-/*
- * Find size this point would get when serialized (no BBOX)
- */
-extern size_t lwpoint_serialize_size(LWPOINT *point);
-
-/*
- * convert this point into its serialize form
- * result's first char will be the 8bit type.
- * See serialized form doc
- */
-extern uint8_t *lwpoint_serialize(LWPOINT *point);
-
-/* same as above, writes to buf */
-extern void lwpoint_serialize_buf(LWPOINT *point, uint8_t *buf, size_t *size);
 
 /*
  * find bounding box (standard one)
@@ -913,27 +859,6 @@ extern int lwpoint_getPoint4d_p(const LWPOINT *point, POINT4D *out);
  ******************************************************************/
 
 /*
- * given the LWGEOM serialized form (or a pointer into a muli* one)
- * construct a proper LWLINE.
- * serialized_form should point to the 8bit type format (with type = 2)
- * See SERIALIZED_FORM doc
- */
-extern LWLINE *lwline_deserialize(uint8_t *serialized_form);
-
-/* find the size this line would get when serialized */
-extern size_t lwline_serialize_size(LWLINE *line);
-
-/*
- * convert this line into its serialize form
- * result's first char will be the 8bit type.  See serialized form doc
- * copies data.
- */
-extern uint8_t *lwline_serialize(LWLINE *line);
-
-/* same as above, writes to buf */
-extern void lwline_serialize_buf(LWLINE *line, uint8_t *buf, size_t *size);
-
-/*
  * find bounding box (standard one)  zmin=zmax=0 if 2d (might change to NaN)
  */
 extern BOX3D *lwline_compute_box3d(LWLINE *line);
@@ -946,27 +871,6 @@ extern int lwline_add_lwpoint(LWLINE *line, LWPOINT *point, int where);
 /******************************************************************
  * LWPOLY functions
  ******************************************************************/
-
-/*
- * given the LWPOLY serialized form (or a pointer into a muli* one)
- * construct a proper LWPOLY.
- * serialized_form should point to the 8bit type format (with type = 3)
- * See SERIALIZED_FORM doc
- */
-extern LWPOLY *lwpoly_deserialize(uint8_t *serialized_form);
-
-/* find the size this polygon would get when serialized */
-extern size_t lwpoly_serialize_size(LWPOLY *poly);
-
-/*
- * create the serialized form of the polygon
- * result's first char will be the 8bit type.  See serialized form doc
- * points copied
- */
-extern uint8_t *lwpoly_serialize(LWPOLY *poly);
-
-/* same as above, writes to buf */
-extern void lwpoly_serialize_buf(LWPOLY *poly, uint8_t *buf, size_t *size);
 
 /*
  * find bounding box (standard one)  zmin=zmax=0 if 2d (might change to NaN)
@@ -998,27 +902,6 @@ extern int lwcompound_add_lwgeom(LWCOMPOUND *comp, LWGEOM *geom);
  ******************************************************************/
 
 /*
- * given the LWGEOM serialized form 
- * construct a proper LWTRIANGLE.
- * serialized_form should point to the 8bit type format 
- * See SERIALIZED_FORM doc
- */
-extern LWTRIANGLE *lwtriangle_deserialize(uint8_t *serialized_form);
-
-/* find the size this triangle would get when serialized */
-extern size_t lwtriangle_serialize_size(LWTRIANGLE *triangle);
-
-/*
- * convert this triangle into its serialize form
- * result's first char will be the 8bit type.  See serialized form doc
- * copies data.
- */
-extern uint8_t *lwtriangle_serialize(LWTRIANGLE *triangle);
-
-/* same as above, writes to buf */
-extern void lwtriangle_serialize_buf(LWTRIANGLE *triangle, uint8_t *buf, size_t *size);
-
-/*
  * find bounding box (standard one)  zmin=zmax=0 if 2d (might change to NaN)
  */
 extern BOX3D *lwtriangle_compute_box3d(LWTRIANGLE *triangle);
@@ -1026,27 +909,6 @@ extern BOX3D *lwtriangle_compute_box3d(LWTRIANGLE *triangle);
 /******************************************************************
  * LWCIRCSTRING functions
  ******************************************************************/
-
-/*
- * given the LWGEOM serialized form (or a pointer into a muli* one)
- * construct a proper LWCIRCSTRING.
- * serialized_form should point to the 8bit type format (with type = 2)
- * See SERIALIZED_FORM doc
- */
-extern LWCIRCSTRING *lwcircstring_deserialize(uint8_t *serialized_form);
-
-/* find the size this curve would get when serialized */
-extern size_t lwcircstring_serialize_size(LWCIRCSTRING *curve);
-
-/*
- * convert this circularstring into its serialize form
- * result's first char will be the 8bit type.  See serialized form doc
- * copies data.
- */
-extern uint8_t *lwcircstring_serialize(LWCIRCSTRING *curve);
-
-/* same as above, writes to buf */
-extern void lwcircstring_serialize_buf(LWCIRCSTRING *curve, uint8_t *buf, size_t *size);
 
 /*
  * find bounding box (standard one)  zmin=zmax=0 if 2d (might change to NaN)
@@ -1059,11 +921,6 @@ extern BOX3D *lwcircstring_compute_box3d(const LWCIRCSTRING *curve);
  * LWGEOM functions
  ******************************************************************/
 
-extern size_t lwgeom_serialize_size(LWGEOM *geom);
-extern size_t lwcollection_serialize_size(LWCOLLECTION *coll);
-extern void lwgeom_serialize_buf(LWGEOM *geom, uint8_t *buf, size_t *size);
-extern uint8_t *lwgeom_serialize(LWGEOM *geom);
-extern void lwcollection_serialize_buf(LWCOLLECTION *mcoll, uint8_t *buf, size_t *size);
 extern int lwcollection_ngeoms(const LWCOLLECTION *col);
 
 /* Given a generic geometry/collection, return the "simplest" form. */
@@ -1075,7 +932,6 @@ extern LWGEOM *lwcollection_homogenize(const LWCOLLECTION *col);
  * The deserialized (recursive) structure will store
  * pointers to the serialized form (POINTARRAYs).
  */
-LWGEOM *lwgeom_deserialize(uint8_t *serializedform);
 BOX3D *lwgeom_compute_box3d(const LWGEOM *geom);
 
 
@@ -1083,178 +939,14 @@ BOX3D *lwgeom_compute_box3d(const LWGEOM *geom);
  * LWMULTIx and LWCOLLECTION functions
  ******************************************************************/
 
-LWMPOINT *lwmpoint_deserialize(uint8_t *serializedform);
-LWMLINE *lwmline_deserialize(uint8_t *serializedform);
-LWMPOLY *lwmpoly_deserialize(uint8_t *serializedform);
-LWCOLLECTION *lwcollection_deserialize(uint8_t *serializedform);
-LWCOMPOUND *lwcompound_deserialize(uint8_t *serialized_form);
-LWCURVEPOLY *lwcurvepoly_deserialize(uint8_t *serialized_form);
-LWMCURVE *lwmcurve_deserialize(uint8_t *serialized_form);
-LWMSURFACE *lwmsurface_deserialize(uint8_t *serialized_form);
-LWPSURFACE *lwpsurface_deserialize(uint8_t *serialized_form);
-LWTIN *lwtin_deserialize(uint8_t *serialized_form);
-
 LWGEOM *lwcollection_getsubgeom(LWCOLLECTION *col, int gnum);
 BOX3D *lwcollection_compute_box3d(LWCOLLECTION *col);
 LWCOLLECTION* lwcollection_extract(LWCOLLECTION *col, int type);
 
+
 /******************************************************************
  * SERIALIZED FORM functions
  ******************************************************************/
-
-
-/******************************************************************
- * Multi-geometries
- *
- * These are all handled equivelently so its easy to write iterator code.
- *  NOTE NOTE: you can hand in a non-multigeometry to most of these functions
- *             and get usual behavior (ie. get geometry 0 on a POINT
- *	       will return the point).
- *             This makes coding even easier since you dont have to necessarily
- *             differenciate between the multi* and non-multi geometries.
- *
- * NOTE: these usually work directly off the serialized form, so
- *	they're a little more difficult to handle (and slower)
- * NOTE NOTE: the get functions maybe slow, so we may want to have an
- *            "analysed" lwgeom that would just have pointer to the start
- *            of each sub-geometry.
- *
- ******************************************************************/
-
-/* use this version for speed.  READ-ONLY! */
-typedef struct
-{
-	int   srid;
-	const uint8_t *serialized_form; /* orginal structure */
-	uint8_t  type;        /* 8-bit type for the LWGEOM */
-	int ngeometries;    /* number of sub-geometries */
-	uint8_t **sub_geoms;  /* list of pointers (into serialized_form)
-				       of the sub-geoms */
-}
-LWGEOM_INSPECTED;
-
-
-/*
- * note - for a simple type (ie. point), this will have
- * sub_geom[0] = serialized_form.
- * for multi-geomtries sub_geom[0] will be a few bytes into the
- * serialized form.
- * This function just computes the length of each sub-object and
- * pre-caches this info.
- * For a geometry collection of multi* geometries, you can inspect
- * the sub-components as well.
- */
-extern LWGEOM_INSPECTED *lwgeom_inspect(const uint8_t *serialized_form);
-
-
-/*
- * 1st geometry has geom_number = 0
- * if the actual sub-geometry isnt a POINT, null is returned (see _gettype()).
- * if there arent enough geometries, return null.
- * this is fine to call on a point (with geom_num=0), multipoint
- * or geometrycollection
- */
-extern LWPOINT *lwgeom_getpoint(uint8_t *serialized_form, int geom_number);
-extern LWPOINT *lwgeom_getpoint_inspected(LWGEOM_INSPECTED *inspected, int geom_number);
-
-/*
- * 1st geometry has geom_number = 0
- * if the actual geometry isnt a LINE, null is returned (see _gettype()).
- * if there arent enough geometries, return null.
- * this is fine to call on a line, multiline or geometrycollection
- */
-extern LWLINE *lwgeom_getline(uint8_t *serialized_form, int geom_number);
-extern LWLINE *lwgeom_getline_inspected(LWGEOM_INSPECTED *inspected, int geom_number);
-
-/*
- * 1st geometry has geom_number = 0
- * if the actual geometry isnt a POLYGON, null is returned (see _gettype()).
- * if there arent enough geometries, return null.
- * this is fine to call on a polygon, multipolygon or geometrycollection
- */
-extern LWPOLY *lwgeom_getpoly(uint8_t *serialized_form, int geom_number);
-extern LWPOLY *lwgeom_getpoly_inspected(LWGEOM_INSPECTED *inspected, int geom_number);
-
-/*
- * 1st geometry has geom_number = 0
- * if the actual geometry isnt a TRIANGLE, null is returned (see _gettype()).
- * if there arent enough geometries, return null.
- * this is fine to call on a triangle, Tin or geometrycollection
- */
-extern LWTRIANGLE *lwgeom_gettriangle(uint8_t *serialized_form, int geom_number);
-extern LWTRIANGLE *lwgeom_gettriangle_inspected(LWGEOM_INSPECTED *inspected, int geom_number);
-
-/*
- * 1st geometry has geom_number = 0
- * if the actual geometry isnt a POLYGON, null is returned (see _gettype()).
- * if there arent enough geometries, return null.
- * this is fine to call on a polygon, multipolygon or geometrycollection
- */
-extern LWCIRCSTRING *lwgeom_getcircstring_inspected(LWGEOM_INSPECTED *inspected, int geom_number);
-
-extern LWGEOM *lwgeom_getgeom_inspected(LWGEOM_INSPECTED *inspected, int geom_number);
-
-
-
-/*
- * this gets the serialized form of a sub-geometry
- * 1st geometry has geom_number = 0
- * if this isnt a multi* geometry, and geom_number ==0 then it returns
- * itself
- * returns null on problems.
- * in the future this is how you would access a muli* portion of a
- * geometry collection.
- *    GEOMETRYCOLLECTION(MULTIPOINT(0 0, 1 1), LINESTRING(0 0, 1 1))
- *   ie. lwgeom_getpoint( lwgeom_getsubgeometry( serialized, 0), 1)
- *           --> POINT(1 1)
- * you can inspect the sub-geometry as well if you wish.
- */
-extern uint8_t *lwgeom_getsubgeometry(const uint8_t *serialized_form, int geom_number);
-extern uint8_t *lwgeom_getsubgeometry_inspected(LWGEOM_INSPECTED *inspected, int geom_number);
-
-
-/*
- * 1st geometry has geom_number = 0
- *  use geom_number = -1 to find the actual type of the serialized form.
- *    ie lwgeom_gettype( <'MULTIPOINT(0 0, 1 1)'>, -1)
- *                 --> multipoint
- *   ie lwgeom_gettype( <'MULTIPOINT(0 0, 1 1)'>, 0)
- *                 --> point
- * gets the 8bit type of the geometry at location geom_number
- */
-extern uint8_t lwgeom_getsubtype(uint8_t *serialized_form, int geom_number);
-extern uint8_t lwgeom_getsubtype_inspected(LWGEOM_INSPECTED *inspected, int geom_number);
-
-
-/*
- * how many sub-geometries are there?
- *  for point,line,polygon will return 1.
- */
-extern int lwgeom_getnumgeometries(uint8_t *serialized_form);
-extern int lwgeom_getnumgeometries_inspected(LWGEOM_INSPECTED *inspected);
-
-
-
-/*
- * set finalType to COLLECTIONTYPE or 0 (0 means choose a best type)
- *   (ie. give it 2 points and ask it to be a multipoint)
- *  use SRID=SRID_UNKNOWN for unknown SRID  (will have 8bit type's S = 0)
- * all subgeometries must have the same SRID
- * if you want to construct an inspected, call this then inspect the result...
- */
-extern uint8_t *lwgeom_serialized_construct(int srid, int finalType, char hasz, char hasm, int nsubgeometries, uint8_t **serialized_subs);
-
-
-/* construct the empty geometry (GEOMETRYCOLLECTION EMPTY) */
-extern uint8_t *lwgeom_constructempty(int srid, char hasz, char hasm);
-extern void lwgeom_constructempty_buf(int srid, char hasz, char hasm, uint8_t *buf, size_t *size);
-size_t lwgeom_empty_length(int srid);
-
-/*
- * get the SRID from the LWGEOM
- * none present => -1
- */
-extern int lwgeom_getsrid(uint8_t *serialized);
 
 /**
 * Set the SRID on an LWGEOM
@@ -1284,27 +976,9 @@ extern int box3d_union_p(BOX3D *b1, BOX3D *b2, BOX3D *ubox);
 extern BOX3D* box3d_from_gbox(const GBOX *gbox);
 extern GBOX* box3d_to_gbox(const BOX3D *b3d);
 
-/*
- * Returns a pointer to the BBOX internal to the serialized form.
- * READ-ONLY!
- * Or NULL if serialized form does not have a BBOX
- * OBSOLETED to avoid memory alignment problems.
- */
-/*extern BOX2DFLOAT4 *getbox2d_internal(uint8_t *serialized_form);*/
-
-/*
- * this function writes to 'box' and returns 0 if serialized_form
- * does not have a bounding box (empty geom)
- */
-extern int getbox2d_p(uint8_t *serialized_form, BOX2DFLOAT4 *box);
-
 /* Expand given box of 'd' units in all directions */
 void expand_box2d(BOX2DFLOAT4 *box, double d);
 void expand_box3d(BOX3D *box, double d);
-
-/* Check if to boxes are equal (considering FLOAT approximations) */
-char box2d_same(BOX2DFLOAT4 *box1, BOX2DFLOAT4 *box2);
-
 
 
 /****************************************************************
@@ -1334,8 +1008,6 @@ extern void lwcollection_free(LWCOLLECTION *col);
 extern void lwcircstring_free(LWCIRCSTRING *curve);
 extern void lwgeom_free(LWGEOM *geom);
 
-extern void lwinspected_release(LWGEOM_INSPECTED *inspected); /* TODO: make this deep free... */
-
 /*
  * The *_release family of functions frees the LWGEOM structures
  * surrounding the POINTARRAYs but leaves the POINTARRAYs
@@ -1363,6 +1035,7 @@ extern void lwgeom_release(LWGEOM *lwgeom);
  ****************************************************************/
 
 /* TODO: move to liblwgeom_internal.h */
+
 extern uint32_t lw_get_uint32_t(const uint8_t *loc);
 extern int32_t lw_get_int32_t(const uint8_t *loc);
 
@@ -1374,14 +1047,6 @@ extern void printLWPOLY(LWPOLY *poly);
 extern void printLWTRIANGLE(LWTRIANGLE *triangle);
 extern void printLWPSURFACE(LWPSURFACE *psurf);
 extern void printLWTIN(LWTIN *tin);
-extern void printBYTES(uint8_t *a, int n);
-extern void printMULTI(uint8_t *serialized);
-
-
-extern float LWGEOM_Minf(float a, float b);
-extern float LWGEOM_Maxf(float a, float b);
-extern double LWGEOM_Mind(double a, double b);
-extern double LWGEOM_Maxd(double a, double b);
 
 extern float  next_float_down(double d);
 extern float  next_float_up(double d);
@@ -1429,6 +1094,7 @@ extern LWPOINT* lwline_get_lwpoint(LWLINE *line, int where);
 extern double ptarray_length_2d(const POINTARRAY *pts);
 extern double ptarray_length(const POINTARRAY *pts);
 
+
 extern int pt_in_ring_2d(const POINT2D *p, const POINTARRAY *ring);
 extern int pt_in_poly_2d(const POINT2D *p, const LWPOLY *poly);
 extern int azimuth_pt_pt(const POINT2D *p1, const POINT2D *p2, double *ret);
@@ -1438,16 +1104,6 @@ extern void lwline_reverse(LWLINE *line);
 extern void lwpoly_reverse(LWPOLY *poly);
 extern void lwtriangle_reverse(LWTRIANGLE *triangle);
 extern char* lwgeom_summary(const LWGEOM *lwgeom, int offset);
-extern const char *lwtype_name(uint8_t type);
-extern int ptarray_compute_box2d_p(const POINTARRAY *pa, BOX2DFLOAT4 *result);
-extern BOX2DFLOAT4 *ptarray_compute_box2d(const POINTARRAY *pa);
-extern int lwpoint_compute_box2d_p(const LWPOINT *point, BOX2DFLOAT4 *box);
-extern int lwline_compute_box2d_p(const LWLINE *line, BOX2DFLOAT4 *box);
-extern int lwpoly_compute_box2d_p(const LWPOLY *poly, BOX2DFLOAT4 *box);
-extern int lwtriangle_compute_box2d_p(const LWTRIANGLE *triangle, BOX2DFLOAT4 *box);
-extern int lwcollection_compute_box2d_p(const LWCOLLECTION *col, BOX2DFLOAT4 *box);
-extern int lwcircstring_compute_box2d_p(const LWCIRCSTRING *curve, BOX2DFLOAT4 *box);
-extern BOX2DFLOAT4* lwgeom_compute_box2d(const LWGEOM *lwgeom);
 extern char* lwpoint_to_latlon(const LWPOINT *p, const char *format);
 extern int lwline_is_closed(const LWLINE *line);
 extern int lwcircstring_is_closed(const LWCIRCSTRING *curve);
@@ -1466,12 +1122,6 @@ extern void lwtriangle_force_clockwise(LWTRIANGLE *triangle);
 
 extern void interpolate_point4d(POINT4D *A, POINT4D *B, POINT4D *I, double F);
 
-/* return alloced memory */
-extern BOX2DFLOAT4 *box2d_union(BOX2DFLOAT4 *b1, BOX2DFLOAT4 *b2);
-
-/* args may overlap ! */
-extern int box2d_union_p(BOX2DFLOAT4 *b1, BOX2DFLOAT4 *b2, BOX2DFLOAT4 *ubox);
-extern int lwgeom_compute_box2d_p(const LWGEOM *lwgeom, BOX2DFLOAT4 *box);
 void lwgeom_longitude_shift(LWGEOM *lwgeom);
 
 
@@ -1615,9 +1265,6 @@ extern double lwpoint_get_m(const LWPOINT *point);
 /* Some lwgeom info */
 extern int lwgeom_has_z(const LWGEOM *geom);
 extern int lwgeom_has_m(const LWGEOM *geom);
-
-/* Return a char string with ASCII versionf of type flags */
-extern const char *lwgeom_typeflags(uint8_t type);
 
 
 /*

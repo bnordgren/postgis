@@ -3,7 +3,9 @@
  *
  * PostGIS - Spatial Types for PostgreSQL
  * http://postgis.refractions.net
- * Copyright 2010 Paul Ramsey <pramsey@cleverelephant.ca>
+ *
+ * Copyright 2010 (C) Paul Ramsey <pramsey@cleverelephant.ca>
+ * Copyright 2004 (C) Sandro Santilli <strk@keybit.net>
  *
  * This is free software; you can redistribute and/or modify it under
  * the terms of the GNU General Public Licence. See the COPYING file.
@@ -21,12 +23,8 @@
 #include "utils/syscache.h"
 
 #include "liblwgeom.h"
-#include "lwgeom_pg.h"
-
-#ifdef GSERIALIZED_ON
-/* TODO Remove this prototype and reordganize code */
-int gserialized_datum_get_gbox_p(Datum gsdatum, GBOX *gbox);
-
+#include "lwgeom_pg.h"       /* For debugging macros. */
+#include "gserialized_gist.h" /* For index common functions */
 
 
 #include <math.h>
@@ -132,9 +130,7 @@ Datum geometry_gist_joinsel(PG_FUNCTION_ARGS)
 
 #else /* REALLY_DO_JOINSEL */
 
-int calculate_column_intersection(GBOX *search_box, GEOM_STATS *geomstats1, GEOM_STATS *geomstats2);
-
-int
+static int
 calculate_column_intersection(GBOX *search_box, GEOM_STATS *geomstats1, GEOM_STATS *geomstats2)
 {
 	/**
@@ -895,13 +891,13 @@ compute_geometry_stats(VacAttrStats *stats, AnalyzeAttrFetchFunc fetchfunc,
 		}
 		else
 		{
-			sample_extent->xmax = LWGEOM_Maxf(sample_extent->xmax,
+			sample_extent->xmax = LW_MAX(sample_extent->xmax,
 			                                  box.xmax);
-			sample_extent->ymax = LWGEOM_Maxf(sample_extent->ymax,
+			sample_extent->ymax = LW_MAX(sample_extent->ymax,
 			                                  box.ymax);
-			sample_extent->xmin = LWGEOM_Minf(sample_extent->xmin,
+			sample_extent->xmin = LW_MIN(sample_extent->xmin,
 			                                  box.xmin);
-			sample_extent->ymin = LWGEOM_Minf(sample_extent->ymin,
+			sample_extent->ymin = LW_MIN(sample_extent->ymin,
 			                                  box.ymin);
 		}
 
@@ -1511,5 +1507,3 @@ Datum geometry_estimated_extent(PG_FUNCTION_ARGS)
 
 	PG_RETURN_POINTER(box);
 }
-
-#endif /* GSERIALIZED_ON */
