@@ -16,16 +16,10 @@
 #include "mb/pg_wchar.h"
 # include "lib/stringinfo.h" /* for binary input */
 
-
 #include "liblwgeom.h"
-
-
-
 #include "lwgeom_pg.h"
-#include "profile.h"
 
 void elog_ERROR(const char* string);
-
 
 Datum LWGEOM_in(PG_FUNCTION_ARGS);
 Datum LWGEOM_out(PG_FUNCTION_ARGS);
@@ -398,26 +392,6 @@ Datum LWGEOM_addBBOX(PG_FUNCTION_ARGS)
 	
 	PG_FREE_IF_COPY(geom, 0);
 	PG_RETURN_POINTER(result);
-}
-
-char
-is_worth_caching_serialized_bbox(const uint8_t *in)
-{
-#if ! POSTGIS_AUTOCACHE_BBOX
-	return false;
-#endif
-	if ( TYPE_GETTYPE((uint8_t)in[0]) == POINTTYPE ) return false;
-	return true;
-}
-
-char
-is_worth_caching_lwgeom_bbox(const LWGEOM *in)
-{
-#if ! POSTGIS_AUTOCACHE_BBOX
-	return false;
-#endif
-	if ( TYPE_GETTYPE(in->type) == POINTTYPE ) return false;
-	return true;
 }
 
 /* removes a bbox from a geometry */
