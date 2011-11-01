@@ -15,7 +15,7 @@
 
 /**
  * This is an additional constructor of a geometry wrapper collection
- * object. Instead of accepting an #LWGEOM, it accepts a #PG_LWGEOM,
+ * object. Instead of accepting an #LWGEOM, it accepts a #GSERIALIZED,
  * deserializes it, and wraps the resultant #LWGEOM object (which is
  * hidden from the caller.)
  *
@@ -23,12 +23,12 @@
  * destroyed with @sc_destroy_geometry_wrapper.
  */
 SPATIAL_COLLECTION *
-sc_create_pglwgeom_wrapper(PG_LWGEOM *pg_geom, double inside, double outside)
+sc_create_pglwgeom_wrapper(GSERIALIZED *pg_geom, double inside, double outside)
 {
 	LWGEOM *geom ;
 
 	if (pg_geom == NULL) return NULL ;
-	geom = pglwgeom_deserialize(pg_geom) ;
+	geom = lwgeom_from_deserialized(pg_geom) ;
 	return sc_create_geometry_wrapper(geom, 1, inside, outside) ;
 }
 

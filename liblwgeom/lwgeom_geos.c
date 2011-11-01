@@ -732,12 +732,12 @@ int lwgeom_intersects(LWGEOM *geom1, LWGEOM *geom2)
 		return -1 ;
 	}
 	/* either they both have SRIDS or they both don't */
-	if ((  TYPE_HASSRID(geom1->type) && !TYPE_HASSRID(geom2->type)) ||
-		( !TYPE_HASSRID(geom1->type) &&  TYPE_HASSRID(geom2->type))){
+	if ((  lwgeom_has_srid(geom1) && !lwgeom_has_srid(geom2)) ||
+		( !lwgeom_has_srid(geom1) &&  lwgeom_has_srid(geom2))){
 		return -1 ;
 	}
 	/* if they have SRID's, they both have to be the same */
-	if ( TYPE_HASSRID(geom1->type) && (geom1->srid != geom2->srid)) {
+	if ( lwgeom_has_srid(geom1) && (geom1->srid != geom2->srid)) {
 		return -1 ;
 	}
 
@@ -751,7 +751,7 @@ int lwgeom_intersects(LWGEOM *geom1, LWGEOM *geom2)
 	 * geom1 bounding box we can prematurely return FALSE.
 	 * Do the test IFF BOUNDING BOX AVAILABLE.
 	 */
-	if ( TYPE_HASBBOX(geom1->type) && TYPE_HASBBOX(geom2->type))
+	if ( FLAGS_GET_BBOX(geom1->flags) && FLAGS_GET_BBOX(geom2->flags))
 	{
 		box1 = geom1->bbox ;
 		box2 = geom2->bbox ;
