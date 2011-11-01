@@ -106,17 +106,8 @@ Datum ST_IsCollection(PG_FUNCTION_ARGS);
 PG_FUNCTION_INFO_V1(LWGEOM_mem_size);
 Datum LWGEOM_mem_size(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom = (PG_LWGEOM *) PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *geom = (GSERIALIZED *) PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
 	size_t size = VARSIZE(geom);
-	size_t computed_size = pglwgeom_size(geom);
-	computed_size += VARHDRSZ; /* varlena size */
-	if ( size != computed_size )
-	{
-		elog(NOTICE, "varlena size (%lu) != computed size+4 (%lu)",
-		     (unsigned long)size,
-		     (unsigned long)computed_size);
-	}
-
 	PG_FREE_IF_COPY(geom,0);
 	PG_RETURN_INT32(size);
 }
@@ -125,12 +116,12 @@ Datum LWGEOM_mem_size(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_summary);
 Datum LWGEOM_summary(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *geom = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
 	char *result;
 	text *mytext;
 	LWGEOM *lwgeom;
 
-	lwgeom = pglwgeom_deserialize(geom);
+	lwgeom = lwgeom_from_gserialized(geom);
 	result = lwgeom_summary(lwgeom, 0);
 	lwgeom_free(lwgeom);
 
@@ -203,8 +194,8 @@ Datum postgis_libxml_version(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_npoints);
 Datum LWGEOM_npoints(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	LWGEOM *lwgeom = pglwgeom_deserialize(geom);
+	GSERIALIZED *geom = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	LWGEOM *lwgeom = lwgeom_from_gserialized(geom);
 	int npoints = 0;
 
 	npoints = lwgeom_count_vertices(lwgeom);
@@ -218,8 +209,8 @@ Datum LWGEOM_npoints(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_nrings);
 Datum LWGEOM_nrings(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	LWGEOM *lwgeom = pglwgeom_deserialize(geom);
+	GSERIALIZED *geom = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	LWGEOM *lwgeom = lwgeom_from_gserialized(geom);
 	int nrings = 0;
 
 	nrings = lwgeom_count_rings(lwgeom);
@@ -238,8 +229,8 @@ Datum LWGEOM_nrings(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_area_polygon);
 Datum LWGEOM_area_polygon(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	LWGEOM *lwgeom = pglwgeom_deserialize(geom);
+	GSERIALIZED *geom = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	LWGEOM *lwgeom = lwgeom_from_gserialized(geom);
 	double area = 0.0;
 
 	POSTGIS_DEBUG(2, "in LWGEOM_area_polygon");
@@ -262,8 +253,8 @@ Datum LWGEOM_area_polygon(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_length2d_linestring);
 Datum LWGEOM_length2d_linestring(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	LWGEOM *lwgeom = pglwgeom_deserialize(geom);
+	GSERIALIZED *geom = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	LWGEOM *lwgeom = lwgeom_from_gserialized(geom);
 	double dist = lwgeom_length_2d(lwgeom);
 	lwgeom_free(lwgeom);
 	PG_FREE_IF_COPY(geom, 0);
@@ -280,8 +271,8 @@ Datum LWGEOM_length2d_linestring(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_length_linestring);
 Datum LWGEOM_length_linestring(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	LWGEOM *lwgeom = pglwgeom_deserialize(geom);
+	GSERIALIZED *geom = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	LWGEOM *lwgeom = lwgeom_from_gserialized(geom);
 	double dist = lwgeom_length(lwgeom);
 	lwgeom_free(lwgeom);
 	PG_FREE_IF_COPY(geom, 0);
@@ -298,8 +289,8 @@ Datum LWGEOM_length_linestring(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_perimeter_poly);
 Datum LWGEOM_perimeter_poly(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	LWGEOM *lwgeom = pglwgeom_deserialize(geom);
+	GSERIALIZED *geom = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	LWGEOM *lwgeom = lwgeom_from_gserialized(geom);
 	double perimeter = 0.0;
 	
 	perimeter = lwgeom_perimeter(lwgeom);
@@ -317,8 +308,8 @@ Datum LWGEOM_perimeter_poly(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_perimeter2d_poly);
 Datum LWGEOM_perimeter2d_poly(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	LWGEOM *lwgeom = pglwgeom_deserialize(geom);
+	GSERIALIZED *geom = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	LWGEOM *lwgeom = lwgeom_from_gserialized(geom);
 	double perimeter = 0.0;
 	
 	perimeter = lwgeom_perimeter_2d(lwgeom);
@@ -331,16 +322,16 @@ Datum LWGEOM_perimeter2d_poly(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_force_2d);
 Datum LWGEOM_force_2d(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *pg_geom_in = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_LWGEOM *pg_geom_out;
+	GSERIALIZED *pg_geom_in = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *pg_geom_out;
 	LWGEOM *lwg_in, *lwg_out;
 
 	/* already 2d */
-	if ( pglwgeom_ndims(pg_geom_in) == 2 ) PG_RETURN_POINTER(pg_geom_in);
+	if ( gserialized_ndims(pg_geom_in) == 2 ) PG_RETURN_POINTER(pg_geom_in);
 
-	lwg_in = pglwgeom_deserialize(pg_geom_in);
+	lwg_in = lwgeom_from_gserialized(pg_geom_in);
 	lwg_out = lwgeom_force_2d(lwg_in);
-	pg_geom_out = pglwgeom_serialize(lwg_out);
+	pg_geom_out = geometry_serialize(lwg_out);
 	lwgeom_free(lwg_out);
 	lwgeom_free(lwg_in);
 
@@ -352,17 +343,17 @@ Datum LWGEOM_force_2d(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_force_3dz);
 Datum LWGEOM_force_3dz(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *pg_geom_in = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_LWGEOM *pg_geom_out;
+	GSERIALIZED *pg_geom_in = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *pg_geom_out;
 	LWGEOM *lwg_in, *lwg_out;
 
 	/* already 3d */
-	if ( pglwgeom_ndims(pg_geom_in) == 3 && pglwgeom_has_z(pg_geom_in) ) 
+	if ( gserialized_ndims(pg_geom_in) == 3 && gserialized_has_z(pg_geom_in) ) 
 		PG_RETURN_POINTER(pg_geom_in);
 
-	lwg_in = pglwgeom_deserialize(pg_geom_in);
+	lwg_in = lwgeom_from_gserialized(pg_geom_in);
 	lwg_out = lwgeom_force_3dz(lwg_in);
-	pg_geom_out = pglwgeom_serialize(lwg_out);
+	pg_geom_out = geometry_serialize(lwg_out);
 	lwgeom_free(lwg_out);
 	lwgeom_free(lwg_in);
 
@@ -374,17 +365,17 @@ Datum LWGEOM_force_3dz(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_force_3dm);
 Datum LWGEOM_force_3dm(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *pg_geom_in = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_LWGEOM *pg_geom_out;
+	GSERIALIZED *pg_geom_in = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *pg_geom_out;
 	LWGEOM *lwg_in, *lwg_out;
 
 	/* already 3d */
-	if ( pglwgeom_ndims(pg_geom_in) == 3 && pglwgeom_has_m(pg_geom_in) ) 
+	if ( gserialized_ndims(pg_geom_in) == 3 && gserialized_has_m(pg_geom_in) ) 
 		PG_RETURN_POINTER(pg_geom_in);
 
-	lwg_in = pglwgeom_deserialize(pg_geom_in);
+	lwg_in = lwgeom_from_gserialized(pg_geom_in);
 	lwg_out = lwgeom_force_3dm(lwg_in);
-	pg_geom_out = pglwgeom_serialize(lwg_out);
+	pg_geom_out = geometry_serialize(lwg_out);
 	lwgeom_free(lwg_out);
 	lwgeom_free(lwg_in);
 
@@ -396,17 +387,17 @@ Datum LWGEOM_force_3dm(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_force_4d);
 Datum LWGEOM_force_4d(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *pg_geom_in = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_LWGEOM *pg_geom_out;
+	GSERIALIZED *pg_geom_in = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *pg_geom_out;
 	LWGEOM *lwg_in, *lwg_out;
 
 	/* already 4d */
-	if ( pglwgeom_ndims(pg_geom_in) == 4 ) 
+	if ( gserialized_ndims(pg_geom_in) == 4 ) 
 		PG_RETURN_POINTER(pg_geom_in);
 
-	lwg_in = pglwgeom_deserialize(pg_geom_in);
+	lwg_in = lwgeom_from_gserialized(pg_geom_in);
 	lwg_out = lwgeom_force_4d(lwg_in);
-	pg_geom_out = pglwgeom_serialize(lwg_out);
+	pg_geom_out = geometry_serialize(lwg_out);
 	lwgeom_free(lwg_out);
 	lwgeom_free(lwg_in);
 
@@ -418,8 +409,8 @@ Datum LWGEOM_force_4d(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_force_collection);
 Datum LWGEOM_force_collection(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_LWGEOM *result;
+	GSERIALIZED *geom = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *result;
 	LWGEOM *lwgeoms[1];
 	LWGEOM *lwgeom;
 	int srid;
@@ -432,14 +423,14 @@ Datum LWGEOM_force_collection(PG_FUNCTION_ARGS)
 	 * in input. If bbox cache is not there we'll need to handle
 	 * automatic bbox addition FOR_COMPLEX_GEOMS.
 	 */
-	if ( pglwgeom_get_type(geom) == COLLECTIONTYPE &&
-	        pglwgeom_has_bbox(geom) )
+	if ( gserialized_get_type(geom) == COLLECTIONTYPE &&
+	        gserialized_has_bbox(geom) )
 	{
 		PG_RETURN_POINTER(geom);
 	}
 
 	/* deserialize into lwgeoms[0] */
-	lwgeom = pglwgeom_deserialize(geom);
+	lwgeom = lwgeom_from_gserialized(geom);
 
 	/* alread a multi*, just make it a collection */
 	if ( lwgeom_is_collection(lwgeom) )
@@ -461,7 +452,7 @@ Datum LWGEOM_force_collection(PG_FUNCTION_ARGS)
 		         lwgeoms);
 	}
 
-	result = pglwgeom_serialize(lwgeom);
+	result = geometry_serialize(lwgeom);
 	lwgeom_release(lwgeom);
 
 	PG_FREE_IF_COPY(geom, 0);
@@ -472,8 +463,8 @@ Datum LWGEOM_force_collection(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_force_multi);
 Datum LWGEOM_force_multi(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_LWGEOM *result;
+	GSERIALIZED *geom = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *result;
 	LWGEOM *lwgeom;
 	LWGEOM *ogeom;
 
@@ -484,17 +475,17 @@ Datum LWGEOM_force_multi(PG_FUNCTION_ARGS)
 	** in input. If bbox cache is not there we'll need to handle
 	** automatic bbox addition FOR_COMPLEX_GEOMS.
 	*/
-	if ( lwtype_is_collection(pglwgeom_get_type(geom)) && 
-	     pglwgeom_has_bbox(geom) )
+	if ( lwtype_is_collection(gserialized_get_type(geom)) && 
+	     gserialized_has_bbox(geom) )
 	{
 		PG_RETURN_POINTER(geom);
 	}
 
 	/* deserialize into lwgeoms[0] */
-	lwgeom = pglwgeom_deserialize(geom);
+	lwgeom = lwgeom_from_gserialized(geom);
 	ogeom = lwgeom_as_multi(lwgeom);
 
-	result = pglwgeom_serialize(ogeom);
+	result = geometry_serialize(ogeom);
 
 	PG_FREE_IF_COPY(geom, 0);
 
@@ -508,12 +499,12 @@ Returns the point in first input geometry that is closest to the second input ge
 PG_FUNCTION_INFO_V1(LWGEOM_closestpoint);
 Datum LWGEOM_closestpoint(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *result;
-	PG_LWGEOM *geom1 = (PG_LWGEOM*)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_LWGEOM *geom2 = (PG_LWGEOM*)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
+	GSERIALIZED *result;
+	GSERIALIZED *geom1 = (GSERIALIZED*)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *geom2 = (GSERIALIZED*)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
 	LWGEOM *point;
-	LWGEOM *lwgeom1 = pglwgeom_deserialize(geom1);
-	LWGEOM *lwgeom2 = pglwgeom_deserialize(geom2);
+	LWGEOM *lwgeom1 = lwgeom_from_gserialized(geom1);
+	LWGEOM *lwgeom2 = lwgeom_from_gserialized(geom2);
 
 	if (lwgeom1->srid != lwgeom2->srid)
 	{
@@ -526,7 +517,7 @@ Datum LWGEOM_closestpoint(PG_FUNCTION_ARGS)
 	if (lwgeom_is_empty(point))
 		PG_RETURN_NULL();
 	
-	result = pglwgeom_serialize(point);
+	result = geometry_serialize(point);
 	lwgeom_free(point);
 	lwgeom_free(lwgeom1);
 	lwgeom_free(lwgeom2);
@@ -542,12 +533,12 @@ Returns the shortest 2d line between two geometries
 PG_FUNCTION_INFO_V1(LWGEOM_shortestline2d);
 Datum LWGEOM_shortestline2d(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *result;
-	PG_LWGEOM *geom1 = (PG_LWGEOM*)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_LWGEOM *geom2 = (PG_LWGEOM*)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
+	GSERIALIZED *result;
+	GSERIALIZED *geom1 = (GSERIALIZED*)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *geom2 = (GSERIALIZED*)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
 	LWGEOM *theline;
-	LWGEOM *lwgeom1 = pglwgeom_deserialize(geom1);
-	LWGEOM *lwgeom2 = pglwgeom_deserialize(geom2);
+	LWGEOM *lwgeom1 = lwgeom_from_gserialized(geom1);
+	LWGEOM *lwgeom2 = lwgeom_from_gserialized(geom2);
 
 	if (lwgeom1->srid != lwgeom2->srid)
 	{
@@ -560,7 +551,7 @@ Datum LWGEOM_shortestline2d(PG_FUNCTION_ARGS)
 	if (lwgeom_is_empty(theline))
 		PG_RETURN_NULL();	
 
-	result = pglwgeom_serialize(theline);
+	result = geometry_serialize(theline);
 	lwgeom_free(theline);
 	lwgeom_free(lwgeom1);
 	lwgeom_free(lwgeom2);
@@ -576,12 +567,12 @@ Returns the longest 2d line between two geometries
 PG_FUNCTION_INFO_V1(LWGEOM_longestline2d);
 Datum LWGEOM_longestline2d(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *result;
-	PG_LWGEOM *geom1 = (PG_LWGEOM*)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_LWGEOM *geom2 = (PG_LWGEOM*)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
+	GSERIALIZED *result;
+	GSERIALIZED *geom1 = (GSERIALIZED*)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *geom2 = (GSERIALIZED*)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
 	LWGEOM *theline;
-	LWGEOM *lwgeom1 = pglwgeom_deserialize(geom1);
-	LWGEOM *lwgeom2 = pglwgeom_deserialize(geom2);
+	LWGEOM *lwgeom1 = lwgeom_from_gserialized(geom1);
+	LWGEOM *lwgeom2 = lwgeom_from_gserialized(geom2);
 
 	if (lwgeom1->srid != lwgeom2->srid)
 	{
@@ -594,7 +585,7 @@ Datum LWGEOM_longestline2d(PG_FUNCTION_ARGS)
 	if (lwgeom_is_empty(theline))
 		PG_RETURN_NULL();
 
-	result = pglwgeom_serialize(theline);
+	result = geometry_serialize(theline);
 	lwgeom_free(theline);
 	lwgeom_free(lwgeom1);
 	lwgeom_free(lwgeom2);
@@ -610,10 +601,10 @@ PG_FUNCTION_INFO_V1(LWGEOM_mindistance2d);
 Datum LWGEOM_mindistance2d(PG_FUNCTION_ARGS)
 {
 	double mindist;
-	PG_LWGEOM *geom1 = (PG_LWGEOM*)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_LWGEOM *geom2 = (PG_LWGEOM*)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
-	LWGEOM *lwgeom1 = pglwgeom_deserialize(geom1);
-	LWGEOM *lwgeom2 = pglwgeom_deserialize(geom2);
+	GSERIALIZED *geom1 = (GSERIALIZED*)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *geom2 = (GSERIALIZED*)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
+	LWGEOM *lwgeom1 = lwgeom_from_gserialized(geom1);
+	LWGEOM *lwgeom2 = lwgeom_from_gserialized(geom2);
 
 	if (lwgeom1->srid != lwgeom2->srid)
 	{
@@ -645,11 +636,11 @@ PG_FUNCTION_INFO_V1(LWGEOM_dwithin);
 Datum LWGEOM_dwithin(PG_FUNCTION_ARGS)
 {
 	double mindist;
-	PG_LWGEOM *geom1 = (PG_LWGEOM*)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_LWGEOM *geom2 = (PG_LWGEOM*)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
+	GSERIALIZED *geom1 = (GSERIALIZED*)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *geom2 = (GSERIALIZED*)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
 	double tolerance = PG_GETARG_FLOAT8(2);	
-	LWGEOM *lwgeom1 = pglwgeom_deserialize(geom1);
-	LWGEOM *lwgeom2 = pglwgeom_deserialize(geom2);
+	LWGEOM *lwgeom1 = lwgeom_from_gserialized(geom1);
+	LWGEOM *lwgeom2 = lwgeom_from_gserialized(geom2);
 
 	if ( tolerance < 0 )
 	{
@@ -681,11 +672,11 @@ PG_FUNCTION_INFO_V1(LWGEOM_dfullywithin);
 Datum LWGEOM_dfullywithin(PG_FUNCTION_ARGS)
 {
 	double maxdist;
-	PG_LWGEOM *geom1 = (PG_LWGEOM*)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_LWGEOM *geom2 = (PG_LWGEOM*)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
+	GSERIALIZED *geom1 = (GSERIALIZED*)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *geom2 = (GSERIALIZED*)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
 	double tolerance = PG_GETARG_FLOAT8(2);	
-	LWGEOM *lwgeom1 = pglwgeom_deserialize(geom1);
-	LWGEOM *lwgeom2 = pglwgeom_deserialize(geom2);
+	LWGEOM *lwgeom1 = lwgeom_from_gserialized(geom1);
+	LWGEOM *lwgeom2 = lwgeom_from_gserialized(geom2);
 
 	if ( tolerance < 0 )
 	{
@@ -718,10 +709,10 @@ PG_FUNCTION_INFO_V1(LWGEOM_maxdistance2d_linestring);
 Datum LWGEOM_maxdistance2d_linestring(PG_FUNCTION_ARGS)
 {
 	double maxdist;
-	PG_LWGEOM *geom1 = (PG_LWGEOM*)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_LWGEOM *geom2 = (PG_LWGEOM*)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
-	LWGEOM *lwgeom1 = pglwgeom_deserialize(geom1);
-	LWGEOM *lwgeom2 = pglwgeom_deserialize(geom2);
+	GSERIALIZED *geom1 = (GSERIALIZED*)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *geom2 = (GSERIALIZED*)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
+	LWGEOM *lwgeom1 = lwgeom_from_gserialized(geom1);
+	LWGEOM *lwgeom2 = lwgeom_from_gserialized(geom2);
 
 	if (lwgeom1->srid != lwgeom2->srid)
 	{
@@ -748,12 +739,12 @@ Returns the point in first input geometry that is closest to the second input ge
 PG_FUNCTION_INFO_V1(LWGEOM_closestpoint3d);
 Datum LWGEOM_closestpoint3d(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *result;
-	PG_LWGEOM *geom1 = (PG_LWGEOM*)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_LWGEOM *geom2 = (PG_LWGEOM*)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
+	GSERIALIZED *result;
+	GSERIALIZED *geom1 = (GSERIALIZED*)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *geom2 = (GSERIALIZED*)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
 	LWGEOM *point;
-	LWGEOM *lwgeom1 = pglwgeom_deserialize(geom1);
-	LWGEOM *lwgeom2 = pglwgeom_deserialize(geom2);
+	LWGEOM *lwgeom1 = lwgeom_from_gserialized(geom1);
+	LWGEOM *lwgeom2 = lwgeom_from_gserialized(geom2);
 
 	if (lwgeom1->srid != lwgeom2->srid)
 	{
@@ -766,7 +757,7 @@ Datum LWGEOM_closestpoint3d(PG_FUNCTION_ARGS)
 	if (lwgeom_is_empty(point))
 		PG_RETURN_NULL();	
 
-	result = pglwgeom_serialize(point);
+	result = geometry_serialize(point);
 	
 	lwgeom_free(point);
 	lwgeom_free(lwgeom1);
@@ -783,12 +774,12 @@ Returns the shortest line between two geometries in 3D
 PG_FUNCTION_INFO_V1(LWGEOM_shortestline3d);
 Datum LWGEOM_shortestline3d(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *result;
-	PG_LWGEOM *geom1 = (PG_LWGEOM*)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_LWGEOM *geom2 = (PG_LWGEOM*)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
+	GSERIALIZED *result;
+	GSERIALIZED *geom1 = (GSERIALIZED*)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *geom2 = (GSERIALIZED*)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
 	LWGEOM *theline;
-	LWGEOM *lwgeom1 = pglwgeom_deserialize(geom1);
-	LWGEOM *lwgeom2 = pglwgeom_deserialize(geom2);
+	LWGEOM *lwgeom1 = lwgeom_from_gserialized(geom1);
+	LWGEOM *lwgeom2 = lwgeom_from_gserialized(geom2);
 
 	if (lwgeom1->srid != lwgeom2->srid)
 	{
@@ -801,7 +792,7 @@ Datum LWGEOM_shortestline3d(PG_FUNCTION_ARGS)
 	if (lwgeom_is_empty(theline))
 		PG_RETURN_NULL();
 
-	result = pglwgeom_serialize(theline);
+	result = geometry_serialize(theline);
 	
 	lwgeom_free(theline);
 	lwgeom_free(lwgeom1);
@@ -818,12 +809,12 @@ Returns the longest line between two geometries in 3D
 PG_FUNCTION_INFO_V1(LWGEOM_longestline3d);
 Datum LWGEOM_longestline3d(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *result;
-	PG_LWGEOM *geom1 = (PG_LWGEOM*)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_LWGEOM *geom2 = (PG_LWGEOM*)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
+	GSERIALIZED *result;
+	GSERIALIZED *geom1 = (GSERIALIZED*)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *geom2 = (GSERIALIZED*)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
 	LWGEOM *theline;
-	LWGEOM *lwgeom1 = pglwgeom_deserialize(geom1);
-	LWGEOM *lwgeom2 = pglwgeom_deserialize(geom2);
+	LWGEOM *lwgeom1 = lwgeom_from_gserialized(geom1);
+	LWGEOM *lwgeom2 = lwgeom_from_gserialized(geom2);
 
 	if (lwgeom1->srid != lwgeom2->srid)
 	{
@@ -836,7 +827,7 @@ Datum LWGEOM_longestline3d(PG_FUNCTION_ARGS)
 	if (lwgeom_is_empty(theline))
 		PG_RETURN_NULL();
 	
-	result = pglwgeom_serialize(theline);
+	result = geometry_serialize(theline);
 	
 	lwgeom_free(theline);
 	lwgeom_free(lwgeom1);
@@ -853,10 +844,10 @@ PG_FUNCTION_INFO_V1(LWGEOM_mindistance3d);
 Datum LWGEOM_mindistance3d(PG_FUNCTION_ARGS)
 {
 	double mindist;
-	PG_LWGEOM *geom1 = (PG_LWGEOM*)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_LWGEOM *geom2 = (PG_LWGEOM*)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
-	LWGEOM *lwgeom1 = pglwgeom_deserialize(geom1);
-	LWGEOM *lwgeom2 = pglwgeom_deserialize(geom2);
+	GSERIALIZED *geom1 = (GSERIALIZED*)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *geom2 = (GSERIALIZED*)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
+	LWGEOM *lwgeom1 = lwgeom_from_gserialized(geom1);
+	LWGEOM *lwgeom2 = lwgeom_from_gserialized(geom2);
 
 	if (lwgeom1->srid != lwgeom2->srid)
 	{
@@ -885,11 +876,11 @@ PG_FUNCTION_INFO_V1(LWGEOM_dwithin3d);
 Datum LWGEOM_dwithin3d(PG_FUNCTION_ARGS)
 {
 	double mindist;
-	PG_LWGEOM *geom1 = (PG_LWGEOM*)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_LWGEOM *geom2 = (PG_LWGEOM*)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
+	GSERIALIZED *geom1 = (GSERIALIZED*)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *geom2 = (GSERIALIZED*)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
 	double tolerance = PG_GETARG_FLOAT8(2);	
-	LWGEOM *lwgeom1 = pglwgeom_deserialize(geom1);
-	LWGEOM *lwgeom2 = pglwgeom_deserialize(geom2);
+	LWGEOM *lwgeom1 = lwgeom_from_gserialized(geom1);
+	LWGEOM *lwgeom2 = lwgeom_from_gserialized(geom2);
 
 	if ( tolerance < 0 )
 	{
@@ -922,11 +913,11 @@ PG_FUNCTION_INFO_V1(LWGEOM_dfullywithin3d);
 Datum LWGEOM_dfullywithin3d(PG_FUNCTION_ARGS)
 {
 	double maxdist;
-	PG_LWGEOM *geom1 = (PG_LWGEOM*)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_LWGEOM *geom2 = (PG_LWGEOM*)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
+	GSERIALIZED *geom1 = (GSERIALIZED*)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *geom2 = (GSERIALIZED*)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
 	double tolerance = PG_GETARG_FLOAT8(2);	
-	LWGEOM *lwgeom1 = pglwgeom_deserialize(geom1);
-	LWGEOM *lwgeom2 = pglwgeom_deserialize(geom2);
+	LWGEOM *lwgeom1 = lwgeom_from_gserialized(geom1);
+	LWGEOM *lwgeom2 = lwgeom_from_gserialized(geom2);
 
 	if ( tolerance < 0 )
 	{
@@ -958,10 +949,10 @@ PG_FUNCTION_INFO_V1(LWGEOM_maxdistance3d);
 Datum LWGEOM_maxdistance3d(PG_FUNCTION_ARGS)
 {
 	double maxdist;
-	PG_LWGEOM *geom1 = (PG_LWGEOM*)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_LWGEOM *geom2 = (PG_LWGEOM*)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
-	LWGEOM *lwgeom1 = pglwgeom_deserialize(geom1);
-	LWGEOM *lwgeom2 = pglwgeom_deserialize(geom2);
+	GSERIALIZED *geom1 = (GSERIALIZED*)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *geom2 = (GSERIALIZED*)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
+	LWGEOM *lwgeom1 = lwgeom_from_gserialized(geom1);
+	LWGEOM *lwgeom2 = lwgeom_from_gserialized(geom2);
 
 	if (lwgeom1->srid != lwgeom2->srid)
 	{
@@ -985,14 +976,14 @@ Datum LWGEOM_maxdistance3d(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_longitude_shift);
 Datum LWGEOM_longitude_shift(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom;
+	GSERIALIZED *geom;
 	LWGEOM *lwgeom;
-	PG_LWGEOM *ret;
+	GSERIALIZED *ret;
 
 	POSTGIS_DEBUG(2, "LWGEOM_longitude_shift called.");
 
-	geom = (PG_LWGEOM *)PG_DETOAST_DATUM_COPY(PG_GETARG_DATUM(0));
-	lwgeom = pglwgeom_deserialize(geom);
+	geom = (GSERIALIZED *)PG_DETOAST_DATUM_COPY(PG_GETARG_DATUM(0));
+	lwgeom = lwgeom_from_gserialized(geom);
 
 	/* Drop bbox, will be recomputed */
 	lwgeom_drop_bbox(lwgeom);
@@ -1000,8 +991,8 @@ Datum LWGEOM_longitude_shift(PG_FUNCTION_ARGS)
 	/* Modify geometry */
 	lwgeom_longitude_shift(lwgeom);
 
-	/* Construct PG_LWGEOM */
-	ret = pglwgeom_serialize(lwgeom);
+	/* Construct GSERIALIZED */
+	ret = geometry_serialize(lwgeom);
 
 	/* Release deserialized geometry */
 	lwgeom_release(lwgeom);
@@ -1015,15 +1006,15 @@ Datum LWGEOM_longitude_shift(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_inside_circle_point);
 Datum LWGEOM_inside_circle_point(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom;
+	GSERIALIZED *geom;
 	double cx = PG_GETARG_FLOAT8(1);
 	double cy = PG_GETARG_FLOAT8(2);
 	double rr = PG_GETARG_FLOAT8(3);
 	LWPOINT *point;
 	POINT2D pt;
 
-	geom = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	point = lwgeom_as_lwpoint(pglwgeom_deserialize(geom));
+	geom = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	point = lwgeom_as_lwpoint(lwgeom_from_gserialized(geom));
 	if ( point == NULL )
 	{
 		PG_FREE_IF_COPY(geom, 0);
@@ -1047,9 +1038,10 @@ Datum LWGEOM_inside_circle_point(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_collect);
 Datum LWGEOM_collect(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *pglwgeom1, *pglwgeom2, *result;
+	GSERIALIZED *pglwgeom1, *pglwgeom2, *result;
 	LWGEOM *lwgeoms[2], *outlwg;
-	uint32 type1, type2, outtype;
+    uint32 type1, type2;
+    uint8_t outtype;
 	int srid;
 
 	POSTGIS_DEBUG(2, "LWGEOM_collect called.");
@@ -1066,10 +1058,10 @@ Datum LWGEOM_collect(PG_FUNCTION_ARGS)
 	if (PG_ARGISNULL(1))
 		PG_RETURN_DATUM(PG_GETARG_DATUM(0));
 
-	pglwgeom1 = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	pglwgeom2 = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
+	pglwgeom1 = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	pglwgeom2 = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
 
-	POSTGIS_DEBUGF(3, "LWGEOM_collect(%s, %s): call", lwtype_name(pglwgeom_get_type(pglwgeom1)), lwtype_name(pglwgeom_get_type(pglwgeom2)));
+	POSTGIS_DEBUGF(3, "LWGEOM_collect(%s, %s): call", lwtype_name(gserialized_get_type(pglwgeom1)), lwtype_name(gserialized_get_type(pglwgeom2)));
 
 	if ( FLAGS_GET_ZM(pglwgeom1->flags) != FLAGS_GET_ZM(pglwgeom2->flags) )
 	{
@@ -1077,11 +1069,11 @@ Datum LWGEOM_collect(PG_FUNCTION_ARGS)
 		PG_RETURN_NULL();
 	}
 
-	srid = pglwgeom_get_srid(pglwgeom1);
-	error_if_srid_mismatch(srid, pglwgeom_get_srid(pglwgeom2));
+	srid = gserialized_get_srid(pglwgeom1);
+	error_if_srid_mismatch(srid, gserialized_get_srid(pglwgeom2));
 
-	lwgeoms[0] = pglwgeom_deserialize(pglwgeom1);
-	lwgeoms[1] = pglwgeom_deserialize(pglwgeom2);
+	lwgeoms[0] = lwgeom_from_gserialized(pglwgeom1);
+	lwgeoms[1] = lwgeom_from_gserialized(pglwgeom2);
 
 	type1 = lwgeoms[0]->type;
 	type2 = lwgeoms[1]->type;
@@ -1100,7 +1092,7 @@ Datum LWGEOM_collect(PG_FUNCTION_ARGS)
 	lwgeom_drop_srid(lwgeoms[1]);
 
 	outlwg = (LWGEOM *)lwcollection_construct(outtype, srid, NULL, 2, lwgeoms);
-	result = pglwgeom_serialize(outlwg);
+	result = geometry_serialize(outlwg);
 
 	lwgeom_free(lwgeoms[0]);
 	lwgeom_free(lwgeoms[1]);
@@ -1127,8 +1119,8 @@ Datum LWGEOM_collect_garray(PG_FUNCTION_ARGS)
 	Datum datum;
 	ArrayType *array;
 	int nelems;
-	/*PG_LWGEOM **geoms; */
-	PG_LWGEOM *result=NULL;
+	/*GSERIALIZED **geoms; */
+	GSERIALIZED *result=NULL;
 	LWGEOM **lwgeoms, *outlwg;
 	uint32 outtype;
 	int i, count;
@@ -1184,12 +1176,12 @@ Datum LWGEOM_collect_garray(PG_FUNCTION_ARGS)
 		/* Don't do anything for NULL values */
 		if ((bitmap && (*bitmap & bitmask) != 0) || !bitmap)
 		{
-			PG_LWGEOM *geom = (PG_LWGEOM *)(ARR_DATA_PTR(array)+offset);
-			uint32 intype = pglwgeom_get_type(geom);
+			GSERIALIZED *geom = (GSERIALIZED *)(ARR_DATA_PTR(array)+offset);
+			uint8_t intype = gserialized_get_type(geom);
 
 			offset += INTALIGN(VARSIZE(geom));
 
-			lwgeoms[count] = pglwgeom_deserialize(geom);
+			lwgeoms[count] = lwgeom_from_gserialized(geom);
 
 			POSTGIS_DEBUGF(3, "LWGEOM_collect_garray: geom %d deserialized", i);
 
@@ -1219,10 +1211,10 @@ Datum LWGEOM_collect_garray(PG_FUNCTION_ARGS)
 				{
 					if ( lwgeoms[count]->bbox )
 					{
-						box->xmin = LW_MIN(box->xmin, lwgeoms[count]->bbox->xmin);
-						box->ymin = LW_MIN(box->ymin, lwgeoms[count]->bbox->ymin);
-						box->xmax = LW_MAX(box->xmax, lwgeoms[count]->bbox->xmax);
-						box->ymax = LW_MAX(box->ymax, lwgeoms[count]->bbox->ymax);
+						box->xmin = Min(box->xmin, lwgeoms[count]->bbox->xmin);
+						box->ymin = Min(box->ymin, lwgeoms[count]->bbox->ymin);
+						box->xmax = Max(box->xmax, lwgeoms[count]->bbox->xmax);
+						box->ymax = Max(box->ymax, lwgeoms[count]->bbox->ymax);
 					}
 					else
 					{
@@ -1282,7 +1274,7 @@ Datum LWGEOM_collect_garray(PG_FUNCTION_ARGS)
 		             outtype, srid,
 		             box, count, lwgeoms);
 
-		result = pglwgeom_serialize(outlwg);
+		result = geometry_serialize(outlwg);
 
 		PG_RETURN_POINTER(result);
 	}
@@ -1295,22 +1287,22 @@ Datum LWGEOM_collect_garray(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_line_from_mpoint);
 Datum LWGEOM_line_from_mpoint(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *ingeom, *result;
+	GSERIALIZED *ingeom, *result;
 	LWLINE *lwline;
 	LWMPOINT *mpoint;
 
 	POSTGIS_DEBUG(2, "LWGEOM_line_from_mpoint called");
 
-	/* Get input PG_LWGEOM and deserialize it */
-	ingeom = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	/* Get input GSERIALIZED and deserialize it */
+	ingeom = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
 
-	if ( pglwgeom_get_type(ingeom) != MULTIPOINTTYPE )
+	if ( gserialized_get_type(ingeom) != MULTIPOINTTYPE )
 	{
 		elog(ERROR, "makeline: input must be a multipoint");
 		PG_RETURN_NULL(); /* input is not a multipoint */
 	}
 
-	mpoint = lwgeom_as_lwmpoint(pglwgeom_deserialize(ingeom));
+	mpoint = lwgeom_as_lwmpoint(lwgeom_from_gserialized(ingeom));
 	lwline = lwline_from_lwmpoint(mpoint->srid, mpoint);
 	if ( ! lwline )
 	{
@@ -1319,7 +1311,7 @@ Datum LWGEOM_line_from_mpoint(PG_FUNCTION_ARGS)
 		PG_RETURN_NULL();
 	}
 
-	result = pglwgeom_serialize(lwline_as_lwgeom(lwline));
+	result = geometry_serialize(lwline_as_lwgeom(lwline));
 
 	PG_FREE_IF_COPY(ingeom, 0);
 	lwline_free(lwline);
@@ -1338,7 +1330,7 @@ Datum LWGEOM_makeline_garray(PG_FUNCTION_ARGS)
 	Datum datum;
 	ArrayType *array;
 	int nelems;
-	PG_LWGEOM *result=NULL;
+	GSERIALIZED *result=NULL;
 	LWPOINT **lwpoints;
 	LWGEOM *outlwg;
 	uint32 npoints;
@@ -1395,13 +1387,13 @@ Datum LWGEOM_makeline_garray(PG_FUNCTION_ARGS)
 		/* Don't do anything for NULL values */
 		if ((bitmap && (*bitmap & bitmask) != 0) || !bitmap)
 		{
-			PG_LWGEOM *geom = (PG_LWGEOM *)(ARR_DATA_PTR(array)+offset);
+			GSERIALIZED *geom = (GSERIALIZED *)(ARR_DATA_PTR(array)+offset);
 			offset += INTALIGN(VARSIZE(geom));
 
-			if ( pglwgeom_get_type(geom) != POINTTYPE ) continue;
+			if ( gserialized_get_type(geom) != POINTTYPE ) continue;
 
 			lwpoints[npoints++] =
-			    lwgeom_as_lwpoint(pglwgeom_deserialize(geom));
+			    lwgeom_as_lwpoint(lwgeom_from_gserialized(geom));
 
 			/* Check SRID homogeneity */
 			if ( npoints == 1 )
@@ -1445,7 +1437,7 @@ Datum LWGEOM_makeline_garray(PG_FUNCTION_ARGS)
 
 	outlwg = (LWGEOM *)lwline_from_lwpointarray(srid, npoints, lwpoints);
 
-	result = pglwgeom_serialize(outlwg);
+	result = geometry_serialize(outlwg);
 
 	PG_RETURN_POINTER(result);
 }
@@ -1457,32 +1449,32 @@ Datum LWGEOM_makeline_garray(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_makeline);
 Datum LWGEOM_makeline(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *pglwg1, *pglwg2;
-	PG_LWGEOM *result=NULL;
+	GSERIALIZED *pglwg1, *pglwg2;
+	GSERIALIZED *result=NULL;
 	LWPOINT *lwpoints[2];
 	LWLINE *outline;
 
 	POSTGIS_DEBUG(2, "LWGEOM_makeline called.");
 
 	/* Get input datum */
-	pglwg1 = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	pglwg2 = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
+	pglwg1 = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	pglwg2 = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
 
-	if ( pglwgeom_get_type(pglwg1) != POINTTYPE ||
-	     pglwgeom_get_type(pglwg2) != POINTTYPE )
+	if ( gserialized_get_type(pglwg1) != POINTTYPE ||
+	     gserialized_get_type(pglwg2) != POINTTYPE )
 	{
 		elog(ERROR, "Input geometries must be points");
 		PG_RETURN_NULL();
 	}
 
-	error_if_srid_mismatch(pglwgeom_get_srid(pglwg1), pglwgeom_get_srid(pglwg2));
+	error_if_srid_mismatch(gserialized_get_srid(pglwg1), gserialized_get_srid(pglwg2));
 
-	lwpoints[0] = lwgeom_as_lwpoint(pglwgeom_deserialize(pglwg1));
-	lwpoints[1] = lwgeom_as_lwpoint(pglwgeom_deserialize(pglwg2));
+	lwpoints[0] = lwgeom_as_lwpoint(lwgeom_from_gserialized(pglwg1));
+	lwpoints[1] = lwgeom_as_lwpoint(lwgeom_from_gserialized(pglwg2));
 
 	outline = lwline_from_lwpointarray(lwpoints[0]->srid, 2, lwpoints);
 
-	result = pglwgeom_serialize((LWGEOM *)outline);
+	result = geometry_serialize((LWGEOM *)outline);
 
 	PG_FREE_IF_COPY(pglwg1, 0);
 	PG_FREE_IF_COPY(pglwg2, 1);
@@ -1499,9 +1491,9 @@ Datum LWGEOM_makeline(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_makepoly);
 Datum LWGEOM_makepoly(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *pglwg1;
+	GSERIALIZED *pglwg1;
 	ArrayType *array=NULL;
-	PG_LWGEOM *result=NULL;
+	GSERIALIZED *result=NULL;
 	const LWLINE *shell=NULL;
 	const LWLINE **holes=NULL;
 	LWPOLY *outpoly;
@@ -1512,12 +1504,12 @@ Datum LWGEOM_makepoly(PG_FUNCTION_ARGS)
 	POSTGIS_DEBUG(2, "LWGEOM_makepoly called.");
 
 	/* Get input shell */
-	pglwg1 = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	if ( pglwgeom_get_type(pglwg1) != LINETYPE )
+	pglwg1 = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	if ( gserialized_get_type(pglwg1) != LINETYPE )
 	{
 		lwerror("Shell is not a line");
 	}
-	shell = lwgeom_as_lwline(pglwgeom_deserialize(pglwg1));
+	shell = lwgeom_as_lwline(lwgeom_from_gserialized(pglwg1));
 
 	/* Get input holes if any */
 	if ( PG_NARGS() > 1 )
@@ -1527,14 +1519,14 @@ Datum LWGEOM_makepoly(PG_FUNCTION_ARGS)
 		holes = lwalloc(sizeof(LWLINE *)*nholes);
 		for (i=0; i<nholes; i++)
 		{
-			PG_LWGEOM *g = (PG_LWGEOM *)(ARR_DATA_PTR(array)+offset);
+			GSERIALIZED *g = (GSERIALIZED *)(ARR_DATA_PTR(array)+offset);
 			LWLINE *hole;
 			offset += INTALIGN(VARSIZE(g));
-			if ( pglwgeom_get_type(g) != LINETYPE )
+			if ( gserialized_get_type(g) != LINETYPE )
 			{
 				lwerror("Hole %d is not a line", i);
 			}
-			hole = lwgeom_as_lwline(pglwgeom_deserialize(g));
+			hole = lwgeom_as_lwline(lwgeom_from_gserialized(g));
 			holes[i] = hole;
 		}
 	}
@@ -1543,7 +1535,7 @@ Datum LWGEOM_makepoly(PG_FUNCTION_ARGS)
 
 	POSTGIS_DEBUGF(3, "%s", lwgeom_summary((LWGEOM*)outpoly, 0));
 
-	result = pglwgeom_serialize((LWGEOM *)outpoly);
+	result = geometry_serialize((LWGEOM *)outpoly);
 
 	PG_FREE_IF_COPY(pglwg1, 0);
 	lwgeom_release((LWGEOM *)shell);
@@ -1560,14 +1552,14 @@ Datum LWGEOM_makepoly(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_expand);
 Datum LWGEOM_expand(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	LWGEOM *lwgeom = pglwgeom_deserialize(geom);
+	GSERIALIZED *geom = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	LWGEOM *lwgeom = lwgeom_from_gserialized(geom);
 	double d = PG_GETARG_FLOAT8(1);
 	POINT4D pt;
 	POINTARRAY *pa;
 	POINTARRAY **ppa;
 	LWPOLY *poly;
-	PG_LWGEOM *result;
+	GSERIALIZED *result;
 	GBOX gbox;
 
 	POSTGIS_DEBUG(2, "LWGEOM_expand called.");
@@ -1625,8 +1617,8 @@ Datum LWGEOM_expand(PG_FUNCTION_ARGS)
 	poly = lwpoly_construct(lwgeom->srid, NULL, 1, ppa);
 	lwgeom_add_bbox(lwpoly_as_lwgeom(poly));
 
-	/* Construct PG_LWGEOM  */
-	result = pglwgeom_serialize(lwpoly_as_lwgeom(poly));
+	/* Construct GSERIALIZED  */
+	result = geometry_serialize(lwpoly_as_lwgeom(poly));
 
 	lwgeom_free(lwpoly_as_lwgeom(poly));
 	lwgeom_free(lwgeom);
@@ -1639,8 +1631,8 @@ Datum LWGEOM_expand(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_to_BOX);
 Datum LWGEOM_to_BOX(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *pg_lwgeom = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	LWGEOM *lwgeom = pglwgeom_deserialize(pg_lwgeom);
+	GSERIALIZED *pg_lwgeom = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	LWGEOM *lwgeom = lwgeom_from_gserialized(pg_lwgeom);
 	GBOX gbox;
 	int result;
 	BOX *out = NULL;
@@ -1675,13 +1667,13 @@ Datum LWGEOM_to_BOX(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_envelope);
 Datum LWGEOM_envelope(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	LWGEOM *lwgeom = pglwgeom_deserialize(geom);
+	GSERIALIZED *geom = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	LWGEOM *lwgeom = lwgeom_from_gserialized(geom);
 	int srid = lwgeom->srid;
 	POINT4D pt;
 	GBOX box;
 	POINTARRAY *pa;
-	PG_LWGEOM *result;
+	GSERIALIZED *result;
 
 
 	if ( lwgeom_is_empty(lwgeom) )
@@ -1711,7 +1703,7 @@ Datum LWGEOM_envelope(PG_FUNCTION_ARGS)
 	{
 		/* Construct and serialize point */
 		LWPOINT *point = lwpoint_make2d(srid, box.xmin, box.ymin);
-		result = pglwgeom_serialize(lwpoint_as_lwgeom(point));
+		result = geometry_serialize(lwpoint_as_lwgeom(point));
 		lwpoint_free(point);
 	}
 	else if ( (box.xmin == box.xmax) || (box.ymin == box.ymax) )
@@ -1730,7 +1722,7 @@ Datum LWGEOM_envelope(PG_FUNCTION_ARGS)
 
 		/* Construct and serialize linestring */
 		line = lwline_construct(srid, NULL, pa);
-		result = pglwgeom_serialize(lwline_as_lwgeom(line));
+		result = geometry_serialize(lwline_as_lwgeom(line));
 		lwline_free(line);
 	}
 	else
@@ -1759,7 +1751,7 @@ Datum LWGEOM_envelope(PG_FUNCTION_ARGS)
 
 		/* Construct polygon  */
 		poly = lwpoly_construct(srid, NULL, 1, ppa);
-		result = pglwgeom_serialize(lwpoly_as_lwgeom(poly));
+		result = geometry_serialize(lwpoly_as_lwgeom(poly));
 		lwpoly_free(poly);
 	}
 
@@ -1771,8 +1763,8 @@ Datum LWGEOM_envelope(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_isempty);
 Datum LWGEOM_isempty(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom = (PG_LWGEOM *) PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	LWGEOM *lwgeom = pglwgeom_deserialize(geom);
+	GSERIALIZED *geom = (GSERIALIZED *) PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	LWGEOM *lwgeom = lwgeom_from_gserialized(geom);
 	bool empty = lwgeom_is_empty(lwgeom);
 
 	lwgeom_free(lwgeom);
@@ -1790,16 +1782,16 @@ Datum LWGEOM_isempty(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_segmentize2d);
 Datum LWGEOM_segmentize2d(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *outgeom, *ingeom;
+	GSERIALIZED *outgeom, *ingeom;
 	double dist;
 	LWGEOM *inlwgeom, *outlwgeom;
 	int type;
 
 	POSTGIS_DEBUG(2, "LWGEOM_segmentize2d called");
 
-	ingeom = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	ingeom = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
 	dist = PG_GETARG_FLOAT8(1);
-	type = pglwgeom_get_type(ingeom); 
+	type = gserialized_get_type(ingeom); 
 
 	/* Avoid types we cannot segmentize. */
 	if ( (type == POINTTYPE) || 
@@ -1811,14 +1803,14 @@ Datum LWGEOM_segmentize2d(PG_FUNCTION_ARGS)
 		PG_RETURN_POINTER(ingeom);
 	}
 
-	inlwgeom = pglwgeom_deserialize(ingeom);
+	inlwgeom = lwgeom_from_gserialized(ingeom);
 	outlwgeom = lwgeom_segmentize2d(inlwgeom, dist);
 
 	/* Copy input bounding box if any */
 	if ( inlwgeom->bbox )
 		outlwgeom->bbox = gbox_copy(inlwgeom->bbox);
 
-	outgeom = pglwgeom_serialize(outlwgeom);
+	outgeom = geometry_serialize(outlwgeom);
 
 	//lwgeom_free(outlwgeom); /* TODO fix lwgeom_clone / ptarray_clone_deep for consistent semantics */
 	lwgeom_free(inlwgeom);
@@ -1832,17 +1824,17 @@ Datum LWGEOM_segmentize2d(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_reverse);
 Datum LWGEOM_reverse(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom;
+	GSERIALIZED *geom;
 	LWGEOM *lwgeom;
 
 	POSTGIS_DEBUG(2, "LWGEOM_reverse called");
 
-	geom = (PG_LWGEOM *)PG_DETOAST_DATUM_COPY(PG_GETARG_DATUM(0));
+	geom = (GSERIALIZED *)PG_DETOAST_DATUM_COPY(PG_GETARG_DATUM(0));
 
-	lwgeom = pglwgeom_deserialize(geom);
+	lwgeom = lwgeom_from_gserialized(geom);
 	lwgeom_reverse(lwgeom);
 
-	geom = pglwgeom_serialize(lwgeom);
+	geom = geometry_serialize(lwgeom);
 
 	PG_RETURN_POINTER(geom);
 }
@@ -1851,17 +1843,17 @@ Datum LWGEOM_reverse(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_force_clockwise_poly);
 Datum LWGEOM_force_clockwise_poly(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *ingeom, *outgeom;
+	GSERIALIZED *ingeom, *outgeom;
 	LWGEOM *lwgeom;
 
 	POSTGIS_DEBUG(2, "LWGEOM_force_clockwise_poly called");
 
-	ingeom = (PG_LWGEOM *)PG_DETOAST_DATUM_COPY(PG_GETARG_DATUM(0));
+	ingeom = (GSERIALIZED *)PG_DETOAST_DATUM_COPY(PG_GETARG_DATUM(0));
 
-	lwgeom = pglwgeom_deserialize(ingeom);
+	lwgeom = lwgeom_from_gserialized(ingeom);
 	lwgeom_force_clockwise(lwgeom);
 
-	outgeom = pglwgeom_serialize(lwgeom);
+	outgeom = geometry_serialize(lwgeom);
 
 	lwgeom_free(lwgeom);
 	PG_FREE_IF_COPY(ingeom, 0);
@@ -1872,18 +1864,18 @@ Datum LWGEOM_force_clockwise_poly(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_noop);
 Datum LWGEOM_noop(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *in, *out;
+	GSERIALIZED *in, *out;
 	LWGEOM *lwgeom;
 
 	POSTGIS_DEBUG(2, "LWGEOM_noop called");
 
-	in = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	in = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
 
-	lwgeom = pglwgeom_deserialize(in);
+	lwgeom = lwgeom_from_gserialized(in);
 
 	POSTGIS_DEBUGF(3, "Deserialized: %s", lwgeom_summary(lwgeom, 0));
 
-	out = pglwgeom_serialize(lwgeom);
+	out = geometry_serialize(lwgeom);
 
 	PG_FREE_IF_COPY(in, 0);
 	lwgeom_release(lwgeom);
@@ -1901,12 +1893,12 @@ Datum LWGEOM_noop(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_zmflag);
 Datum LWGEOM_zmflag(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *in;
+	GSERIALIZED *in;
 	int ret = 0;
 
-	in = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	if ( pglwgeom_has_z(in) ) ret += 2;
-	if ( pglwgeom_has_m(in) ) ret += 1;
+	in = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	if ( gserialized_has_z(in) ) ret += 2;
+	if ( gserialized_has_m(in) ) ret += 1;
 	PG_FREE_IF_COPY(in, 0);
 	PG_RETURN_INT16(ret);
 }
@@ -1914,23 +1906,23 @@ Datum LWGEOM_zmflag(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_hasz);
 Datum LWGEOM_hasz(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *in = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_RETURN_BOOL(pglwgeom_has_z(in));
+	GSERIALIZED *in = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	PG_RETURN_BOOL(gserialized_has_z(in));
 }
 
 PG_FUNCTION_INFO_V1(LWGEOM_hasm);
 Datum LWGEOM_hasm(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *in = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_RETURN_BOOL(pglwgeom_has_m(in));
+	GSERIALIZED *in = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	PG_RETURN_BOOL(gserialized_has_m(in));
 }
 
 
 PG_FUNCTION_INFO_V1(LWGEOM_hasBBOX);
 Datum LWGEOM_hasBBOX(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *in = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	char res = pglwgeom_has_bbox(in);
+	GSERIALIZED *in = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	char res = gserialized_has_bbox(in);
 	PG_FREE_IF_COPY(in, 0);
 	PG_RETURN_BOOL(res);
 }
@@ -1939,11 +1931,11 @@ Datum LWGEOM_hasBBOX(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_ndims);
 Datum LWGEOM_ndims(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *in;
+	GSERIALIZED *in;
 	int ret;
 
-	in = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	ret = (pglwgeom_ndims(in));
+	in = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	ret = (gserialized_ndims(in));
 	PG_FREE_IF_COPY(in, 0);
 	PG_RETURN_INT16(ret);
 }
@@ -1952,19 +1944,19 @@ Datum LWGEOM_ndims(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_same);
 Datum LWGEOM_same(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *g1 = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_LWGEOM *g2 = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
+	GSERIALIZED *g1 = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *g2 = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
 	LWGEOM *lwg1, *lwg2;
 	bool result;
 
-	if ( pglwgeom_get_type(g1) != pglwgeom_get_type(g2) )
+	if ( gserialized_get_type(g1) != gserialized_get_type(g2) )
 	{
 		PG_FREE_IF_COPY(g1, 0);
 		PG_FREE_IF_COPY(g2, 1);
 		PG_RETURN_BOOL(FALSE); /* different types */
 	}
 
-	if ( pglwgeom_get_zm(g1) != pglwgeom_get_zm(g2) )
+	if ( gserialized_get_zm(g1) != gserialized_get_zm(g2) )
 	{
 		PG_FREE_IF_COPY(g1, 0);
 		PG_FREE_IF_COPY(g2, 1);
@@ -1972,8 +1964,8 @@ Datum LWGEOM_same(PG_FUNCTION_ARGS)
 	}
 
 	/* ok, deserialize. */
-	lwg1 = pglwgeom_deserialize(g1);
-	lwg2 = pglwgeom_deserialize(g2);
+	lwg1 = lwgeom_from_gserialized(g1);
+	lwg2 = lwgeom_from_gserialized(g2);
 
 	/* invoke appropriate function */
 	result = lwgeom_same(lwg1, lwg2);
@@ -1991,7 +1983,7 @@ PG_FUNCTION_INFO_V1(ST_MakeEnvelope);
 Datum ST_MakeEnvelope(PG_FUNCTION_ARGS)
 {
 	LWPOLY *poly;
-	PG_LWGEOM *result;
+	GSERIALIZED *result;
 	POINTARRAY **pa;
 	POINT4D p;
 	double x1, y1, x2, y2;
@@ -2036,7 +2028,7 @@ Datum ST_MakeEnvelope(PG_FUNCTION_ARGS)
 	poly = lwpoly_construct(srid, NULL, 1, pa);
 	lwgeom_add_bbox(lwpoly_as_lwgeom(poly));
 
-	result = pglwgeom_serialize(lwpoly_as_lwgeom(poly));
+	result = geometry_serialize(lwpoly_as_lwgeom(poly));
 	lwpoly_free(poly);
 
 	PG_RETURN_POINTER(result);
@@ -2045,7 +2037,7 @@ Datum ST_MakeEnvelope(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(ST_IsCollection);
 Datum ST_IsCollection(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom;
+	GSERIALIZED *geom;
 	int type;
 	size_t size;
 
@@ -2053,9 +2045,9 @@ Datum ST_IsCollection(PG_FUNCTION_ARGS)
 	/* header + srid/flags + bbox? + type number */
 	size = VARHDRSZ + 8 + 32 + 4;  
 
-	geom = (PG_LWGEOM*)PG_DETOAST_DATUM_SLICE(PG_GETARG_DATUM(0), 0, size);
+	geom = (GSERIALIZED*)PG_DETOAST_DATUM_SLICE(PG_GETARG_DATUM(0), 0, size);
 
-	type = pglwgeom_get_type(geom);
+	type = gserialized_get_type(geom);
 	PG_RETURN_BOOL(lwtype_is_collection(type));
 }
 
@@ -2064,7 +2056,7 @@ Datum LWGEOM_makepoint(PG_FUNCTION_ARGS)
 {
 	double x,y,z,m;
 	LWPOINT *point;
-	PG_LWGEOM *result;
+	GSERIALIZED *result;
 
 	POSTGIS_DEBUG(2, "LWGEOM_makepoint called");
 
@@ -2090,7 +2082,7 @@ Datum LWGEOM_makepoint(PG_FUNCTION_ARGS)
 		PG_RETURN_NULL();
 	}
 
-	result = pglwgeom_serialize((LWGEOM *)point);
+	result = geometry_serialize((LWGEOM *)point);
 
 	PG_RETURN_POINTER(result);
 }
@@ -2100,7 +2092,7 @@ Datum LWGEOM_makepoint3dm(PG_FUNCTION_ARGS)
 {
 	double x,y,m;
 	LWPOINT *point;
-	PG_LWGEOM *result;
+	GSERIALIZED *result;
 
 	POSTGIS_DEBUG(2, "LWGEOM_makepoint3dm called.");
 
@@ -2109,7 +2101,7 @@ Datum LWGEOM_makepoint3dm(PG_FUNCTION_ARGS)
 	m = PG_GETARG_FLOAT8(2);
 
 	point = lwpoint_make3dm(SRID_UNKNOWN, x, y, m);
-	result = pglwgeom_serialize((LWGEOM *)point);
+	result = geometry_serialize((LWGEOM *)point);
 
 	PG_RETURN_POINTER(result);
 }
@@ -2117,34 +2109,34 @@ Datum LWGEOM_makepoint3dm(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_addpoint);
 Datum LWGEOM_addpoint(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *pglwg1, *pglwg2, *result;
+	GSERIALIZED *pglwg1, *pglwg2, *result;
 	LWPOINT *point;
 	LWLINE *line, *linecopy;
 	int where = -1;
 
 	POSTGIS_DEBUG(2, "LWGEOM_addpoint called.");
 
-	pglwg1 = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	pglwg2 = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
+	pglwg1 = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	pglwg2 = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
 
 	if ( PG_NARGS() > 2 )
 	{
 		where = PG_GETARG_INT32(2);
 	}
 
-	if ( pglwgeom_get_type(pglwg1) != LINETYPE )
+	if ( gserialized_get_type(pglwg1) != LINETYPE )
 	{
 		elog(ERROR, "First argument must be a LINESTRING");
 		PG_RETURN_NULL();
 	}
 
-	if ( pglwgeom_get_type(pglwg2) != POINTTYPE )
+	if ( gserialized_get_type(pglwg2) != POINTTYPE )
 	{
 		elog(ERROR, "Second argument must be a POINT");
 		PG_RETURN_NULL();
 	}
 
-	line = lwgeom_as_lwline(pglwgeom_deserialize(pglwg1));
+	line = lwgeom_as_lwline(lwgeom_from_gserialized(pglwg1));
 
 	if ( where == -1 ) where = line->points->npoints;
 	else if ( where < 0 || where > line->points->npoints )
@@ -2153,7 +2145,7 @@ Datum LWGEOM_addpoint(PG_FUNCTION_ARGS)
 		PG_RETURN_NULL();
 	}
 
-	point = lwgeom_as_lwpoint(pglwgeom_deserialize(pglwg2));
+	point = lwgeom_as_lwpoint(lwgeom_from_gserialized(pglwg2));
 	linecopy = lwgeom_as_lwline(lwgeom_clone_deep(lwline_as_lwgeom(line)));
 	lwline_free(line);
 	
@@ -2163,7 +2155,7 @@ Datum LWGEOM_addpoint(PG_FUNCTION_ARGS)
 		PG_RETURN_NULL();
 	}
 
-	result = pglwgeom_serialize(lwline_as_lwgeom(linecopy));
+	result = geometry_serialize(lwline_as_lwgeom(linecopy));
 
 	/* Release memory */
 	PG_FREE_IF_COPY(pglwg1, 0);
@@ -2177,22 +2169,22 @@ Datum LWGEOM_addpoint(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_removepoint);
 Datum LWGEOM_removepoint(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *pglwg1, *result;
+	GSERIALIZED *pglwg1, *result;
 	LWLINE *line, *outline;
 	uint32 which;
 
 	POSTGIS_DEBUG(2, "LWGEOM_removepoint called.");
 
-	pglwg1 = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	pglwg1 = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
 	which = PG_GETARG_INT32(1);
 
-	if ( pglwgeom_get_type(pglwg1) != LINETYPE )
+	if ( gserialized_get_type(pglwg1) != LINETYPE )
 	{
 		elog(ERROR, "First argument must be a LINESTRING");
 		PG_RETURN_NULL();
 	}
 
-	line = lwgeom_as_lwline(pglwgeom_deserialize(pglwg1));
+	line = lwgeom_as_lwline(lwgeom_from_gserialized(pglwg1));
 
 	if ( which > line->points->npoints-1 )
 	{
@@ -2208,7 +2200,7 @@ Datum LWGEOM_removepoint(PG_FUNCTION_ARGS)
 
 	outline = lwline_removepoint(line, which);
 
-	result = pglwgeom_serialize((LWGEOM *)outline);
+	result = geometry_serialize((LWGEOM *)outline);
 
 	/* Release memory */
 	PG_FREE_IF_COPY(pglwg1, 0);
@@ -2222,7 +2214,7 @@ Datum LWGEOM_removepoint(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_setpoint_linestring);
 Datum LWGEOM_setpoint_linestring(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *pglwg1, *pglwg2, *result;
+	GSERIALIZED *pglwg1, *pglwg2, *result;
 	LWGEOM *lwg;
 	LWLINE *line;
 	LWPOINT *lwpoint;
@@ -2232,14 +2224,14 @@ Datum LWGEOM_setpoint_linestring(PG_FUNCTION_ARGS)
 	POSTGIS_DEBUG(2, "LWGEOM_setpoint_linestring called.");
 
 	/* we copy input as we're going to modify it */
-	pglwg1 = (PG_LWGEOM *)PG_DETOAST_DATUM_COPY(PG_GETARG_DATUM(0));
+	pglwg1 = (GSERIALIZED *)PG_DETOAST_DATUM_COPY(PG_GETARG_DATUM(0));
 
 	which = PG_GETARG_INT32(1);
-	pglwg2 = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(2));
+	pglwg2 = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(2));
 
 
 	/* Extract a POINT4D from the point */
-	lwg = pglwgeom_deserialize(pglwg2);
+	lwg = lwgeom_from_gserialized(pglwg2);
 	lwpoint = lwgeom_as_lwpoint(lwg);
 	if ( ! lwpoint )
 	{
@@ -2250,7 +2242,7 @@ Datum LWGEOM_setpoint_linestring(PG_FUNCTION_ARGS)
 	lwgeom_release((LWGEOM *)lwpoint);
 	PG_FREE_IF_COPY(pglwg2, 2);
 
-	lwg = pglwgeom_deserialize(pglwg1);
+	lwg = lwgeom_from_gserialized(pglwg1);
 	line = lwgeom_as_lwline(lwg);
 	if ( ! line )
 	{
@@ -2267,7 +2259,7 @@ Datum LWGEOM_setpoint_linestring(PG_FUNCTION_ARGS)
 	 * This will change pointarray of the serialized pglwg1,
 	 */
 	lwline_setPoint4d(line, which, &newpoint);
-	result = pglwgeom_serialize((LWGEOM *)line);
+	result = geometry_serialize((LWGEOM *)line);
 
 	/* Release memory */
 	pfree(pglwg1); /* we forced copy, POINARRAY is released now */
@@ -2281,7 +2273,7 @@ Datum LWGEOM_setpoint_linestring(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_asEWKT);
 Datum LWGEOM_asEWKT(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom;
+	GSERIALIZED *geom;
 	LWGEOM *lwgeom;
 	char *wkt;
 	size_t wkt_size;
@@ -2289,8 +2281,8 @@ Datum LWGEOM_asEWKT(PG_FUNCTION_ARGS)
 
 	POSTGIS_DEBUG(2, "LWGEOM_asEWKT called.");
 
-	geom = (PG_LWGEOM*)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	lwgeom = pglwgeom_deserialize(geom);
+	geom = (GSERIALIZED*)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	lwgeom = lwgeom_from_gserialized(geom);
 
 	/* Write to WKT and free the geometry */
 	wkt = lwgeom_to_wkt(lwgeom, WKT_EXTENDED, DBL_DIG, &wkt_size);
@@ -2314,15 +2306,15 @@ Datum LWGEOM_asEWKT(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_azimuth);
 Datum LWGEOM_azimuth(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom;
+	GSERIALIZED *geom;
 	LWPOINT *lwpoint;
 	POINT2D p1, p2;
 	double result;
 	int srid;
 
 	/* Extract first point */
-	geom = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	lwpoint = lwgeom_as_lwpoint(pglwgeom_deserialize(geom));
+	geom = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	lwpoint = lwgeom_as_lwpoint(lwgeom_from_gserialized(geom));
 	if ( ! lwpoint )
 	{
 		PG_FREE_IF_COPY(geom, 0);
@@ -2340,8 +2332,8 @@ Datum LWGEOM_azimuth(PG_FUNCTION_ARGS)
 	PG_FREE_IF_COPY(geom, 0);
 
 	/* Extract second point */
-	geom = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
-	lwpoint = lwgeom_as_lwpoint(pglwgeom_deserialize(geom));
+	geom = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
+	lwpoint = lwgeom_as_lwpoint(lwgeom_from_gserialized(geom));
 	if ( ! lwpoint )
 	{
 		PG_FREE_IF_COPY(geom, 1);
@@ -2372,10 +2364,6 @@ Datum LWGEOM_azimuth(PG_FUNCTION_ARGS)
 	PG_RETURN_FLOAT8(result);
 }
 
-
-
-
-
 /*
  * optimistic_overlap(Polygon P1, Multipolygon MP2, double dist)
  * returns true if P1 overlaps MP2
@@ -2386,24 +2374,17 @@ Datum LWGEOM_azimuth(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(optimistic_overlap);
 Datum optimistic_overlap(PG_FUNCTION_ARGS)
 {
+	GSERIALIZED *pg_geom1 = (GSERIALIZED*)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *pg_geom2 = (GSERIALIZED*)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
+	double dist = PG_GETARG_FLOAT8(2);
+	GBOX g1_bvol;
+	double calc_dist;
 
-	PG_LWGEOM                  *pg_geom1 = (PG_LWGEOM *)  PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_LWGEOM                  *pg_geom2 = (PG_LWGEOM *)  PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
-	double                  dist = PG_GETARG_FLOAT8(2);
-	BOX2DFLOAT4             g1_bvol;
-	double                  calc_dist;
-
-	LWGEOM                     *geom1;
-	LWGEOM                     *geom2;
-
-
-	/* deserialized PG_LEGEOM into their respective LWGEOM */
-	geom1 = pglwgeom_deserialize(pg_geom1);
-	geom2 = pglwgeom_deserialize(pg_geom2);
+	LWGEOM *geom1 = lwgeom_from_gserialized(pg_geom1);
+	LWGEOM *geom2 = lwgeom_from_gserialized(pg_geom2);
 
 	if (geom1->srid != geom2->srid)
 	{
-
 		elog(ERROR,"optimistic_overlap:Operation on two GEOMETRIES with different SRIDs\\n");
 		PG_RETURN_NULL();
 	}
@@ -2421,20 +2402,17 @@ Datum optimistic_overlap(PG_FUNCTION_ARGS)
 	}
 
 	/*bbox check */
-
-	pglwgeom_getbox2d_p(pg_geom1, &g1_bvol );
-
+	gserialized_get_gbox_p(pg_geom1, &g1_bvol );
 
 	g1_bvol.xmin = g1_bvol.xmin - dist;
 	g1_bvol.ymin = g1_bvol.ymin - dist;
 	g1_bvol.xmax = g1_bvol.xmax + dist;
 	g1_bvol.ymax = g1_bvol.ymax + dist;
 
-	if (  (g1_bvol.xmin > geom2->bbox->xmax) ||
-	        (g1_bvol.xmax < geom2->bbox->xmin) ||
-	        (g1_bvol.ymin > geom2->bbox->ymax) ||
-	        (g1_bvol.ymax < geom2->bbox->ymin)
-	   )
+	if ( (g1_bvol.xmin > geom2->bbox->xmax) ||
+	     (g1_bvol.xmax < geom2->bbox->xmin) ||
+	     (g1_bvol.ymin > geom2->bbox->ymax) ||
+	     (g1_bvol.ymax < geom2->bbox->ymin) )
 	{
 		PG_RETURN_BOOL(FALSE);  /*bbox not overlap */
 	}
@@ -2443,7 +2421,7 @@ Datum optimistic_overlap(PG_FUNCTION_ARGS)
 	 * compute distances
 	 * should be a fast calc if they actually do intersect
 	 */
-	calc_dist =     DatumGetFloat8 ( DirectFunctionCall2(LWGEOM_mindistance2d,   PointerGetDatum( pg_geom1 ),       PointerGetDatum( pg_geom2 )));
+	calc_dist = DatumGetFloat8 ( DirectFunctionCall2(LWGEOM_mindistance2d,   PointerGetDatum( pg_geom1 ),       PointerGetDatum( pg_geom2 )));
 
 	PG_RETURN_BOOL(calc_dist < dist);
 }
@@ -2453,9 +2431,9 @@ Datum optimistic_overlap(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_affine);
 Datum LWGEOM_affine(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom = (PG_LWGEOM *)PG_DETOAST_DATUM_COPY(PG_GETARG_DATUM(0));
-	LWGEOM *lwgeom = pglwgeom_deserialize(geom);
-	PG_LWGEOM *ret;
+	GSERIALIZED *geom = (GSERIALIZED *)PG_DETOAST_DATUM_COPY(PG_GETARG_DATUM(0));
+	LWGEOM *lwgeom = lwgeom_from_gserialized(geom);
+	GSERIALIZED *ret;
 	AFFINE affine;
 
 	affine.afac =  PG_GETARG_FLOAT8(1);
@@ -2478,7 +2456,7 @@ Datum LWGEOM_affine(PG_FUNCTION_ARGS)
 	/* COMPUTE_BBOX TAINTING */
 	lwgeom_drop_bbox(lwgeom);
 	lwgeom_add_bbox(lwgeom);
-	ret = pglwgeom_serialize(lwgeom);
+	ret = geometry_serialize(lwgeom);
 
 	/* Release memory */
 	lwgeom_free(lwgeom);
@@ -2491,7 +2469,7 @@ PG_FUNCTION_INFO_V1(ST_GeoHash);
 Datum ST_GeoHash(PG_FUNCTION_ARGS)
 {
 
-	PG_LWGEOM *geom = NULL;
+	GSERIALIZED *geom = NULL;
 	int precision = 0;
 	int len = 0;
 	char *geohash = NULL;
@@ -2502,14 +2480,14 @@ Datum ST_GeoHash(PG_FUNCTION_ARGS)
 		PG_RETURN_NULL();
 	}
 
-	geom = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	geom = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
 
 	if ( ! PG_ARGISNULL(1) )
 	{
 		precision = PG_GETARG_INT32(1);
 	}
 
-	geohash = lwgeom_geohash((LWGEOM*)(pglwgeom_deserialize(geom)), precision);
+	geohash = lwgeom_geohash((LWGEOM*)(lwgeom_from_gserialized(geom)), precision);
 
 	if ( ! geohash )
 		PG_RETURN_NULL();
@@ -2526,9 +2504,9 @@ Datum ST_GeoHash(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(ST_CollectionExtract);
 Datum ST_CollectionExtract(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *input = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_LWGEOM *output;
-	LWGEOM *lwgeom = pglwgeom_deserialize(input);
+	GSERIALIZED *input = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *output;
+	LWGEOM *lwgeom = lwgeom_from_gserialized(input);
 	LWCOLLECTION *lwcol = NULL;
 	int type = PG_GETARG_INT32(1);
 	int lwgeom_type = lwgeom->type;
@@ -2558,7 +2536,7 @@ Datum ST_CollectionExtract(PG_FUNCTION_ARGS)
 	}
 
 	lwcol = lwcollection_extract((LWCOLLECTION*)lwgeom, type);
-	output = pglwgeom_serialize((LWGEOM*)lwcol);
+	output = geometry_serialize((LWGEOM*)lwcol);
 	lwgeom_free(lwgeom);
 
 	PG_RETURN_POINTER(output);
@@ -2568,15 +2546,15 @@ Datum ST_RemoveRepeatedPoints(PG_FUNCTION_ARGS);
 PG_FUNCTION_INFO_V1(ST_RemoveRepeatedPoints);
 Datum ST_RemoveRepeatedPoints(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *input = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_LWGEOM *output;
-	LWGEOM *lwgeom_in = pglwgeom_deserialize(input);
+	GSERIALIZED *input = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *output;
+	LWGEOM *lwgeom_in = lwgeom_from_gserialized(input);
 	LWGEOM *lwgeom_out;
 
 	/* lwnotice("ST_RemoveRepeatedPoints got %p", lwgeom_in); */
 
 	lwgeom_out = lwgeom_remove_repeated_points(lwgeom_in);
-	output = pglwgeom_serialize(lwgeom_out);
+	output = geometry_serialize(lwgeom_out);
 
 	lwgeom_free(lwgeom_in);
 	PG_FREE_IF_COPY(input, 0);
@@ -2588,13 +2566,13 @@ Datum ST_FlipCoordinates(PG_FUNCTION_ARGS);
 PG_FUNCTION_INFO_V1(ST_FlipCoordinates);
 Datum ST_FlipCoordinates(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *input = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_LWGEOM *output;
-	LWGEOM *lwgeom_in = pglwgeom_deserialize(input);
+	GSERIALIZED *input = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *output;
+	LWGEOM *lwgeom_in = lwgeom_from_gserialized(input);
 	LWGEOM *lwgeom_out;
 
 	lwgeom_out = lwgeom_flip_coordinates(lwgeom_in);
-	output = pglwgeom_serialize(lwgeom_out);
+	output = geometry_serialize(lwgeom_out);
 
 	lwgeom_free(lwgeom_in);
 	PG_FREE_IF_COPY(input, 0);

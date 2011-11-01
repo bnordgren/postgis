@@ -10,7 +10,6 @@
  *
  **********************************************************************/
 
-#include <math.h>
 #include <string.h>
 #include <stdlib.h>
 
@@ -1465,7 +1464,7 @@ distance2d_pt_seg(const POINT2D *p, const POINT2D *A, const POINT2D *B)
 	s = ( (A->y-p->y)*(B->x-A->x)- (A->x-p->x)*(B->y-A->y) ) /
 	    ( (B->x-A->x)*(B->x-A->x) +(B->y-A->y)*(B->y-A->y) );
 
-	return LW_ABS(s) * sqrt(
+	return FP_ABS(s) * sqrt(
 	           (B->x-A->x)*(B->x-A->x) + (B->y-A->y)*(B->y-A->y)
 	       );
 }

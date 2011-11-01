@@ -33,14 +33,14 @@ Datum lwgeom_cmp(PG_FUNCTION_ARGS);
 PG_FUNCTION_INFO_V1(lwgeom_lt);
 Datum lwgeom_lt(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom1 = (PG_LWGEOM *) PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_LWGEOM *geom2 = (PG_LWGEOM *) PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
-	BOX2DFLOAT4 box1;
-	BOX2DFLOAT4 box2;
+	GSERIALIZED *geom1 = (GSERIALIZED *) PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *geom2 = (GSERIALIZED *) PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
+	GBOX box1;
+	GBOX box2;
 
 	POSTGIS_DEBUG(2, "lwgeom_lt called");
 
-	if (pglwgeom_get_srid(geom1) != pglwgeom_get_srid(geom2))
+	if (gserialized_get_srid(geom1) != gserialized_get_srid(geom2))
 	{
 		elog(BTREE_SRID_MISMATCH_SEVERITY,
 		     "Operation on two GEOMETRIES with different SRIDs\n");
@@ -51,8 +51,8 @@ Datum lwgeom_lt(PG_FUNCTION_ARGS)
 
 	POSTGIS_DEBUG(3, "lwgeom_lt passed getSRID test");
 
-	pglwgeom_getbox2d_p(geom1, &box1);
-	pglwgeom_getbox2d_p(geom2, &box2);
+	gserialized_get_gbox_p(geom1, &box1);
+	gserialized_get_gbox_p(geom2, &box2);
 
 	PG_FREE_IF_COPY(geom1, 0);
 	PG_FREE_IF_COPY(geom2, 1);
@@ -89,14 +89,14 @@ Datum lwgeom_lt(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(lwgeom_le);
 Datum lwgeom_le(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom1 = (PG_LWGEOM *) PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_LWGEOM *geom2 = (PG_LWGEOM *) PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
-	BOX2DFLOAT4 box1;
-	BOX2DFLOAT4 box2;
+	GSERIALIZED *geom1 = (GSERIALIZED *) PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *geom2 = (GSERIALIZED *) PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
+	GBOX box1;
+	GBOX box2;
 
 	POSTGIS_DEBUG(2, "lwgeom_le called");
 
-	if (pglwgeom_get_srid(geom1) != pglwgeom_get_srid(geom2))
+	if (gserialized_get_srid(geom1) != gserialized_get_srid(geom2))
 	{
 		elog(BTREE_SRID_MISMATCH_SEVERITY,
 		     "Operation on two GEOMETRIES with different SRIDs\n");
@@ -105,8 +105,8 @@ Datum lwgeom_le(PG_FUNCTION_ARGS)
 		PG_RETURN_NULL();
 	}
 
-	pglwgeom_getbox2d_p(geom1, &box1);
-	pglwgeom_getbox2d_p(geom2, &box2);
+	gserialized_get_gbox_p(geom1, &box1);
+	gserialized_get_gbox_p(geom2, &box2);
 
 	PG_FREE_IF_COPY(geom1, 0);
 	PG_FREE_IF_COPY(geom2, 1);
@@ -153,15 +153,15 @@ Datum lwgeom_le(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(lwgeom_eq);
 Datum lwgeom_eq(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom1 = (PG_LWGEOM *) PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_LWGEOM *geom2 = (PG_LWGEOM *) PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
-	BOX2DFLOAT4 box1;
-	BOX2DFLOAT4 box2;
+	GSERIALIZED *geom1 = (GSERIALIZED *) PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *geom2 = (GSERIALIZED *) PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
+	GBOX box1;
+	GBOX box2;
 	bool result;
 
 	POSTGIS_DEBUG(2, "lwgeom_eq called");
 
-	if (pglwgeom_get_srid(geom1) != pglwgeom_get_srid(geom2))
+	if (gserialized_get_srid(geom1) != gserialized_get_srid(geom2))
 	{
 		elog(BTREE_SRID_MISMATCH_SEVERITY,
 		     "Operation on two GEOMETRIES with different SRIDs\n");
@@ -170,8 +170,8 @@ Datum lwgeom_eq(PG_FUNCTION_ARGS)
 		PG_RETURN_NULL();
 	}
 
-	pglwgeom_getbox2d_p(geom1, &box1);
-	pglwgeom_getbox2d_p(geom2, &box2);
+	gserialized_get_gbox_p(geom1, &box1);
+	gserialized_get_gbox_p(geom2, &box2);
 	PG_FREE_IF_COPY(geom1, 0);
 	PG_FREE_IF_COPY(geom2, 1);
 
@@ -191,14 +191,14 @@ Datum lwgeom_eq(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(lwgeom_ge);
 Datum lwgeom_ge(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom1 = (PG_LWGEOM *) PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_LWGEOM *geom2 = (PG_LWGEOM *) PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
-	BOX2DFLOAT4 box1;
-	BOX2DFLOAT4 box2;
+	GSERIALIZED *geom1 = (GSERIALIZED *) PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *geom2 = (GSERIALIZED *) PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
+	GBOX box1;
+	GBOX box2;
 
 	POSTGIS_DEBUG(2, "lwgeom_ge called");
 
-	if (pglwgeom_get_srid(geom1) != pglwgeom_get_srid(geom2))
+	if (gserialized_get_srid(geom1) != gserialized_get_srid(geom2))
 	{
 		elog(BTREE_SRID_MISMATCH_SEVERITY,
 		     "Operation on two GEOMETRIES with different SRIDs\n");
@@ -207,8 +207,8 @@ Datum lwgeom_ge(PG_FUNCTION_ARGS)
 		PG_RETURN_NULL();
 	}
 
-	pglwgeom_getbox2d_p(geom1, &box1);
-	pglwgeom_getbox2d_p(geom2, &box2);
+	gserialized_get_gbox_p(geom1, &box1);
+	gserialized_get_gbox_p(geom2, &box2);
 
 	PG_FREE_IF_COPY(geom1, 0);
 	PG_FREE_IF_COPY(geom2, 1);
@@ -255,14 +255,14 @@ Datum lwgeom_ge(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(lwgeom_gt);
 Datum lwgeom_gt(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom1 = (PG_LWGEOM *) PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_LWGEOM *geom2 = (PG_LWGEOM *) PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
-	BOX2DFLOAT4 box1;
-	BOX2DFLOAT4 box2;
+	GSERIALIZED *geom1 = (GSERIALIZED *) PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *geom2 = (GSERIALIZED *) PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
+	GBOX box1;
+	GBOX box2;
 
 	POSTGIS_DEBUG(2, "lwgeom_gt called");
 
-	if (pglwgeom_get_srid(geom1) != pglwgeom_get_srid(geom2))
+	if (gserialized_get_srid(geom1) != gserialized_get_srid(geom2))
 	{
 		elog(BTREE_SRID_MISMATCH_SEVERITY,
 		     "Operation on two GEOMETRIES with different SRIDs\n");
@@ -271,8 +271,8 @@ Datum lwgeom_gt(PG_FUNCTION_ARGS)
 		PG_RETURN_NULL();
 	}
 
-	pglwgeom_getbox2d_p(geom1, &box1);
-	pglwgeom_getbox2d_p(geom2, &box2);
+	gserialized_get_gbox_p(geom1, &box1);
+	gserialized_get_gbox_p(geom2, &box2);
 
 	PG_FREE_IF_COPY(geom1, 0);
 	PG_FREE_IF_COPY(geom2, 1);
@@ -315,14 +315,14 @@ Datum lwgeom_gt(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(lwgeom_cmp);
 Datum lwgeom_cmp(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom1 = (PG_LWGEOM *) PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_LWGEOM *geom2 = (PG_LWGEOM *) PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
-	BOX2DFLOAT4 box1;
-	BOX2DFLOAT4 box2;
+	GSERIALIZED *geom1 = (GSERIALIZED *) PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *geom2 = (GSERIALIZED *) PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
+	GBOX box1;
+	GBOX box2;
 
 	POSTGIS_DEBUG(2, "lwgeom_cmp called");
 
-	if (pglwgeom_get_srid(geom1) != pglwgeom_get_srid(geom2))
+	if (gserialized_get_srid(geom1) != gserialized_get_srid(geom2))
 	{
 		elog(BTREE_SRID_MISMATCH_SEVERITY,
 		     "Operation on two GEOMETRIES with different SRIDs\n");
@@ -331,8 +331,8 @@ Datum lwgeom_cmp(PG_FUNCTION_ARGS)
 		PG_RETURN_NULL();
 	}
 
-	pglwgeom_getbox2d_p(geom1, &box1);
-	pglwgeom_getbox2d_p(geom2, &box2);
+	gserialized_get_gbox_p(geom1, &box1);
+	gserialized_get_gbox_p(geom2, &box2);
 
 	PG_FREE_IF_COPY(geom1, 0);
 	PG_FREE_IF_COPY(geom2, 1);

@@ -54,11 +54,11 @@ Datum ST_MakeValid(PG_FUNCTION_ARGS)
 	PG_RETURN_NULL();
 #else /* POSTGIS_GEOS_VERSION >= 33 */
 
-	PG_LWGEOM *in, *out;
+	GSERIALIZED *in, *out;
 	LWGEOM *lwgeom_in, *lwgeom_out;
 
-	in = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	lwgeom_in = pglwgeom_deserialize(in);
+	in = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	lwgeom_in = lwgeom_from_gserialized(in);
 
 	switch ( lwgeom_in->type )
 	{
@@ -82,7 +82,7 @@ Datum ST_MakeValid(PG_FUNCTION_ARGS)
 		PG_RETURN_NULL();
 	}
 
-	out = pglwgeom_serialize(lwgeom_out);
+	out = geometry_serialize(lwgeom_out);
 
 	PG_RETURN_POINTER(out);
 #endif /* POSTGIS_GEOS_VERSION >= 33 */
@@ -144,17 +144,17 @@ Datum ST_CleanGeometry(PG_FUNCTION_ARGS)
 	PG_RETURN_NULL();
 #else /* POSTGIS_GEOS_VERSION >= 33 */
 
-	PG_LWGEOM *in, *out;
+	GSERIALIZED *in, *out;
 	LWGEOM *lwgeom_in, *lwgeom_out;
 
-	in = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	lwgeom_in = pglwgeom_deserialize(in);
+	in = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	lwgeom_in = lwgeom_from_gserialized(in);
 
 	/* Short-circuit: empty geometry are the cleanest ! */
 #if 0
 	if ( lwgeom_is_empty(lwgeom_in) )
 	{
-		out = pglwgeom_serialize(lwgeom_in);
+		out = geometry_serialize(lwgeom_in);
 		PG_FREE_IF_COPY(in, 0);
 		PG_RETURN_POINTER(out);
 	}
@@ -167,7 +167,7 @@ Datum ST_CleanGeometry(PG_FUNCTION_ARGS)
 		PG_RETURN_NULL();
 	}
 
-	out = pglwgeom_serialize(lwgeom_out);
+	out = geometry_serialize(lwgeom_out);
 	PG_RETURN_POINTER(out);
 
 #endif /* POSTGIS_GEOS_VERSION >= 33 */
