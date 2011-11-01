@@ -20,7 +20,7 @@
                 </para>	
             </abstract>
         </sect1info>
-        <title>PostgreSQL PostGIS Topology Types and Domains</title>
+        <title>Topology Types</title>
 		
 		<refentry id="getfaceedges_returntype">
 		  <refnamediv>
@@ -93,7 +93,7 @@
 		<refentry id="validatetopology_returntype">
             <refnamediv>
                 <refname>validatetopology_returntype</refname>
-                    <refpurpose>A composite type that consists of an error message and id1 and id2 to denote location of error.  This is the return type for <varname>ST_ValidateTopology</varname></refpurpose>
+                    <refpurpose>A composite type that consists of an error message and id1 and id2 to denote location of error.  This is the return type for <varname>ValidateTopology</varname></refpurpose>
                 </refnamediv>
             <refsection>
             <title>Description</title>
@@ -127,7 +127,7 @@
                 </para>	
             </abstract>
         </sect1info>
-        <title>PostgreSQL PostGIS Topology Domains</title>
+        <title>Topology Domains</title>
 		
 		<refentry id="topoelement">
 		  <refnamediv>
@@ -205,11 +205,11 @@ ERROR:  value for domain topology.topoelementarray violates check constraint "di
                 <para>This section lists the Topology functions for building new Topology schemas, validating topologies, and managing TopoGeometry Columns</para>
             </abstract>
         </sect1info>
-	    <title>Topology and TopoGeometry Management Functions</title>
+	    <title>Topology and TopoGeometry Management</title>
 	    <refentry id="AddTopoGeometryColumn">
 			<refnamediv>
 				<refname>AddTopoGeometryColumn</refname>
-				<refpurpose>Adds a topogeometry column to an existing feature table, registers this new column as a layer in topology.layer and returns the new layer_id.</refpurpose>
+				<refpurpose>Adds a topogeometry column to an existing table, registers this new column as a layer in topology.layer and returns the new layer_id.</refpurpose>
 			</refnamediv>
 		
             <refsynopsisdiv>
@@ -720,7 +720,7 @@ SELECT topology.AddTopoGeometryColumn('ri_topo', 'ri', 'roads', 'topo', 'LINE');
                 <para>This section covers topology functions for adding, moving, deleting, and splitting edges, faces, and nodes. All of these functions are defined by ISO SQL/MM.</para>
             </abstract>
         </sect1info>
-	    <title>Topology Editing Functions</title>
+	    <title>Topology Editors</title>
 
 		<refentry id="ST_AddIsoNode">
 			<refnamediv>
@@ -1823,7 +1823,7 @@ SELECT ST_AsText(topology.ST_GetFaceGeometry('ma_topo', 1)) As facegeomwkt;
             <para>This section covers the functions for processing topologies in non-standard ways.</para>
         </abstract>
     </sect1info>
-	  <title>Topology Processing Functions</title>
+	  <title>Topology Processing</title>
 	     <refentry id="AddEdge">
 			<refnamediv>
 				<refname>AddEdge</refname>
@@ -2394,7 +2394,19 @@ UPDATE boston.blockgroups SET new_geom = topo::geometry;
             
                 <para>Returns the GML representation of a topogeometry in version GML3 format. If no <varname>nsprefix_in</varname> is specified then <varname>gml</varname> is used. Pass in an empty string for nsprefix to get a non-qualified name space. The precision (default: 15) and options (default 1) parameters, if given, are passed untouched to the underlying call to ST_AsGML.</para>
 
-		<para>The <varname>visitedTable</varname> parameter, if given, is used for keeping track of the visited Node and Edge elements so to use cross-references (xlink:xref) rather than duplicating definitions. The table is expected to have (at least) two integer fields: 'element_type' and 'element_id'. The calling user must have both read and write privileges on the given table.</para>
+		<para>
+The <varname>visitedTable</varname> parameter, if given, is used for keeping track of the visited Node and Edge elements so to use cross-references (xlink:xref) rather than duplicating definitions. The table is expected to have (at least) two integer fields: 'element_type' and 'element_id'. The calling user must have both read and write privileges on the given table.
+For best performance, an index should be defined on
+<varname>element_type</varname> and <varname>element_id</varname>, 
+in that order. Such index would be created automatically by adding a unique
+constraint to the fields. Example:
+<programlisting>
+CREATE TABLE visited (
+  element_type integer, element_id integer,
+  unique(element_type, element_id)
+);
+</programlisting>
+		</para>
               
 		<para>The <varname>idprefix</varname> parameter, if given, will be prepended to Edge and Node tag identifiers.</para>
 			

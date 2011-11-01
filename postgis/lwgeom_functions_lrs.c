@@ -463,13 +463,13 @@ lwgeom_locate_between_m(LWGEOM *lwin, double m0, double m1)
 PG_FUNCTION_INFO_V1(LWGEOM_locate_between_m);
 Datum LWGEOM_locate_between_m(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *gin = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_LWGEOM *gout;
+	GSERIALIZED *gin = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *gout;
 	double start_measure = PG_GETARG_FLOAT8(1);
 	double end_measure = PG_GETARG_FLOAT8(2);
 	LWGEOM *lwin, *lwout;
-	int hasz = pglwgeom_has_z(gin);
-	int hasm = pglwgeom_has_m(gin);
+	int hasz = gserialized_has_z(gin);
+	int hasm = gserialized_has_m(gin);
 	int type;
 
 	if ( end_measure < start_measure )
@@ -491,7 +491,7 @@ Datum LWGEOM_locate_between_m(PG_FUNCTION_ARGS)
 	 * Raise an error if input is a polygon, a multipolygon
 	 * or a collection
 	 */
-	type = pglwgeom_get_type(gin);
+	type = gserialized_get_type(gin);
 
 	if ( type == POLYGONTYPE || type == MULTIPOLYGONTYPE || type == COLLECTIONTYPE )
 	{
@@ -499,7 +499,7 @@ Datum LWGEOM_locate_between_m(PG_FUNCTION_ARGS)
 		PG_RETURN_NULL();
 	}
 
-	lwin = pglwgeom_deserialize(gin);
+	lwin = lwgeom_from_gserialized(gin);
 
 	lwout = lwgeom_locate_between_m(lwin,
 	                                start_measure, end_measure);
@@ -509,10 +509,10 @@ Datum LWGEOM_locate_between_m(PG_FUNCTION_ARGS)
 	if ( lwout == NULL )
 	{
 		lwout = (LWGEOM *)lwcollection_construct_empty(COLLECTIONTYPE, 
-		            pglwgeom_get_srid(gin), hasz, hasm);
+		            gserialized_get_srid(gin), hasz, hasm);
 	}
 
-	gout = pglwgeom_serialize(lwout);
+	gout = geometry_serialize(lwout);
 	lwgeom_release(lwout);
 
 	PG_RETURN_POINTER(gout);
@@ -528,12 +528,12 @@ Datum LWGEOM_locate_between_m(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(ST_AddMeasure);
 Datum ST_AddMeasure(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *gin = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_LWGEOM *gout;
+	GSERIALIZED *gin = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *gout;
 	double start_measure = PG_GETARG_FLOAT8(1);
 	double end_measure = PG_GETARG_FLOAT8(2);
 	LWGEOM *lwin, *lwout;
-	int type = pglwgeom_get_type(gin);
+	int type = gserialized_get_type(gin);
 
 	/* Raise an error if input is not a linestring or multilinestring */
 	if ( type != LINETYPE && type != MULTILINETYPE )
@@ -542,7 +542,7 @@ Datum ST_AddMeasure(PG_FUNCTION_ARGS)
 		PG_RETURN_NULL();
 	}
 
-	lwin = pglwgeom_deserialize(gin);
+	lwin = lwgeom_from_gserialized(gin);
 	if ( type == LINETYPE )
 		lwout = (LWGEOM*)lwline_measured_from_lwline((LWLINE*)lwin, start_measure, end_measure);
 	else
@@ -553,7 +553,7 @@ Datum ST_AddMeasure(PG_FUNCTION_ARGS)
 	if ( lwout == NULL )
 		PG_RETURN_NULL();
 
-	gout = pglwgeom_serialize(lwout);
+	gout = geometry_serialize(lwout);
 	lwgeom_release(lwout);
 
 	PG_RETURN_POINTER(gout);

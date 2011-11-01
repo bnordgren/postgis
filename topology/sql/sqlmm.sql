@@ -3151,10 +3151,7 @@ BEGIN
     ORDER BY p.right_side DESC
   LOOP -- {
     RAISE DEBUG 'Adding % face', rec.side;
-    sql :=
-      'SELECT topology.AddFace(' || quote_literal(atopology)
-      || ', ' || quote_literal(rec.geom::text) || ', true)';
-    EXECUTE sql INTO newface;
+    SELECT topology.AddFace(atopology, rec.geom, true) INTO newface;
     newfaces := array_append(newfaces, newface);
   END LOOP; --}
 
@@ -3820,11 +3817,9 @@ BEGIN
 
     END IF; -- }
 
-    RAISE DEBUG 'Adding face %', ST_AsText(rec.geom);
-    sql :=
-      'SELECT topology.AddFace(' || quote_literal(atopology)
-      || ', ' || quote_literal(rec.geom::text) || ', true)';
-    EXECUTE sql INTO newface;
+    RAISE DEBUG 'Adding % face', ST_AsText(rec.geom);
+    SELECT topology.AddFace(atopology, rec.geom, true) INTO newface;
+    newfaces := array_append(newfaces, newface);
 
   END LOOP; --}
   RAISE DEBUG 'Added face: %', newface;
@@ -3984,7 +3979,7 @@ BEGIN
   SELECT ST_UnaryUnion(ST_Collect(geom)) FROM (
     SELECT geom FROM components
       WHERE ST_Dimension(geom) = 1
-    UNION 
+    UNION ALL
     SELECT ST_Boundary(geom) FROM components
       WHERE ST_Dimension(geom) = 2
   ) as linework INTO STRICT nodededges;
@@ -3993,6 +3988,8 @@ BEGIN
 
   --
   -- Linemerge the resulting edges, to reduce the working set
+  -- NOTE: this is more of a workaround for GEOS splitting overlapping
+  --       lines to each of the segments.
   --
   SELECT ST_LineMerge(nodededges) INTO STRICT nodededges;
 
@@ -4000,25 +3997,31 @@ BEGIN
 
 
   --
-  -- Collect input points 
+  -- Collect input points and input lines endpoints
   --
+  WITH components AS ( SELECT geom FROM ST_Dump(acollection) )
   SELECT ST_Union(geom) FROM (
-    SELECT geom FROM ST_Dump(acollection)
+    SELECT geom FROM components
       WHERE ST_Dimension(geom) = 0
+    UNION ALL
+    SELECT ST_Boundary(geom) FROM components
+      WHERE ST_Dimension(geom) = 1
   ) as nodes INTO STRICT points;
 
   RAISE DEBUG 'Collected % input points', ST_NumGeometries(points);
 
   --
   -- Further split edges by points
+  -- TODO: optimize this adding ST_Split support for multiline/multipoint
   --
   FOR rec IN SELECT geom FROM ST_Dump(points)
   LOOP
     -- Use the node to split edges
-    SELECT ST_Union(geom) -- TODO: ST_UnaryUnion ?
+    SELECT ST_Collect(geom) 
     FROM ST_Dump(ST_Split(nodededges, rec.geom))
     INTO STRICT nodededges;
   END LOOP;
+  SELECT ST_UnaryUnion(nodededges) INTO STRICT nodededges;
 
   RAISE DEBUG 'Noded edges became % after point-split',
     ST_NumGeometries(nodededges);

@@ -43,9 +43,9 @@ int point_in_ring_rtree(RTREE_NODE *root, POINT2D *point);
 PG_FUNCTION_INFO_V1(LWGEOM_simplify2d);
 Datum LWGEOM_simplify2d(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_LWGEOM *result;
-	LWGEOM *in = pglwgeom_deserialize(geom);
+	GSERIALIZED *geom = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *result;
+	LWGEOM *in = lwgeom_from_gserialized(geom);
 	LWGEOM *out;
 	double dist = PG_GETARG_FLOAT8(1);
 
@@ -55,7 +55,7 @@ Datum LWGEOM_simplify2d(PG_FUNCTION_ARGS)
 	/* COMPUTE_BBOX TAINTING */
 	if ( in->bbox ) lwgeom_add_bbox(out);
 
-	result = pglwgeom_serialize(out);
+	result = geometry_serialize(out);
 	lwgeom_free(out);
 	PG_FREE_IF_COPY(geom, 0);
 	PG_RETURN_POINTER(result);
@@ -80,7 +80,7 @@ Datum LWGEOM_line_interpolate_point(PG_FUNCTION_ARGS);
 PG_FUNCTION_INFO_V1(LWGEOM_line_interpolate_point);
 Datum LWGEOM_line_interpolate_point(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *geom = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
 	double distance = PG_GETARG_FLOAT8(1);
 	LWLINE *line;
 	LWPOINT *point;
@@ -95,13 +95,13 @@ Datum LWGEOM_line_interpolate_point(PG_FUNCTION_ARGS)
 		PG_RETURN_NULL();
 	}
 
-	if ( pglwgeom_get_type(geom) != LINETYPE )
+	if ( gserialized_get_type(geom) != LINETYPE )
 	{
 		elog(ERROR,"line_interpolate_point: 1st arg isnt a line");
 		PG_RETURN_NULL();
 	}
 
-	line = lwgeom_as_lwline(pglwgeom_deserialize(geom));
+	line = lwgeom_as_lwline(lwgeom_from_gserialized(geom));
 	ipa = line->points;
 
 	/* If distance is one of the two extremes, return the point on that
@@ -117,7 +117,7 @@ Datum LWGEOM_line_interpolate_point(PG_FUNCTION_ARGS)
 		opa = ptarray_construct_reference_data(FLAGS_GET_Z(line->flags), FLAGS_GET_M(line->flags), 1, (uint8_t*)&pt);
 		
 		point = lwpoint_construct(line->srid, NULL, opa);
-		PG_RETURN_POINTER(pglwgeom_serialize(lwpoint_as_lwgeom(point)));
+		PG_RETURN_POINTER(geometry_serialize(lwpoint_as_lwgeom(point)));
 	}
 
 	/* Interpolate a point on the line */
@@ -147,7 +147,7 @@ Datum LWGEOM_line_interpolate_point(PG_FUNCTION_ARGS)
 			interpolate_point4d(&p1, &p2, &pt, dseg);
 			opa = ptarray_construct_reference_data(FLAGS_GET_Z(line->flags), FLAGS_GET_M(line->flags), 1, (uint8_t*)&pt);
 			point = lwpoint_construct(line->srid, NULL, opa);
-			PG_RETURN_POINTER(pglwgeom_serialize(lwpoint_as_lwgeom(point)));
+			PG_RETURN_POINTER(geometry_serialize(lwpoint_as_lwgeom(point)));
 		}
 		tlength += slength;
 	}
@@ -157,7 +157,7 @@ Datum LWGEOM_line_interpolate_point(PG_FUNCTION_ARGS)
 	getPoint4d_p(ipa, ipa->npoints-1, &pt);
 	opa = ptarray_construct_reference_data(FLAGS_GET_Z(line->flags), FLAGS_GET_M(line->flags), 1, (uint8_t*)&pt);
 	point = lwpoint_construct(line->srid, NULL, opa);
-	PG_RETURN_POINTER(pglwgeom_serialize(lwpoint_as_lwgeom(point)));
+	PG_RETURN_POINTER(geometry_serialize(lwpoint_as_lwgeom(point)));
 }
 /***********************************************************************
  * --jsunday@rochgrp.com;
@@ -504,16 +504,16 @@ PG_FUNCTION_INFO_V1(LWGEOM_snaptogrid);
 Datum LWGEOM_snaptogrid(PG_FUNCTION_ARGS)
 {
 	Datum datum;
-	PG_LWGEOM *in_geom;
+	GSERIALIZED *in_geom;
 	LWGEOM *in_lwgeom;
-	PG_LWGEOM *out_geom = NULL;
+	GSERIALIZED *out_geom = NULL;
 	LWGEOM *out_lwgeom;
 	gridspec grid;
 	/* BOX3D box3d; */
 
 	if ( PG_ARGISNULL(0) ) PG_RETURN_NULL();
 	datum = PG_GETARG_DATUM(0);
-	in_geom = (PG_LWGEOM *)PG_DETOAST_DATUM(datum);
+	in_geom = (GSERIALIZED *)PG_DETOAST_DATUM(datum);
 
 	if ( PG_ARGISNULL(1) ) PG_RETURN_NULL();
 	grid.ipx = PG_GETARG_FLOAT8(1);
@@ -536,7 +536,7 @@ Datum LWGEOM_snaptogrid(PG_FUNCTION_ARGS)
 		PG_RETURN_POINTER(in_geom);
 	}
 
-	in_lwgeom = pglwgeom_deserialize(in_geom);
+	in_lwgeom = lwgeom_from_gserialized(in_geom);
 
 	POSTGIS_DEBUGF(3, "SnapToGrid got a %s", lwtype_name(in_lwgeom->type));
 
@@ -546,37 +546,10 @@ Datum LWGEOM_snaptogrid(PG_FUNCTION_ARGS)
 	/* COMPUTE_BBOX TAINTING */
 	if ( in_lwgeom->bbox ) lwgeom_add_bbox(out_lwgeom);
 
-#if 0
-	/*
-	 * COMPUTE_BBOX WHEN SIMPLE
-	 *
-	 * WARNING: this is not SIMPLE, as snapping
-	 * an existing bbox to a grid does not
-	 * give the same result as computing a
-	 * new bounding box on the snapped coordinates.
-	 *
-	 * This bug has been fixed in postgis-1.1.2
-	 */
-	if ( in_lwgeom->bbox )
-	{
-		box2df_to_box3d_p(in_lwgeom->bbox, &box3d);
-
-		box3d.xmin = rint((box3d.xmin - grid.ipx)/grid.xsize)
-		             * grid.xsize + grid.ipx;
-		box3d.xmax = rint((box3d.xmax - grid.ipx)/grid.xsize)
-		             * grid.xsize + grid.ipx;
-		box3d.ymin = rint((box3d.ymin - grid.ipy)/grid.ysize)
-		             * grid.ysize + grid.ipy;
-		box3d.ymax = rint((box3d.ymax - grid.ipy)/grid.ysize)
-		             * grid.ysize + grid.ipy;
-
-		out_lwgeom->bbox = box3d_to_box2df(&box3d);
-	}
-#endif /* 0 */
 
 	POSTGIS_DEBUGF(3, "SnapToGrid made a %s", lwtype_name(out_lwgeom->type));
 
-	out_geom = pglwgeom_serialize(out_lwgeom);
+	out_geom = geometry_serialize(out_lwgeom);
 
 	PG_RETURN_POINTER(out_geom);
 }
@@ -585,10 +558,10 @@ PG_FUNCTION_INFO_V1(LWGEOM_snaptogrid_pointoff);
 Datum LWGEOM_snaptogrid_pointoff(PG_FUNCTION_ARGS)
 {
 	Datum datum;
-	PG_LWGEOM *in_geom, *in_point;
+	GSERIALIZED *in_geom, *in_point;
 	LWGEOM *in_lwgeom;
 	LWPOINT *in_lwpoint;
-	PG_LWGEOM *out_geom = NULL;
+	GSERIALIZED *out_geom = NULL;
 	LWGEOM *out_lwgeom;
 	gridspec grid;
 	/* BOX3D box3d; */
@@ -596,12 +569,12 @@ Datum LWGEOM_snaptogrid_pointoff(PG_FUNCTION_ARGS)
 
 	if ( PG_ARGISNULL(0) ) PG_RETURN_NULL();
 	datum = PG_GETARG_DATUM(0);
-	in_geom = (PG_LWGEOM *)PG_DETOAST_DATUM(datum);
+	in_geom = (GSERIALIZED *)PG_DETOAST_DATUM(datum);
 
 	if ( PG_ARGISNULL(1) ) PG_RETURN_NULL();
 	datum = PG_GETARG_DATUM(1);
-	in_point = (PG_LWGEOM *)PG_DETOAST_DATUM(datum);
-	in_lwpoint = lwgeom_as_lwpoint(pglwgeom_deserialize(in_point));
+	in_point = (GSERIALIZED *)PG_DETOAST_DATUM(datum);
+	in_lwpoint = lwgeom_as_lwpoint(lwgeom_from_gserialized(in_point));
 	if ( in_lwpoint == NULL )
 	{
 		lwerror("Offset geometry must be a point");
@@ -638,7 +611,7 @@ Datum LWGEOM_snaptogrid_pointoff(PG_FUNCTION_ARGS)
 		PG_RETURN_POINTER(in_geom);
 	}
 
-	in_lwgeom = pglwgeom_deserialize(in_geom);
+	in_lwgeom = lwgeom_from_gserialized(in_geom);
 
 	POSTGIS_DEBUGF(3, "SnapToGrid got a %s", lwtype_name(in_lwgeom->type));
 
@@ -648,37 +621,9 @@ Datum LWGEOM_snaptogrid_pointoff(PG_FUNCTION_ARGS)
 	/* COMPUTE_BBOX TAINTING */
 	if ( in_lwgeom->bbox ) lwgeom_add_bbox(out_lwgeom);
 
-#if 0
-	/*
-	 * COMPUTE_BBOX WHEN SIMPLE
-	 *
-	 * WARNING: this is not SIMPLE, as snapping
-	 * an existing bbox to a grid does not
-	 * give the same result as computing a
-	 * new bounding box on the snapped coordinates.
-	 *
-	 * This bug has been fixed in postgis-1.1.2
-	 */
-	if ( in_lwgeom->bbox )
-	{
-		box2df_to_box3d_p(in_lwgeom->bbox, &box3d);
-
-		box3d.xmin = rint((box3d.xmin - grid.ipx)/grid.xsize)
-		             * grid.xsize + grid.ipx;
-		box3d.xmax = rint((box3d.xmax - grid.ipx)/grid.xsize)
-		             * grid.xsize + grid.ipx;
-		box3d.ymin = rint((box3d.ymin - grid.ipy)/grid.ysize)
-		             * grid.ysize + grid.ipy;
-		box3d.ymax = rint((box3d.ymax - grid.ipy)/grid.ysize)
-		             * grid.ysize + grid.ipy;
-
-		out_lwgeom->bbox = box3d_to_box2df(&box3d);
-	}
-#endif /* 0 */
-
 	POSTGIS_DEBUGF(3, "SnapToGrid made a %s", lwtype_name(out_lwgeom->type));
 
-	out_geom = pglwgeom_serialize(out_lwgeom);
+	out_geom = geometry_serialize(out_lwgeom);
 
 	PG_RETURN_POINTER(out_geom);
 }
@@ -696,13 +641,13 @@ Datum ST_LineCrossingDirection(PG_FUNCTION_ARGS)
 	int type1, type2, rv;
 	LWLINE *l1 = NULL;
 	LWLINE *l2 = NULL;
-	PG_LWGEOM *geom1 = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_LWGEOM *geom2 = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
+	GSERIALIZED *geom1 = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *geom2 = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
 
-	error_if_srid_mismatch(pglwgeom_get_srid(geom1), pglwgeom_get_srid(geom2));
+	error_if_srid_mismatch(gserialized_get_srid(geom1), gserialized_get_srid(geom2));
 
-	type1 = pglwgeom_get_type(geom1);
-	type2 = pglwgeom_get_type(geom2);
+	type1 = gserialized_get_type(geom1);
+	type2 = gserialized_get_type(geom2);
 
 	if ( type1 != LINETYPE || type2 != LINETYPE )
 	{
@@ -710,8 +655,8 @@ Datum ST_LineCrossingDirection(PG_FUNCTION_ARGS)
 		PG_RETURN_NULL();
 	}
 
-	l1 = lwgeom_as_lwline(pglwgeom_deserialize(geom1));
-	l2 = lwgeom_as_lwline(pglwgeom_deserialize(geom2));
+	l1 = lwgeom_as_lwline(lwgeom_from_gserialized(geom1));
+	l2 = lwgeom_as_lwline(lwgeom_from_gserialized(geom2));
 
 	rv = lwline_crossing_direction(l1, l2);
 
@@ -725,12 +670,12 @@ Datum ST_LineCrossingDirection(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(ST_LocateBetweenElevations);
 Datum ST_LocateBetweenElevations(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom_in = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *geom_in = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
 	double from = PG_GETARG_FLOAT8(1);
 	double to = PG_GETARG_FLOAT8(2);
 	LWCOLLECTION *geom_out = NULL;
 	LWGEOM *line_in = NULL;
-	char geomtype = pglwgeom_get_type(geom_in);
+	char geomtype = gserialized_get_type(geom_in);
 	static int ordinate = 2; /* Z */
 
 	if ( ! ( geomtype == LINETYPE || geomtype == MULTILINETYPE ) )
@@ -739,7 +684,7 @@ Datum ST_LocateBetweenElevations(PG_FUNCTION_ARGS)
 		PG_RETURN_NULL();
 	}
 
-	line_in = pglwgeom_deserialize(geom_in);
+	line_in = lwgeom_from_gserialized(geom_in);
 
 	if ( ! FLAGS_GET_Z(line_in->flags) )
 	{
@@ -764,7 +709,7 @@ Datum ST_LocateBetweenElevations(PG_FUNCTION_ARGS)
 	}
 
 	PG_FREE_IF_COPY(geom_in, 0);
-	PG_RETURN_POINTER(pglwgeom_serialize((LWGEOM*)geom_out));
+	PG_RETURN_POINTER(geometry_serialize((LWGEOM*)geom_out));
 }
 
 /***********************************************************************
@@ -776,13 +721,13 @@ Datum LWGEOM_line_substring(PG_FUNCTION_ARGS);
 PG_FUNCTION_INFO_V1(LWGEOM_line_substring);
 Datum LWGEOM_line_substring(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *geom = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
 	double from = PG_GETARG_FLOAT8(1);
 	double to = PG_GETARG_FLOAT8(2);
 	LWGEOM *olwgeom;
 	POINTARRAY *ipa, *opa;
-	PG_LWGEOM *ret;
-	int type = pglwgeom_get_type(geom);
+	GSERIALIZED *ret;
+	int type = gserialized_get_type(geom);
 
 	if ( from < 0 || from > 1 )
 	{
@@ -804,7 +749,7 @@ Datum LWGEOM_line_substring(PG_FUNCTION_ARGS)
 
 	if ( type == LINETYPE )
 	{
-		LWLINE *iline = lwgeom_as_lwline(pglwgeom_deserialize(geom));
+		LWLINE *iline = lwgeom_as_lwline(lwgeom_from_gserialized(geom));
 
 		if ( lwgeom_is_empty((LWGEOM*)iline) )
 		{
@@ -832,7 +777,7 @@ Datum LWGEOM_line_substring(PG_FUNCTION_ARGS)
 		LWGEOM **geoms = NULL;
 		double length = 0.0, sublength = 0.0, minprop = 0.0, maxprop = 0.0;
 
-		iline = lwgeom_as_lwmline(pglwgeom_deserialize(geom));
+		iline = lwgeom_as_lwmline(lwgeom_from_gserialized(geom));
 
 		if ( lwgeom_is_empty((LWGEOM*)iline) )
 		{
@@ -912,7 +857,7 @@ Datum LWGEOM_line_substring(PG_FUNCTION_ARGS)
 		PG_RETURN_NULL();
 	}
 
-	ret = pglwgeom_serialize(olwgeom);
+	ret = geometry_serialize(olwgeom);
 	lwgeom_free(olwgeom);
 	PG_FREE_IF_COPY(geom, 0);
 	PG_RETURN_POINTER(ret);
@@ -924,32 +869,32 @@ Datum LWGEOM_line_locate_point(PG_FUNCTION_ARGS);
 PG_FUNCTION_INFO_V1(LWGEOM_line_locate_point);
 Datum LWGEOM_line_locate_point(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom1 = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_LWGEOM *geom2 = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
+	GSERIALIZED *geom1 = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *geom2 = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
 	LWLINE *lwline;
 	LWPOINT *lwpoint;
 	POINTARRAY *pa;
 	POINT2D p;
 	double ret;
 
-	if ( pglwgeom_get_type(geom1) != LINETYPE )
+	if ( gserialized_get_type(geom1) != LINETYPE )
 	{
 		elog(ERROR,"line_locate_point: 1st arg isnt a line");
 		PG_RETURN_NULL();
 	}
-	if ( pglwgeom_get_type(geom2) != POINTTYPE )
+	if ( gserialized_get_type(geom2) != POINTTYPE )
 	{
 		elog(ERROR,"line_locate_point: 2st arg isnt a point");
 		PG_RETURN_NULL();
 	}
-	if ( pglwgeom_get_srid(geom1) != pglwgeom_get_srid(geom2) )
+	if ( gserialized_get_srid(geom1) != gserialized_get_srid(geom2) )
 	{
 		elog(ERROR, "Operation on two geometries with different SRIDs");
 		PG_RETURN_NULL();
 	}
 
-	lwline = lwgeom_as_lwline(pglwgeom_deserialize(geom1));
-	lwpoint = lwgeom_as_lwpoint(pglwgeom_deserialize(geom2));
+	lwline = lwgeom_as_lwline(lwgeom_from_gserialized(geom1));
+	lwpoint = lwgeom_as_lwpoint(lwgeom_from_gserialized(geom2));
 
 	pa = lwline->points;
 	lwpoint_getPoint2d_p(lwpoint, &p);

@@ -82,7 +82,7 @@ static void gml_lwerror(char *msg, int error_code)
 PG_FUNCTION_INFO_V1(geom_from_gml);
 Datum geom_from_gml(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom;
+	GSERIALIZED *geom;
 	xmlDocPtr xmldoc;
 	text *xml_input;
 	LWGEOM *lwgeom;
@@ -135,7 +135,7 @@ Datum geom_from_gml(PG_FUNCTION_ARGS)
 		lwgeom = tmp;
 	}
 
-	geom = pglwgeom_serialize(lwgeom);
+	geom = geometry_serialize(lwgeom);
 	lwgeom_free(lwgeom);
 
 	PG_RETURN_POINTER(geom);

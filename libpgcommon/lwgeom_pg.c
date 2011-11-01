@@ -5,7 +5,7 @@
  * http://postgis.refractions.net
  *
  * Copyright (C) 2011      Sandro Santilli <strk@keybit.net>
- * Copyright (C) 2009-2010 Paul Ramsey <pramsey@cleverelephant.ca>
+ * Copyright (C) 2009-2011 Paul Ramsey <pramsey@cleverelephant.ca>
  * Copyright (C) 2008      Mark Cave-Ayland <mark.cave-ayland@siriusit.co.uk>
  * Copyright (C) 2004-2007 Refractions Research Inc.
  *
@@ -192,107 +192,40 @@ lwgeom_init_allocators(void)
 	lwnotice_var = pg_notice;
 }
 
-PG_LWGEOM *
-pglwgeom_serialize(LWGEOM *in)
-{
-	size_t gser_size;
-	GSERIALIZED *gser;
-	gser = gserialized_from_lwgeom(in, 0, &gser_size);
-	SET_VARSIZE(gser, gser_size);
-	return gser;
-}
+/**
+* Utility method to call the serialization and then set the
+* PgSQL varsize header appropriately with the serialized size.
+*/
 
-LWGEOM *
-pglwgeom_deserialize(PG_LWGEOM *in)
+/**
+* Utility method to call the serialization and then set the
+* PgSQL varsize header appropriately with the serialized size.
+*/
+GSERIALIZED* geography_serialize(LWGEOM *lwgeom)
 {
-	return lwgeom_from_gserialized(in);
-}
+	static int is_geodetic = 1;
+	size_t ret_size = 0;
+	GSERIALIZED *g = NULL;
 
-
-/*
- * Set the SRID of a PG_LWGEOM
- * Returns a newly allocated PG_LWGEOM object.
- * Allocation will be done using the lwalloc.
- */
-PG_LWGEOM *
-pglwgeom_set_srid(PG_LWGEOM *lwgeom, int32 new_srid)
-{
-	gserialized_set_srid(lwgeom, new_srid);
-	return lwgeom;
-}
-
-/*
- * get the SRID from the LWGEOM
- * none present => -1
- */
-int
-pglwgeom_get_srid(PG_LWGEOM *lwgeom)
-{
-	return gserialized_get_srid(lwgeom);
-}
-
-int
-pglwgeom_get_type(const PG_LWGEOM *lwgeom)
-{
-	return gserialized_get_type(lwgeom);
-}
-
-int
-pglwgeom_get_zm(const PG_LWGEOM *lwgeom)
-{
-	return 2 * FLAGS_GET_Z(lwgeom->flags) + FLAGS_GET_M(lwgeom->flags);
-}
-
-bool
-pglwgeom_has_bbox(const PG_LWGEOM *lwgeom)
-{
-	return FLAGS_GET_BBOX(lwgeom->flags);
-}
-
-bool
-pglwgeom_has_z(const PG_LWGEOM *lwgeom)
-{
-	return FLAGS_GET_Z(lwgeom->flags);
-}
-
-bool
-pglwgeom_has_m(const PG_LWGEOM *lwgeom)
-{
-	return FLAGS_GET_M(lwgeom->flags);
-}
-
-PG_LWGEOM* pglwgeom_drop_bbox(PG_LWGEOM *geom)
-{
-	return gserialized_drop_gidx(geom);
-}
-
-size_t pglwgeom_size(const PG_LWGEOM *geom)
-{
-	return VARSIZE(geom) - VARHDRSZ;
-};
-
-int pglwgeom_ndims(const PG_LWGEOM *geom)
-{
-	return FLAGS_NDIMS(geom->flags);
-}
-
-int pglwgeom_getbox2d_p(const PG_LWGEOM *geom, BOX2DFLOAT4 *box)
-{
-	LWGEOM *lwgeom;
-	int ret = gserialized_get_gbox_p(geom, box);
-	if ( LW_FAILURE == ret ) {
-		/* See http://trac.osgeo.org/postgis/ticket/1023 */
-		lwgeom = lwgeom_from_gserialized(geom);
-		ret = lwgeom_calculate_gbox(lwgeom, box);
-                lwgeom_free(lwgeom);
-	}
-	return ret;
-}
-
-int
-pglwgeom_is_empty(const PG_LWGEOM *geom)
-{
-	return gserialized_is_empty(geom);
+	g = gserialized_from_lwgeom(lwgeom, is_geodetic, &ret_size);
+	if ( ! g ) lwerror("Unable to serialize lwgeom.");
+	SET_VARSIZE(g, ret_size);
+	return g;
 }
 
 
+/**
+* Utility method to call the serialization and then set the
+* PgSQL varsize header appropriately with the serialized size.
+*/
+GSERIALIZED* geometry_serialize(LWGEOM *lwgeom)
+{
+	static int is_geodetic = 0;
+	size_t ret_size = 0;
+	GSERIALIZED *g = NULL;
+
+	g = gserialized_from_lwgeom(lwgeom, is_geodetic, &ret_size);
+	if ( ! g ) lwerror("Unable to serialize lwgeom.");
+	SET_VARSIZE(g, ret_size);
+	return g;
+}
