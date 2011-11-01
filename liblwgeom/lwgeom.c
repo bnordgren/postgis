@@ -77,45 +77,6 @@ lwgeom_reverse(LWGEOM *lwgeom)
 	}
 }
 
-BOX3D *lwgeom_compute_box3d(const LWGEOM *lwgeom)
-{
-    /* Null can't have a box */
-	if ( ! lwgeom ) return NULL;
-
-    /* Empty things can't have a box */
-    if ( lwgeom_is_empty(lwgeom) )
-        return NULL;
-
-	switch (lwgeom->type)
-	{
-	case POINTTYPE:
-		return lwpoint_compute_box3d((LWPOINT *)lwgeom);
-	case LINETYPE:
-		return lwline_compute_box3d((LWLINE *)lwgeom);
-	case CIRCSTRINGTYPE:
-		return lwcircstring_compute_box3d((LWCIRCSTRING *)lwgeom);
-	case POLYGONTYPE:
-		return lwpoly_compute_box3d((LWPOLY *)lwgeom);
-	case TRIANGLETYPE:
-		return lwtriangle_compute_box3d((LWTRIANGLE *)lwgeom);
-	case COMPOUNDTYPE:
-	case CURVEPOLYTYPE:
-	case MULTIPOINTTYPE:
-	case MULTILINETYPE:
-	case MULTICURVETYPE:
-	case MULTIPOLYGONTYPE:
-	case MULTISURFACETYPE:
-	case POLYHEDRALSURFACETYPE:
-	case TINTYPE:
-	case COLLECTIONTYPE:
-		return lwcollection_compute_box3d((LWCOLLECTION *)lwgeom);
-	}
-	/* Never get here, please. */
-    lwerror("Unhandled type in lwgeom_compute_box3d: %d", lwgeom->type);
-	return NULL;
-}
-
-
 LWPOINT *
 lwgeom_as_lwpoint(const LWGEOM *lwgeom)
 {
@@ -696,6 +657,14 @@ lwgeom_has_m(const LWGEOM *geom)
 	return FLAGS_GET_M(geom->flags);
 }
 
+int 
+lwgeom_ndims(const LWGEOM *geom)
+{
+	if ( ! geom ) return 0;
+	return FLAGS_NDIMS(geom->flags);
+}
+
+
 void
 lwgeom_set_geodetic(LWGEOM *geom, int value)
 {
@@ -836,7 +805,7 @@ lwgeom_is_collection(const LWGEOM *geom)
 
 /** Return TRUE if the geometry may contain sub-geometries, i.e. it is a MULTI* or COMPOUNDCURVE */
 int
-lwtype_is_collection(int type)
+lwtype_is_collection(uint8_t type)
 {
 
 	switch (type)
@@ -862,7 +831,7 @@ lwtype_is_collection(int type)
 * Given an lwtype number, what homogeneous collection can hold it?
 */
 int 
-lwtype_get_collectiontype(int type)
+lwtype_get_collectiontype(uint8_t type)
 {
 	switch (type)
 	{
