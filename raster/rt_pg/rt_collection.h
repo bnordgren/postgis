@@ -14,7 +14,7 @@ SPATIAL_COLLECTION *
 sc_create_pgraster_wrapper(rt_pgraster *pg_raster, int *bands, int num_bands) ;
 
 SPATIAL_COLLECTION *
-sc_create_pglwgeom_wrapper(GSERIALIZED *pg_geom, double inside, double outside) ;
+sc_create_gserialized_wrapper(GSERIALIZED *pg_geom, double inside, double outside) ;
 
 int
 getarg_bandlist(FunctionCallInfo fcinfo, int argnum,

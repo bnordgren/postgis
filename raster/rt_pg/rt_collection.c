@@ -9,7 +9,7 @@
 #include "utils/array.h"
 
 /**
- * \addtogroup geo_wrap_collection pglwgeom wrapper
+ * \addtogroup geo_wrap_collection gserialized wrapper
  * @{
  */
 
@@ -23,7 +23,7 @@
  * destroyed with @sc_destroy_geometry_wrapper.
  */
 SPATIAL_COLLECTION *
-sc_create_pglwgeom_wrapper(GSERIALIZED *pg_geom, double inside, double outside)
+sc_create_gserialized_wrapper(GSERIALIZED *pg_geom, double inside, double outside)
 {
 	LWGEOM *geom ;
 
