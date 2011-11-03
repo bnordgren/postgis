@@ -61,12 +61,6 @@ CREATE OR REPLACE FUNCTION geometry_out(geometry)
 	AS 'MODULE_PATHNAME','LWGEOM_out'
 	LANGUAGE 'C' IMMUTABLE STRICT;
 
-CREATE OR REPLACE FUNCTION geometry_out(geometry)
-	RETURNS cstring
-	AS 'MODULE_PATHNAME','LWGEOM_out'
-	LANGUAGE 'C' IMMUTABLE STRICT;
-
-#ifdef GSERIALIZED_ON
 -- Availability: 2.0.0
 CREATE OR REPLACE FUNCTION geometry_typmod_in(cstring[])
 	RETURNS integer
@@ -78,15 +72,10 @@ CREATE OR REPLACE FUNCTION geometry_typmod_out(integer)
 	RETURNS cstring
 	AS 'MODULE_PATHNAME','postgis_typmod_out'
 	LANGUAGE 'C' IMMUTABLE STRICT; 
-#endif
 
 CREATE OR REPLACE FUNCTION geometry_analyze(internal)
 	RETURNS bool
-#ifdef GSERIALIZED_ON
 	AS 'MODULE_PATHNAME', 'geometry_analyze_2d'
-#else
-	AS 'MODULE_PATHNAME', 'LWGEOM_analyze'
-#endif
 	LANGUAGE 'C' VOLATILE STRICT;
 
 CREATE OR REPLACE FUNCTION geometry_recv(internal)
@@ -105,12 +94,10 @@ CREATE TYPE geometry (
 	output = geometry_out,
 	send = geometry_send,
 	receive = geometry_recv,
-#ifdef GSERIALIZED_ON
 	typmod_in = geometry_typmod_in,
 	typmod_out = geometry_typmod_out,
 	delimiter = ':',
     alignment = double,
-#endif
 	analyze = geometry_analyze,
 	storage = main
 );
@@ -308,11 +295,7 @@ CREATE OR REPLACE FUNCTION box2d_out(box2d)
 	LANGUAGE 'C' IMMUTABLE STRICT;
 
 CREATE TYPE box2d (
-#ifdef GSERIALIZED_ON
 	internallength = 65,
-#else
-	internallength = 16,
-#endif
 	input = box2d_in,
 	output = box2d_out,
 	storage = plain
@@ -353,11 +336,7 @@ CREATE OR REPLACE FUNCTION ST_Combine_BBox(box2d,geometry)
 -----------------------------------------------------------------------
 -- Availability: 1.2.2
 CREATE OR REPLACE FUNCTION ST_estimated_extent(text,text,text) RETURNS box2d AS
-#ifdef GSERIALIZED_ON
 	'MODULE_PATHNAME', 'geometry_estimated_extent'
-#else
-	'MODULE_PATHNAME', 'LWGEOM_estimated_extent'
-#endif
 	LANGUAGE 'C' IMMUTABLE STRICT SECURITY DEFINER;
 
 -----------------------------------------------------------------------
@@ -365,11 +344,7 @@ CREATE OR REPLACE FUNCTION ST_estimated_extent(text,text,text) RETURNS box2d AS
 -----------------------------------------------------------------------
 -- Availability: 1.2.2
 CREATE OR REPLACE FUNCTION ST_estimated_extent(text,text) RETURNS box2d AS
-#ifdef GSERIALIZED_ON
 	'MODULE_PATHNAME', 'geometry_estimated_extent'
-#else
-	'MODULE_PATHNAME', 'LWGEOM_estimated_extent'
-#endif
 	LANGUAGE 'C' IMMUTABLE STRICT SECURITY DEFINER;
 
 -----------------------------------------------------------------------
@@ -490,7 +465,6 @@ CREATE OPERATOR CLASS btree_geometry_ops
 
 
 
-#ifdef GSERIALIZED_ON
 -----------------------------------------------------------------------------
 -- GiST 2D GEOMETRY-over-GSERIALIZED
 -----------------------------------------------------------------------------
@@ -518,6 +492,12 @@ CREATE TYPE box2df (
 	storage = plain,
 	alignment = double
 );
+
+-- Availability: 2.0.0
+CREATE OR REPLACE FUNCTION geometry_gist_distance_2d(internal,geometry,int4) 
+	RETURNS float8 
+	AS 'MODULE_PATHNAME' ,'gserialized_gist_distance_2d'
+	LANGUAGE 'C';
 
 -- Availability: 2.0.0
 CREATE OR REPLACE FUNCTION geometry_gist_consistent_2d(internal,geometry,int4) 
@@ -600,6 +580,30 @@ CREATE OPERATOR ~= (
 	LEFTARG = geometry, RIGHTARG = geometry, PROCEDURE = geometry_same,
 	RESTRICT = contsel, JOIN = contjoinsel
 );
+
+-- Availability: 2.0.0
+CREATE OR REPLACE FUNCTION geometry_distance_centroid(geometry, geometry) 
+	RETURNS float8 
+	AS 'MODULE_PATHNAME' ,'gserialized_distance_centroid_2d'
+	LANGUAGE 'C' IMMUTABLE STRICT;
+
+-- Availability: 2.0.0
+CREATE OR REPLACE FUNCTION geometry_distance_box(geometry, geometry) 
+	RETURNS float8 
+	AS 'MODULE_PATHNAME' ,'gserialized_distance_box_2d'
+	LANGUAGE 'C' IMMUTABLE STRICT;
+
+#if POSTGIS_PGSQL_VERSION >= 91
+CREATE OPERATOR <-> (
+    LEFTARG = geometry, RIGHTARG = geometry, PROCEDURE = geometry_distance_centroid,
+    COMMUTATOR = '<->'
+);
+
+CREATE OPERATOR <#> (
+    LEFTARG = geometry, RIGHTARG = geometry, PROCEDURE = geometry_distance_box,
+    COMMUTATOR = '<#>'
+);
+#endif
 
 -- Availability: 2.0.0
 CREATE OR REPLACE FUNCTION geometry_contains(geometry, geometry)
@@ -737,6 +741,11 @@ CREATE OPERATOR CLASS gist_geometry_ops_2d
 	OPERATOR        10       <<| ,
 	OPERATOR        11       |>> ,
 	OPERATOR        12       |&> ,
+#if POSTGIS_PGSQL_VERSION >= 91
+	OPERATOR        13       <-> FOR ORDER BY pg_catalog.float_ops,
+	OPERATOR        14       <#> FOR ORDER BY pg_catalog.float_ops,
+	FUNCTION        8        geometry_gist_distance_2d (internal, geometry, int4),
+#endif
 	FUNCTION        1        geometry_gist_consistent_2d (internal, geometry, int4),
 	FUNCTION        2        geometry_gist_union_2d (bytea, internal),
 	FUNCTION        3        geometry_gist_compress_2d (internal),
@@ -744,228 +753,7 @@ CREATE OPERATOR CLASS gist_geometry_ops_2d
 	FUNCTION        5        geometry_gist_penalty_2d (internal, internal, internal),
 	FUNCTION        6        geometry_gist_picksplit_2d (internal, internal),
 	FUNCTION        7        geometry_gist_same_2d (geometry, geometry, internal);
-	
-#else
 
--------------------------------------------------------------------
--- Original geometry GiST indexes
--------------------------------------------------------------------
--- Deprecation in 1.5.0 -- is this deprecated? 2011-01-05 robe
-CREATE OR REPLACE FUNCTION geometry_same(geometry, geometry)
-	RETURNS bool
-	AS 'MODULE_PATHNAME', 'LWGEOM_samebox'
-	LANGUAGE 'C' IMMUTABLE STRICT;
-
-CREATE OR REPLACE FUNCTION geometry_gist_sel (internal, oid, internal, int4)
-	RETURNS float8
-	AS 'MODULE_PATHNAME', 'LWGEOM_gist_sel'
-	LANGUAGE 'C';
-
-CREATE OR REPLACE FUNCTION geometry_gist_joinsel(internal, oid, internal, smallint)
-	RETURNS float8
-	AS 'MODULE_PATHNAME', 'LWGEOM_gist_joinsel'
-	LANGUAGE 'C';
-
-CREATE OR REPLACE FUNCTION geometry_overleft(geometry, geometry)
-	RETURNS bool
-	AS 'MODULE_PATHNAME', 'LWGEOM_overleft'
-	LANGUAGE 'C' IMMUTABLE STRICT;
-
-CREATE OR REPLACE FUNCTION geometry_overright(geometry, geometry)
-	RETURNS bool
-	AS 'MODULE_PATHNAME', 'LWGEOM_overright'
-	LANGUAGE 'C' IMMUTABLE STRICT;
-
-CREATE OR REPLACE FUNCTION geometry_overabove(geometry, geometry)
-	RETURNS bool
-	AS 'MODULE_PATHNAME', 'LWGEOM_overabove'
-	LANGUAGE 'C' IMMUTABLE STRICT;
-
-CREATE OR REPLACE FUNCTION geometry_overbelow(geometry, geometry)
-	RETURNS bool
-	AS 'MODULE_PATHNAME', 'LWGEOM_overbelow'
-	LANGUAGE 'C' IMMUTABLE STRICT;
-
-CREATE OR REPLACE FUNCTION geometry_left(geometry, geometry)
-	RETURNS bool
-	AS 'MODULE_PATHNAME', 'LWGEOM_left'
-	LANGUAGE 'C' IMMUTABLE STRICT;
-
-CREATE OR REPLACE FUNCTION geometry_right(geometry, geometry)
-	RETURNS bool
-	AS 'MODULE_PATHNAME', 'LWGEOM_right'
-	LANGUAGE 'C' IMMUTABLE STRICT;
-
-CREATE OR REPLACE FUNCTION geometry_above(geometry, geometry)
-	RETURNS bool
-	AS 'MODULE_PATHNAME', 'LWGEOM_above'
-	LANGUAGE 'C' IMMUTABLE STRICT;
-
-CREATE OR REPLACE FUNCTION geometry_below(geometry, geometry)
-	RETURNS bool
-	AS 'MODULE_PATHNAME', 'LWGEOM_below'
-	LANGUAGE 'C' IMMUTABLE STRICT;
-
-CREATE OR REPLACE FUNCTION geometry_contain(geometry, geometry)
-	RETURNS bool
-	AS 'MODULE_PATHNAME', 'LWGEOM_contain'
-	LANGUAGE 'C' IMMUTABLE STRICT;
-
-CREATE OR REPLACE FUNCTION geometry_contained(geometry, geometry)
-	RETURNS bool
-	AS 'MODULE_PATHNAME', 'LWGEOM_contained'
-	LANGUAGE 'C' IMMUTABLE STRICT;
-
-CREATE OR REPLACE FUNCTION geometry_overlap(geometry, geometry)
-	RETURNS bool
-	AS 'MODULE_PATHNAME', 'LWGEOM_overlap'
-	LANGUAGE 'C' IMMUTABLE STRICT;
-
-CREATE OR REPLACE FUNCTION geometry_samebox(geometry, geometry)
-	RETURNS bool
-	AS 'MODULE_PATHNAME', 'LWGEOM_samebox'
-	LANGUAGE 'C' IMMUTABLE STRICT;
-
-CREATE OPERATOR << (
-	LEFTARG = geometry, RIGHTARG = geometry, PROCEDURE = geometry_left,
-	COMMUTATOR = '>>',
-	RESTRICT = positionsel, JOIN = positionjoinsel
-);
-
-CREATE OPERATOR &< (
-	LEFTARG = geometry, RIGHTARG = geometry, PROCEDURE = geometry_overleft,
-	COMMUTATOR = '&>',
-	RESTRICT = positionsel, JOIN = positionjoinsel
-);
-
-CREATE OPERATOR <<| (
-	LEFTARG = geometry, RIGHTARG = geometry, PROCEDURE = geometry_below,
-	COMMUTATOR = '|>>',
-	RESTRICT = positionsel, JOIN = positionjoinsel
-);
-
-CREATE OPERATOR &<| (
-	LEFTARG = geometry, RIGHTARG = geometry, PROCEDURE = geometry_overbelow,
-	COMMUTATOR = '|&>',
-	RESTRICT = positionsel, JOIN = positionjoinsel
-);
-
-CREATE OPERATOR && (
-	LEFTARG = geometry, RIGHTARG = geometry, PROCEDURE = geometry_overlap,
-	COMMUTATOR = '&&',
-	RESTRICT = geometry_gist_sel, JOIN = geometry_gist_joinsel
-);
-
-CREATE OPERATOR &> (
-	LEFTARG = geometry, RIGHTARG = geometry, PROCEDURE = geometry_overright,
-	COMMUTATOR = '&<',
-	RESTRICT = positionsel, JOIN = positionjoinsel
-);
-
-CREATE OPERATOR >> (
-	LEFTARG = geometry, RIGHTARG = geometry, PROCEDURE = geometry_right,
-	COMMUTATOR = '<<',
-	RESTRICT = positionsel, JOIN = positionjoinsel
-);
-
-CREATE OPERATOR |&> (
-	LEFTARG = geometry, RIGHTARG = geometry, PROCEDURE = geometry_overabove,
-	COMMUTATOR = '&<|',
-	RESTRICT = positionsel, JOIN = positionjoinsel
-);
-
-CREATE OPERATOR |>> (
-	LEFTARG = geometry, RIGHTARG = geometry, PROCEDURE = geometry_above,
-	COMMUTATOR = '<<|',
-	RESTRICT = positionsel, JOIN = positionjoinsel
-);
-
-CREATE OPERATOR ~= (
-	LEFTARG = geometry, RIGHTARG = geometry, PROCEDURE = geometry_samebox,
-	COMMUTATOR = '~=',
-	RESTRICT = eqsel, JOIN = eqjoinsel
-);
-
-CREATE OPERATOR @ (
-	LEFTARG = geometry, RIGHTARG = geometry, PROCEDURE = geometry_contained,
-	COMMUTATOR = '~',
-	RESTRICT = contsel, JOIN = contjoinsel
-);
-
-CREATE OPERATOR ~ (
-	LEFTARG = geometry, RIGHTARG = geometry, PROCEDURE = geometry_contain,
-	COMMUTATOR = '@',
-	RESTRICT = contsel, JOIN = contjoinsel
-);
-
--- gist support functions
-
-CREATE OR REPLACE FUNCTION LWGEOM_gist_consistent(internal,geometry,int4)
-	RETURNS bool
-	AS 'MODULE_PATHNAME' ,'LWGEOM_gist_consistent'
-	LANGUAGE 'C';
-
-CREATE OR REPLACE FUNCTION LWGEOM_gist_compress(internal)
-	RETURNS internal
-	AS 'MODULE_PATHNAME','LWGEOM_gist_compress'
-	LANGUAGE 'C';
-
-CREATE OR REPLACE FUNCTION LWGEOM_gist_penalty(internal,internal,internal)
-	RETURNS internal
-	AS 'MODULE_PATHNAME' ,'LWGEOM_gist_penalty'
-	LANGUAGE 'C';
-
-CREATE OR REPLACE FUNCTION LWGEOM_gist_picksplit(internal, internal)
-	RETURNS internal
-	AS 'MODULE_PATHNAME' ,'LWGEOM_gist_picksplit'
-	LANGUAGE 'C';
-
-CREATE OR REPLACE FUNCTION LWGEOM_gist_union(bytea, internal)
-	RETURNS internal
-	AS 'MODULE_PATHNAME' ,'LWGEOM_gist_union'
-	LANGUAGE 'C';
-
-CREATE OR REPLACE FUNCTION LWGEOM_gist_same(box2d, box2d, internal)
-	RETURNS internal
-	AS 'MODULE_PATHNAME' ,'LWGEOM_gist_same'
-	LANGUAGE 'C';
-
-CREATE OR REPLACE FUNCTION LWGEOM_gist_decompress(internal)
-	RETURNS internal
-	AS 'MODULE_PATHNAME' ,'LWGEOM_gist_decompress'
-	LANGUAGE 'C';
-
--------------------------------------------
--- GIST opclass index binding entries.
--------------------------------------------
---
--- Create opclass index bindings for PG>=73
---
-
-CREATE OPERATOR CLASS gist_geometry_ops
-	DEFAULT FOR TYPE geometry USING gist AS
-	STORAGE 	box2d,
-	OPERATOR        1        << ,
-	OPERATOR        2        &<	,
-	OPERATOR        3        &&	,
-	OPERATOR        4        &>	,
-	OPERATOR        5        >>	,
-	OPERATOR        6        ~=	,
-	OPERATOR        7        ~	,
-	OPERATOR        8        @	,
-	OPERATOR	9	 &<|	,
-	OPERATOR	10	 <<|	,
-	OPERATOR	11	 |>>	,
-	OPERATOR	12	 |&>	,
-	FUNCTION        1        LWGEOM_gist_consistent (internal, geometry, int4),
-	FUNCTION        2        LWGEOM_gist_union (bytea, internal),
-	FUNCTION        3        LWGEOM_gist_compress (internal),
-	FUNCTION        4        LWGEOM_gist_decompress (internal),
-	FUNCTION        5        LWGEOM_gist_penalty (internal, internal, internal),
-	FUNCTION        6        LWGEOM_gist_picksplit (internal, internal),
-	FUNCTION        7        LWGEOM_gist_same (box2d, box2d, internal);
-
-#endif
 
 -------------------------------------------
 -- other lwgeom functions
@@ -1097,19 +885,10 @@ CREATE OR REPLACE FUNCTION ST_Area(geometry)
 	AS 'MODULE_PATHNAME','LWGEOM_area_polygon'
 	LANGUAGE 'C' IMMUTABLE STRICT;
 
-
 -- Availability: 1.2.2
 CREATE OR REPLACE FUNCTION ST_distance_spheroid(geometry,geometry,spheroid)
 	RETURNS FLOAT8
 	AS 'MODULE_PATHNAME','LWGEOM_distance_ellipsoid'
-	LANGUAGE 'C' IMMUTABLE STRICT
-	COST 100;
-
-
--- Availability: 1.2.2
-CREATE OR REPLACE FUNCTION ST_distance_sphere(geometry,geometry)
-	RETURNS FLOAT8
-	AS 'MODULE_PATHNAME','LWGEOM_distance_sphere'
 	LANGUAGE 'C' IMMUTABLE STRICT
 	COST 100;
 
@@ -1582,7 +1361,8 @@ CREATE AGGREGATE ST_3DExtent(
 -- SPATIAL_REF_SYS
 -------------------------------------------------------------------
 CREATE TABLE spatial_ref_sys (
-	 srid integer not null primary key,
+	 srid integer not null primary key
+		check (srid > 0 and srid < 999000),
 	 auth_name varchar(256),
 	 auth_srid integer,
 	 srtext varchar(2048),
@@ -1632,12 +1412,12 @@ BEGIN
 		 pg_type t,
 		 pg_namespace n
 	WHERE (c.relkind = 'r' OR c.relkind = 'v')
-	AND t.typname = 'geometry'
-	AND a.attisdropped = false
-	AND a.atttypid = t.oid
-	AND a.attrelid = c.oid
-	AND c.relnamespace = n.oid
-	AND n.nspname NOT ILIKE 'pg_temp%';
+		AND t.typname = 'geometry'
+		AND a.attisdropped = false
+		AND a.atttypid = t.oid
+		AND a.attrelid = c.oid
+		AND c.relnamespace = n.oid
+		AND n.nspname NOT ILIKE 'pg_temp%' AND c.relname != 'raster_columns' ;
 
 	-- Iterate through all non-dropped geometry columns
 	RAISE DEBUG 'Processing Tables.....';
@@ -1654,29 +1434,10 @@ BEGIN
 		AND a.atttypid = t.oid
 		AND a.attrelid = c.oid
 		AND c.relnamespace = n.oid
-		AND n.nspname NOT ILIKE 'pg_temp%'
+		AND n.nspname NOT ILIKE 'pg_temp%' AND c.relname != 'raster_columns' 
 	LOOP
 
-	inserted := inserted + populate_geometry_columns(gcs.oid, use_typmod);
-	END LOOP;
-
-	-- Add views to geometry columns table
-	RAISE DEBUG 'Processing Views.....';
-	FOR gcs IN
-	SELECT DISTINCT ON (c.oid) c.oid, n.nspname, c.relname
-		FROM pg_class c,
-			 pg_attribute a,
-			 pg_type t,
-			 pg_namespace n
-		WHERE c.relkind = 'v'
-		AND t.typname = 'geometry'
-		AND a.attisdropped = false
-		AND a.atttypid = t.oid
-		AND a.attrelid = c.oid
-		AND c.relnamespace = n.oid
-	LOOP
-
-	inserted := inserted + populate_geometry_columns(gcs.oid, use_typmod);
+		inserted := inserted + populate_geometry_columns(gcs.oid, use_typmod);
 	END LOOP;
 
 	IF oldcount > inserted THEN
@@ -1685,7 +1446,7 @@ BEGIN
 	    stale = 0;
 	END IF;
 
-	RETURN 'probed:' ||probed|| ' inserted:'||inserted|| ' conflicts:'||probed-inserted|| ' deleted:'||stale;
+	RETURN 'probed:' ||probed|| ' inserted:'||inserted;
 END
 
 $$
@@ -1726,6 +1487,7 @@ DECLARE
 	query       text;
 	gc_is_valid boolean;
 	inserted    integer;
+	constraint_successful boolean := false;
 
 BEGIN
 	inserted := 0;
@@ -1764,26 +1526,32 @@ BEGIN
                      ' FROM ONLY ' || quote_ident(gcs.nspname) || '.' || quote_ident(gcs.relname) || 
                      ' WHERE ' || quote_ident(gcs.attname) || ' IS NOT NULL LIMIT 1;'
                 INTO gc;
+            IF gc IS NULL THEN -- there is no data so we can not determine geometry type
+            	RAISE WARNING 'No data in table %.%, so no information to determine geometry type and srid', gcs.nspname, gcs.relname;
+            	RETURN 0;
+            END IF;
             gsrid := gc.srid; gtype := gc.type; gndims := gc.dims;
-                
+            	
             IF use_typmod THEN
                 BEGIN
                     EXECUTE 'ALTER TABLE ' || quote_ident(gcs.nspname) || '.' || quote_ident(gcs.relname) || ' ALTER COLUMN ' || quote_ident(gcs.attname) || 
                         ' TYPE geometry(' || postgis_type_name(gtype, gndims, true) || ', ' || gsrid::text  || ') ';
                     inserted := inserted + 1;
                 EXCEPTION
-                        WHEN check_violation THEN
-                            RAISE WARNING 'Could not convert ''%'' in ''%.%'' to use typmod with srid ', quote_ident(gcs.attname), quote_ident(gcs.nspname), quote_ident(gcs.relname), quote_ident(gcs.attname), gsrid;
+                        WHEN invalid_parameter_value THEN
+                        RAISE WARNING 'Could not convert ''%'' in ''%.%'' to use typmod with srid %, type: % ', quote_ident(gcs.attname), quote_ident(gcs.nspname), quote_ident(gcs.relname), gsrid, postgis_type_name(gtype, gndims, true);
                             gc_is_valid := false;
                 END;
                 
             ELSE
                 -- Try to apply srid check to column
-                IF (gsrid > 0) THEN
+            	constraint_successful = false;
+                IF (gsrid > 0 AND postgis_constraint_srid(gcs.nspname, gcs.relname,gcs.attname) IS NULL ) THEN
                     BEGIN
                         EXECUTE 'ALTER TABLE ONLY ' || quote_ident(gcs.nspname) || '.' || quote_ident(gcs.relname) || 
                                  ' ADD CONSTRAINT ' || quote_ident('enforce_srid_' || gcs.attname) || 
                                  ' CHECK (st_srid(' || quote_ident(gcs.attname) || ') = ' || gsrid || ')';
+                        constraint_successful := true;
                     EXCEPTION
                         WHEN check_violation THEN
                             RAISE WARNING 'Not inserting ''%'' in ''%.%'' into geometry_columns: could not apply constraint CHECK (st_srid(%) = %)', quote_ident(gcs.attname), quote_ident(gcs.nspname), quote_ident(gcs.relname), quote_ident(gcs.attname), gsrid;
@@ -1792,11 +1560,12 @@ BEGIN
                 END IF;
                 
                 -- Try to apply ndims check to column
-                IF (gndims IS NOT NULL) THEN
+                IF (gndims IS NOT NULL AND postgis_constraint_dims(gcs.nspname, gcs.relname,gcs.attname) IS NULL ) THEN
                     BEGIN
                         EXECUTE 'ALTER TABLE ONLY ' || quote_ident(gcs.nspname) || '.' || quote_ident(gcs.relname) || '
                                  ADD CONSTRAINT ' || quote_ident('enforce_dims_' || gcs.attname) || '
                                  CHECK (st_ndims(' || quote_ident(gcs.attname) || ') = '||gndims||')';
+                        constraint_successful := true;
                     EXCEPTION
                         WHEN check_violation THEN
                             RAISE WARNING 'Not inserting ''%'' in ''%.%'' into geometry_columns: could not apply constraint CHECK (st_ndims(%) = %)', quote_ident(gcs.attname), quote_ident(gcs.nspname), quote_ident(gcs.relname), quote_ident(gcs.attname), gndims;
@@ -1805,18 +1574,22 @@ BEGIN
                 END IF;
     
                 -- Try to apply geometrytype check to column
-                IF (gtype IS NOT NULL) THEN
+                IF (gtype IS NOT NULL AND postgis_constraint_type(gcs.nspname, gcs.relname,gcs.attname) IS NULL ) THEN
                     BEGIN
                         EXECUTE 'ALTER TABLE ONLY ' || quote_ident(gcs.nspname) || '.' || quote_ident(gcs.relname) || '
                         ADD CONSTRAINT ' || quote_ident('enforce_geotype_' || gcs.attname) || '
                         CHECK ((geometrytype(' || quote_ident(gcs.attname) || ') = ' || quote_literal(gtype) || ') OR (' || quote_ident(gcs.attname) || ' IS NULL))';
+                        constraint_successful := true;
                     EXCEPTION
                         WHEN check_violation THEN
                             -- No geometry check can be applied. This column contains a number of geometry types.
                             RAISE WARNING 'Could not add geometry type check (%) to table column: %.%.%', gtype, quote_ident(gcs.nspname),quote_ident(gcs.relname),quote_ident(gcs.attname);
                     END;
                 END IF;
-                inserted := inserted + 1;
+                 --only count if we were successful in applying at least one constraint
+                IF constraint_successful THEN
+                	inserted := inserted + 1;
+                END IF;
             END IF;	        
 	    END IF;
 
@@ -1844,7 +1617,7 @@ LANGUAGE 'plpgsql' VOLATILE;
 -- Should also check the precision grid (future expansion).
 --
 -----------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION AddGeometryColumn(catalog_name varchar,schema_name varchar,table_name varchar,column_name varchar,new_srid integer,new_type varchar,new_dim integer, use_typmod boolean DEFAULT true)
+CREATE OR REPLACE FUNCTION AddGeometryColumn(catalog_name varchar,schema_name varchar,table_name varchar,column_name varchar,new_srid_in integer,new_type varchar,new_dim integer, use_typmod boolean DEFAULT true)
 	RETURNS text
 	AS
 $$
@@ -1853,6 +1626,7 @@ DECLARE
 	sr varchar;
 	real_schema name;
 	sql text;
+	new_srid integer;
 
 BEGIN
 
@@ -1890,11 +1664,20 @@ BEGIN
 
 
 	-- Verify SRID
-	IF ( new_srid != 0 AND new_srid != -1) THEN
+	IF ( new_srid_in > 0 ) THEN
+		IF new_srid_in >= 999000 THEN
+			RAISE EXCEPTION 'AddGeometryColumns() - SRID must be < 999000';
+		END IF;
+		new_srid := new_srid_in;
 		SELECT SRID INTO sr FROM spatial_ref_sys WHERE SRID = new_srid;
 		IF NOT FOUND THEN
 			RAISE EXCEPTION 'AddGeometryColumns() - invalid SRID';
 			RETURN 'fail';
+		END IF;
+	ELSE
+		new_srid := ST_SRID('POINT EMPTY'::geometry);
+		IF ( new_srid_in != new_srid ) THEN
+			RAISE NOTICE 'SRID value % converted to the officially unknown SRID value %', new_srid_in, new_srid;
 		END IF;
 	END IF;
 
@@ -2427,14 +2210,15 @@ CREATE OR REPLACE FUNCTION postgis_lib_build_date() RETURNS text
 	AS 'MODULE_PATHNAME'
 	LANGUAGE 'C' IMMUTABLE;
 
-
-
 CREATE OR REPLACE FUNCTION postgis_full_version() RETURNS text
 AS $$
 DECLARE
 	libver text;
 	projver text;
 	geosver text;
+#ifdef POSTGIS_GDAL_VERSION
+	gdalver text;
+#endif
 	libxmlver text;
 	usestats bool;
 	dbproc text;
@@ -2444,6 +2228,9 @@ BEGIN
 	SELECT postgis_lib_version() INTO libver;
 	SELECT postgis_proj_version() INTO projver;
 	SELECT postgis_geos_version() INTO geosver;
+#ifdef POSTGIS_GDAL_VERSION
+	SELECT postgis_gdal_version() INTO gdalver;
+#endif
 	SELECT postgis_libxml_version() INTO libxmlver;
 	SELECT postgis_uses_stats() INTO usestats;
 	SELECT postgis_scripts_installed() INTO dbproc;
@@ -2458,6 +2245,12 @@ BEGIN
 	IF  projver IS NOT NULL THEN
 		fullver = fullver || ' PROJ="' || projver || '"';
 	END IF;
+
+#ifdef POSTGIS_GDAL_VERSION
+	IF  gdalver IS NOT NULL THEN
+		fullver = fullver || ' GDAL="' || gdalver || '"';
+	END IF;
+#endif
 
 	IF  libxmlver IS NOT NULL THEN
 		fullver = fullver || ' LIBXML="' || libxmlver || '"';
@@ -2768,7 +2561,6 @@ CREATE OR REPLACE FUNCTION ST_IsValidDetail(geometry, int4)
 	LANGUAGE 'C' IMMUTABLE STRICT
 	COST 100;
 
-#if POSTGIS_GEOS_VERSION >= 33
 -- Requires GEOS >= 3.3.0
 -- Availability: 2.0.0
 CREATE OR REPLACE FUNCTION ST_IsValidReason(geometry, int4)
@@ -2780,9 +2572,7 @@ SELECT CASE WHEN valid THEN 'Valid Geometry' ELSE reason END FROM (
 	$$
 	LANGUAGE 'sql' IMMUTABLE STRICT
 	COST 100;
-#endif
 
-#if POSTGIS_GEOS_VERSION >= 33
 -- Requires GEOS >= 3.3.0
 -- Availability: 2.0.0
 CREATE OR REPLACE FUNCTION ST_IsValid(geometry, int4)
@@ -2790,10 +2580,8 @@ CREATE OR REPLACE FUNCTION ST_IsValid(geometry, int4)
 	AS 'SELECT (ST_isValidDetail($1, $2)).valid'
 	LANGUAGE 'sql' IMMUTABLE STRICT
 	COST 100;
-#endif
 
 
-#if POSTGIS_GEOS_VERSION >= 32
 -- Requires GEOS >= 3.2.0
 -- Availability: 1.5.0
 CREATE OR REPLACE FUNCTION ST_HausdorffDistance(geometry, geometry)
@@ -2801,9 +2589,7 @@ CREATE OR REPLACE FUNCTION ST_HausdorffDistance(geometry, geometry)
 	AS 'MODULE_PATHNAME', 'hausdorffdistance'
 	LANGUAGE 'C' IMMUTABLE STRICT
 	COST 100;
-#endif
 
-#if POSTGIS_GEOS_VERSION >= 32
 -- Requires GEOS >= 3.2.0
 -- Availability: 1.5.0
 CREATE OR REPLACE FUNCTION ST_HausdorffDistance(geometry, geometry, float8)
@@ -2811,7 +2597,6 @@ CREATE OR REPLACE FUNCTION ST_HausdorffDistance(geometry, geometry, float8)
 	AS 'MODULE_PATHNAME', 'hausdorffdistancedensify'
 	LANGUAGE 'C' IMMUTABLE STRICT
 	COST 100;
-#endif
 
 -- PostGIS equivalent function: difference(geometry,geometry)
 CREATE OR REPLACE FUNCTION ST_Difference(geometry,geometry)
@@ -4391,9 +4176,25 @@ LANGUAGE 'plpgsql' IMMUTABLE STRICT;
 
 
 
+-- Availability: 1.2.2
+CREATE OR REPLACE FUNCTION ST_distance_sphere(geometry,geometry)
+	RETURNS FLOAT8
+	AS $$
+	select st_distance(geography($1),geography($2),false)
+	$$
+	LANGUAGE 'SQL' IMMUTABLE STRICT
+	COST 300;
+
+-- Availability: 1.2.2
+CREATE OR REPLACE FUNCTION ST_distance_sphere(geometry,geometry)
+	RETURNS FLOAT8
+	AS $$
+	select st_distance(geography($1),geography($2),false)
+	$$
+	LANGUAGE 'SQL' IMMUTABLE STRICT
+	COST 300;
 
 
-#ifdef GSERIALIZED_ON
 ---------------------------------------------------------------
 -- GEOMETRY_COLUMNS view support functions
 ---------------------------------------------------------------
@@ -4553,7 +4354,6 @@ CREATE OR REPLACE VIEW geometry_columns AS
     AND a.attrelid = c.oid 
     AND c.relnamespace = n.oid 
     AND (c.relkind = 'r'::"char" OR c.relkind = 'v'::"char") AND NOT pg_is_other_temp_schema(c.relnamespace);
-#endif
 
 
 

@@ -2,7 +2,7 @@
  * $Id$
  *
  * PostGIS - Spatial Types for PostgreSQL
- * Copyright 2009 Paul Ramsey <pramsey@cleverelephant.ca>
+ * Copyright 2009-2011 Paul Ramsey <pramsey@cleverelephant.ca>
  *
  * This is free software; you can redistribute and/or modify it under
  * the terms of the GNU General Public Licence. See the COPYING file.
@@ -48,41 +48,6 @@ Datum geometry_from_geography(PG_FUNCTION_ARGS);
 /* Datum geography_gist_join_selectivity(PG_FUNCTION_ARGS); TBD */
 /* Datum geography_send(PG_FUNCTION_ARGS); TBD */
 /* Datum geography_recv(PG_FUNCTION_ARGS); TBD */
-
-
-/**
-* Utility method to call the serialization and then set the
-* PgSQL varsize header appropriately with the serialized size.
-*/
-GSERIALIZED* geography_serialize(LWGEOM *lwgeom)
-{
-	static int is_geodetic = 1;
-	size_t ret_size = 0;
-	GSERIALIZED *g = NULL;
-
-	g = gserialized_from_lwgeom(lwgeom, is_geodetic, &ret_size);
-	if ( ! g ) lwerror("Unable to serialize lwgeom.");
-	SET_VARSIZE(g, ret_size);
-	return g;
-}
-
-
-/**
-* Utility method to call the serialization and then set the
-* PgSQL varsize header appropriately with the serialized size.
-*/
-GSERIALIZED* geometry_serialize(LWGEOM *lwgeom)
-{
-	static int is_geodetic = 0;
-	size_t ret_size = 0;
-	GSERIALIZED *g = NULL;
-
-	g = gserialized_from_lwgeom(lwgeom, is_geodetic, &ret_size);
-	if ( ! g ) lwerror("Unable to serialize lwgeom.");
-	SET_VARSIZE(g, ret_size);
-	return g;
-}
-
 
 /**
 * The geography type only support POINT, LINESTRING, POLYGON, MULTI* variants
@@ -565,7 +530,7 @@ Datum geography_as_binary(PG_FUNCTION_ARGS)
 	/* Get our lwgeom form */
 	lwgeom = lwgeom_from_gserialized(g);
 
-	if ( FLAGS_NDIMS(lwgeom->flags) > 2 )
+	if ( gserialized_ndims(g) > 2 )
 	{
 		/* Strip out the higher dimensions */
 		LWGEOM *tmp = lwgeom_force_2d(lwgeom);
@@ -618,13 +583,13 @@ Datum geography_from_binary(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(geography_from_geometry);
 Datum geography_from_geometry(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom = (PG_LWGEOM*)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *geom = (GSERIALIZED*)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
 	LWGEOM *lwgeom = NULL;
 	GSERIALIZED *g_ser = NULL;
 
-	geography_valid_type(pglwgeom_get_type(geom));
+	geography_valid_type(gserialized_get_type(geom));
 
-	lwgeom = pglwgeom_deserialize(geom);
+	lwgeom = lwgeom_from_gserialized(geom);
 
 	/* Force default SRID */
 	if ( (int)lwgeom->srid <= 0 )
@@ -672,7 +637,7 @@ PG_FUNCTION_INFO_V1(geometry_from_geography);
 Datum geometry_from_geography(PG_FUNCTION_ARGS)
 {
 	LWGEOM *lwgeom = NULL;
-	PG_LWGEOM *ret = NULL;
+	GSERIALIZED *ret = NULL;
 	GSERIALIZED *g_ser = (GSERIALIZED*)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
 
 	lwgeom = lwgeom_from_gserialized(g_ser);
@@ -687,7 +652,7 @@ Datum geometry_from_geography(PG_FUNCTION_ARGS)
 	if ( (int)lwgeom->srid <= 0 )
 		lwgeom->srid = SRID_DEFAULT;
 
-	ret = pglwgeom_serialize(lwgeom);
+	ret = geometry_serialize(lwgeom);
 	lwgeom_free(lwgeom);
 
 	PG_RETURN_POINTER(ret);

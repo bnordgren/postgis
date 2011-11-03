@@ -31,12 +31,9 @@
 
 /**********************************************************************
 **  Useful functions for all GSERIALIZED handlers. 
-**  XXX move to gserialized.h eventually
+**  TODO: Move to common.h in pgcommon
 */
 
-/* Convert lwgeom to newly allocated gserialized */
-GSERIALIZED* geography_serialize(LWGEOM *lwgeom);
-GSERIALIZED* geometry_serialize(LWGEOM *lwgeom);
 /* Check that the typmod matches the flags on the lwgeom */
 void postgis_valid_typmod(LWGEOM *lwgeom, int32 typmod);
 /* Check that the type is legal in geography (no curves please!) */

@@ -13,7 +13,7 @@
 #include "lwgeom_geos.h"
 #include "liblwgeom.h"
 #include "liblwgeom_internal.h"
-#include "profile.h"
+#include "lwgeom_log.h"
 
 #include <stdlib.h>
 
@@ -414,8 +414,6 @@ lwgeom_intersection(const LWGEOM *geom1, const LWGEOM *geom2)
 	int is3d ;
 	int srid ;
 
-	PROFSTART(PROF_QRUN);
-
 	/* A.Intersection(Empty) == Empty */
 	if ( lwgeom_is_empty(geom2) )
 		return lwgeom_clone(geom2);
@@ -434,18 +432,14 @@ lwgeom_intersection(const LWGEOM *geom1, const LWGEOM *geom2)
 
 	LWDEBUG(3, "intersection() START");
 
-	PROFSTART(PROF_P2G1);
 	g1 = LWGEOM2GEOS(geom1);
-	PROFSTOP(PROF_P2G1);
 	if ( 0 == g1 )   /* exception thrown at construction */
 	{
 		lwerror("First argument geometry could not be converted to GEOS.");
 		return NULL ;
 	}
 
-	PROFSTART(PROF_P2G2);
 	g2 = LWGEOM2GEOS(geom2);
-	PROFSTOP(PROF_P2G2);
 	if ( 0 == g2 )   /* exception thrown at construction */
 	{
 		lwerror("Second argument geometry could not be converted to GEOS.");
@@ -459,9 +453,7 @@ lwgeom_intersection(const LWGEOM *geom1, const LWGEOM *geom2)
 	/*LWDEBUGF(3, "g2 is valid = %i",GEOSisvalid(g2)); */
 	/*LWDEBUGF(3, "g1 is valid = %i",GEOSisvalid(g1)); */
 
-	PROFSTART(PROF_GRUN);
 	g3 = GEOSIntersection(g1,g2);
-	PROFSTOP(PROF_GRUN);
 
 	LWDEBUG(3, " intersection finished");
 
@@ -477,9 +469,7 @@ lwgeom_intersection(const LWGEOM *geom1, const LWGEOM *geom2)
 
 	GEOSSetSRID(g3, srid);
 
-	PROFSTART(PROF_G2P);
 	result = GEOS2LWGEOM(g3, is3d);
-	PROFSTOP(PROF_G2P);
 
 	if (result == NULL)
 	{
@@ -494,9 +484,6 @@ lwgeom_intersection(const LWGEOM *geom1, const LWGEOM *geom2)
 	GEOSGeom_destroy(g2);
 	GEOSGeom_destroy(g3);
 
-	PROFSTOP(PROF_QRUN);
-	PROFREPORT("geos",geom1, geom2, result);
-
 	return result ;
 }
 
@@ -507,8 +494,6 @@ lwgeom_difference(const LWGEOM *geom1, const LWGEOM *geom2)
 	LWGEOM *result;
 	int is3d;
 	int srid;
-
-	PROFSTART(PROF_QRUN);
 
 	/* A.Difference(Empty) == A */
 	if ( lwgeom_is_empty(geom2) )
@@ -526,18 +511,14 @@ lwgeom_difference(const LWGEOM *geom1, const LWGEOM *geom2)
 
 	initGEOS(lwnotice, lwgeom_geos_error);
 
-	PROFSTART(PROF_P2G1);
 	g1 = LWGEOM2GEOS(geom1);
-	PROFSTOP(PROF_P2G1);
 	if ( 0 == g1 )   /* exception thrown at construction */
 	{
 		lwerror("First argument geometry could not be converted to GEOS: %s", lwgeom_geos_errmsg);
 		return NULL;
 	}
 
-	PROFSTART(PROF_P2G2);
 	g2 = LWGEOM2GEOS(geom2);
-	PROFSTOP(PROF_P2G2);
 	if ( 0 == g2 )   /* exception thrown at construction */
 	{
 		GEOSGeom_destroy(g1);
@@ -545,9 +526,7 @@ lwgeom_difference(const LWGEOM *geom1, const LWGEOM *geom2)
 		return NULL;
 	}
 
-	PROFSTART(PROF_GRUN);
 	g3 = GEOSDifference(g1,g2);
-	PROFSTOP(PROF_GRUN);
 
 	if (g3 == NULL)
 	{
@@ -561,9 +540,7 @@ lwgeom_difference(const LWGEOM *geom1, const LWGEOM *geom2)
 
 	GEOSSetSRID(g3, srid);
 
-	PROFSTART(PROF_G2P);
 	result = GEOS2LWGEOM(g3, is3d);
-	PROFSTOP(PROF_G2P);
 
 	if (result == NULL)
 	{
@@ -580,9 +557,6 @@ lwgeom_difference(const LWGEOM *geom1, const LWGEOM *geom2)
 
 	/* compressType(result); */
 
-	PROFSTOP(PROF_QRUN);
-	PROFREPORT("geos",geom1, geom2, result);
-
 	return result;
 }
 
@@ -593,8 +567,6 @@ lwgeom_symdifference(const LWGEOM* geom1, const LWGEOM* geom2)
 	LWGEOM *result;
 	int is3d;
 	int srid;
-
-	PROFSTART(PROF_QRUN);
 
 	/* A.SymDifference(Empty) == A */
 	if ( lwgeom_is_empty(geom2) )
@@ -612,18 +584,16 @@ lwgeom_symdifference(const LWGEOM* geom1, const LWGEOM* geom2)
 
 	initGEOS(lwnotice, lwgeom_geos_error);
 
-	PROFSTART(PROF_P2G1);
 	g1 = LWGEOM2GEOS(geom1);
-	PROFSTOP(PROF_P2G1);
+
 	if ( 0 == g1 )   /* exception thrown at construction */
 	{
 		lwerror("First argument geometry could not be converted to GEOS: %s", lwgeom_geos_errmsg);
 		return NULL;
 	}
 
-	PROFSTART(PROF_P2G2);
 	g2 = LWGEOM2GEOS(geom2);
-	PROFSTOP(PROF_P2G2);
+
 	if ( 0 == g2 )   /* exception thrown at construction */
 	{
 		lwerror("Second argument geometry could not be converted to GEOS: %s", lwgeom_geos_errmsg);
@@ -631,9 +601,7 @@ lwgeom_symdifference(const LWGEOM* geom1, const LWGEOM* geom2)
 		return NULL;
 	}
 
-	PROFSTART(PROF_GRUN);
 	g3 = GEOSSymDifference(g1,g2);
-	PROFSTOP(PROF_GRUN);
 
 	if (g3 == NULL)
 	{
@@ -647,9 +615,7 @@ lwgeom_symdifference(const LWGEOM* geom1, const LWGEOM* geom2)
 
 	GEOSSetSRID(g3, srid);
 
-	PROFSTART(PROF_G2P);
 	result = GEOS2LWGEOM(g3, is3d);
-	PROFSTOP(PROF_G2P);
 
 	if (result == NULL)
 	{
@@ -664,11 +630,6 @@ lwgeom_symdifference(const LWGEOM* geom1, const LWGEOM* geom2)
 	GEOSGeom_destroy(g2);
 	GEOSGeom_destroy(g3);
 
-	/* compressType(result); */
-
-	PROFSTOP(PROF_QRUN);
-	PROFREPORT("geos",geom1, geom2, result);
-
 	return result;
 }
 
@@ -681,8 +642,6 @@ lwgeom_union(const LWGEOM *geom1, const LWGEOM *geom2)
 	LWGEOM *result;
 
 	LWDEBUG(2, "in geomunion");
-
-	PROFSTART(PROF_QRUN);
 
 	/* A.Union(empty) == A */
 	if ( lwgeom_is_empty(geom1) )
@@ -701,18 +660,16 @@ lwgeom_union(const LWGEOM *geom1, const LWGEOM *geom2)
 
 	initGEOS(lwnotice, lwgeom_geos_error);
 
-	PROFSTART(PROF_P2G1);
 	g1 = LWGEOM2GEOS(geom1);
-	PROFSTOP(PROF_P2G1);
+
 	if ( 0 == g1 )   /* exception thrown at construction */
 	{
 		lwerror("First argument geometry could not be converted to GEOS: %s", lwgeom_geos_errmsg);
 		return NULL;
 	}
 
-	PROFSTART(PROF_P2G2);
 	g2 = LWGEOM2GEOS(geom2);
-	PROFSTOP(PROF_P2G2);
+
 	if ( 0 == g2 )   /* exception thrown at construction */
 	{
 		GEOSGeom_destroy(g1);
@@ -723,9 +680,7 @@ lwgeom_union(const LWGEOM *geom1, const LWGEOM *geom2)
 	LWDEBUGF(3, "g1=%s", GEOSGeomToWKT(g1));
 	LWDEBUGF(3, "g2=%s", GEOSGeomToWKT(g2));
 
-	PROFSTART(PROF_GRUN);
 	g3 = GEOSUnion(g1,g2);
-	PROFSTOP(PROF_GRUN);
 
 	LWDEBUGF(3, "g3=%s", GEOSGeomToWKT(g3));
 
@@ -741,9 +696,7 @@ lwgeom_union(const LWGEOM *geom1, const LWGEOM *geom2)
 
 	GEOSSetSRID(g3, srid);
 
-	PROFSTART(PROF_G2P);
 	result = GEOS2LWGEOM(g3, is3d);
-	PROFSTOP(PROF_G2P);
 
 	GEOSGeom_destroy(g3);
 
@@ -752,11 +705,6 @@ lwgeom_union(const LWGEOM *geom1, const LWGEOM *geom2)
 		lwerror("GEOS union() threw an error (result postgis geometry formation)!");
 		return NULL; /*never get here */
 	}
-
-	/* compressType(result); */
-
-	PROFSTOP(PROF_QRUN);
-	PROFREPORT("geos",geom1, geom2, result);
 
 	return result;
 }
@@ -784,12 +732,12 @@ int lwgeom_intersects(LWGEOM *geom1, LWGEOM *geom2)
 		return -1 ;
 	}
 	/* either they both have SRIDS or they both don't */
-	if ((  TYPE_HASSRID(geom1->type) && !TYPE_HASSRID(geom2->type)) ||
-		( !TYPE_HASSRID(geom1->type) &&  TYPE_HASSRID(geom2->type))){
+	if ((  lwgeom_has_srid(geom1) && !lwgeom_has_srid(geom2)) ||
+		( !lwgeom_has_srid(geom1) &&  lwgeom_has_srid(geom2))){
 		return -1 ;
 	}
 	/* if they have SRID's, they both have to be the same */
-	if ( TYPE_HASSRID(geom1->type) && (geom1->srid != geom2->srid)) {
+	if ( lwgeom_has_srid(geom1) && (geom1->srid != geom2->srid)) {
 		return -1 ;
 	}
 
@@ -803,7 +751,7 @@ int lwgeom_intersects(LWGEOM *geom1, LWGEOM *geom2)
 	 * geom1 bounding box we can prematurely return FALSE.
 	 * Do the test IFF BOUNDING BOX AVAILABLE.
 	 */
-	if ( TYPE_HASBBOX(geom1->type) && TYPE_HASBBOX(geom2->type))
+	if ( FLAGS_GET_BBOX(geom1->flags) && FLAGS_GET_BBOX(geom2->flags))
 	{
 		box1 = geom1->bbox ;
 		box2 = geom2->bbox ;

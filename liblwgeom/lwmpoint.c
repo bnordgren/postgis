@@ -1,9 +1,9 @@
 /**********************************************************************
- * $Id$
  *
  * PostGIS - Spatial Types for PostgreSQL
  * http://postgis.refractions.net
- * Copyright 2001-2006 Refractions Research Inc.
+ * 
+ * Copyright (C) 2001-2006 Refractions Research Inc.
  *
  * This is free software; you can redistribute and/or modify it under
  * the terms of the GNU General Public Licence. See the COPYING file.
@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "liblwgeom_internal.h"
+#include "lwgeom_log.h"
 
 void
 lwmpoint_release(LWMPOINT *lwmpoint)
@@ -29,70 +30,7 @@ lwmpoint_construct_empty(int srid, char hasz, char hasm)
 }
 
 
-LWMPOINT *
-lwmpoint_deserialize(uint8_t *srl)
-{
-	LWMPOINT *result;
-	LWGEOM_INSPECTED *insp;
-	uint8_t type = (uint8_t)srl[0];
-	int geomtype = lwgeom_getType(type);
-	int i;
 
-	if ( geomtype != MULTIPOINTTYPE )
-	{
-		lwerror("lwmpoint_deserialize called on NON multipoint: %d - %s",
-		        geomtype, lwtype_name(geomtype));
-		return NULL;
-	}
-
-	insp = lwgeom_inspect(srl);
-
-	result = lwalloc(sizeof(LWMPOINT));
-	result->type = geomtype;
-	result->flags = gflags(TYPE_HASZ(type), TYPE_HASM(type), 0);
-	result->srid = insp->srid;
-	result->ngeoms = insp->ngeometries;
-
-	if ( insp->ngeometries )
-	{
-		result->geoms = lwalloc(sizeof(LWPOINT *)*insp->ngeometries);
-	}
-	else
-	{
-		result->geoms = NULL;
-	}
-
-	if (lwgeom_hasBBOX(type))
-	{
-		BOX2DFLOAT4 *box2df;
-
-		FLAGS_SET_BBOX(result->flags, 1);
-		box2df = lwalloc(sizeof(BOX2DFLOAT4));
-		memcpy(box2df, srl+1, sizeof(BOX2DFLOAT4));
-		result->bbox = gbox_from_box2df(result->flags, box2df);
-		lwfree(box2df);
-	}
-	else
-	{
-		result->bbox = NULL;
-	}
-
-	for (i=0; i<insp->ngeometries; i++)
-	{
-		result->geoms[i] = lwpoint_deserialize(insp->sub_geoms[i]);
-		if ( FLAGS_NDIMS(result->geoms[i]->flags) != FLAGS_NDIMS(result->flags) )
-		{
-			lwerror("Mixed dimensions (multipoint:%d, point%d:%d)",
-			        FLAGS_NDIMS(result->flags), i,
-			        FLAGS_NDIMS(result->geoms[i]->flags)
-			       );
-			return NULL;
-		}
-	}
-	lwinspected_release(insp);
-
-	return result;
-}
 
 LWMPOINT* lwmpoint_add_lwpoint(LWMPOINT *mobj, const LWPOINT *obj)
 {

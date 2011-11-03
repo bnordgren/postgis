@@ -31,8 +31,8 @@ Datum postgis_proj_version(PG_FUNCTION_ARGS);
 PG_FUNCTION_INFO_V1(transform);
 Datum transform(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom;
-	PG_LWGEOM *result=NULL;
+	GSERIALIZED *geom;
+	GSERIALIZED *result=NULL;
 	LWGEOM *lwgeom;
 	projPJ input_pj, output_pj;
 	int32 result_srid ;
@@ -43,15 +43,15 @@ Datum transform(PG_FUNCTION_ARGS)
 	result_srid = PG_GETARG_INT32(1);
 	if (result_srid == SRID_UNKNOWN)
 	{
-		elog(ERROR,"-1 is an invalid target SRID");
+		elog(ERROR,"%d is an invalid target SRID",SRID_UNKNOWN);
 		PG_RETURN_NULL();
 	}
 
-	geom = (PG_LWGEOM *)PG_DETOAST_DATUM_COPY(PG_GETARG_DATUM(0));
-	if (pglwgeom_get_srid(geom) == -1)
+	geom = (GSERIALIZED *)PG_DETOAST_DATUM_COPY(PG_GETARG_DATUM(0));
+	if (gserialized_get_srid(geom) == SRID_UNKNOWN)
 	{
 		PG_FREE_IF_COPY(geom, 0);
-		elog(ERROR,"Input geometry has unknown (-1) SRID");
+		elog(ERROR,"Input geometry has unknown (%d) SRID",SRID_UNKNOWN);
 		PG_RETURN_NULL();
 	}
 
@@ -62,7 +62,7 @@ Datum transform(PG_FUNCTION_ARGS)
 	 * If input SRID and output SRID are equal, return geometry
 	 * without transform it
 	 */
-	if (pglwgeom_get_srid(geom) == result_srid)
+	if (gserialized_get_srid(geom) == result_srid)
 	{
 		pfree(geom);
 		PG_RETURN_POINTER(PG_GETARG_DATUM(0));
@@ -73,21 +73,21 @@ Datum transform(PG_FUNCTION_ARGS)
 
 	/* Add the output srid to the cache if it's not already there */
 	if (!IsInPROJ4Cache(proj_cache, result_srid))
-		AddToPROJ4Cache(proj_cache, result_srid, pglwgeom_get_srid(geom));
+		AddToPROJ4Cache(proj_cache, result_srid, gserialized_get_srid(geom));
 
 	/* Get the output projection */
 	output_pj = GetProjectionFromPROJ4Cache(proj_cache, result_srid);
 
 	/* Add the input srid to the cache if it's not already there */
-	if (!IsInPROJ4Cache(proj_cache, pglwgeom_get_srid(geom)))
-		AddToPROJ4Cache(proj_cache, pglwgeom_get_srid(geom), result_srid);
+	if (!IsInPROJ4Cache(proj_cache, gserialized_get_srid(geom)))
+		AddToPROJ4Cache(proj_cache, gserialized_get_srid(geom), result_srid);
 
 	/* Get the input projection	 */
-	input_pj = GetProjectionFromPROJ4Cache(proj_cache, pglwgeom_get_srid(geom));
+	input_pj = GetProjectionFromPROJ4Cache(proj_cache, gserialized_get_srid(geom));
 
 
 	/* now we have a geometry, and input/output PJ structs. */
-	lwgeom = pglwgeom_deserialize(geom);
+	lwgeom = lwgeom_from_gserialized(geom);
 	lwgeom_transform(lwgeom, input_pj, output_pj);
 	lwgeom->srid = result_srid;
 
@@ -98,7 +98,7 @@ Datum transform(PG_FUNCTION_ARGS)
 		lwgeom_add_bbox(lwgeom);
 	}
 
-	result = pglwgeom_serialize(lwgeom);
+	result = geometry_serialize(lwgeom);
 	lwgeom_free(lwgeom);
 	PG_FREE_IF_COPY(geom, 0);
 
@@ -117,8 +117,8 @@ Datum transform(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(transform_geom);
 Datum transform_geom(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom;
-	PG_LWGEOM *result=NULL;
+	GSERIALIZED *geom;
+	GSERIALIZED *result=NULL;
 	LWGEOM *lwgeom;
 	projPJ input_pj, output_pj;
 	char *input_proj4, *output_proj4;
@@ -131,15 +131,15 @@ Datum transform_geom(PG_FUNCTION_ARGS)
 	result_srid = PG_GETARG_INT32(3);
 	if (result_srid == SRID_UNKNOWN)
 	{
-		elog(ERROR,"tranform: destination SRID = -1");
+		elog(ERROR,"tranform: destination SRID = %d",SRID_UNKNOWN);
 		PG_RETURN_NULL();
 	}
 
-	geom = (PG_LWGEOM *)PG_DETOAST_DATUM_COPY(PG_GETARG_DATUM(0));
-	if (pglwgeom_get_srid(geom) == -1)
+	geom = (GSERIALIZED *)PG_DETOAST_DATUM_COPY(PG_GETARG_DATUM(0));
+	if (gserialized_get_srid(geom) == SRID_UNKNOWN)
 	{
 		pfree(geom);
-		elog(ERROR,"tranform: source SRID = -1");
+		elog(ERROR,"tranform: source SRID = %d",SRID_UNKNOWN);
 		PG_RETURN_NULL();
 	}
 
@@ -185,7 +185,7 @@ Datum transform_geom(PG_FUNCTION_ARGS)
 	pfree(output_proj4);
 
 	/* now we have a geometry, and input/output PJ structs. */
-	lwgeom = pglwgeom_deserialize(geom);
+	lwgeom = lwgeom_from_gserialized(geom);
 	lwgeom_transform(lwgeom, input_pj, output_pj);
 	lwgeom->srid = result_srid;
 
@@ -200,7 +200,7 @@ Datum transform_geom(PG_FUNCTION_ARGS)
 		lwgeom_add_bbox(lwgeom);
 	}
 
-	result = pglwgeom_serialize(lwgeom);
+	result = geometry_serialize(lwgeom);
 
 	lwgeom_free(lwgeom);
 	PG_FREE_IF_COPY(geom, 0);

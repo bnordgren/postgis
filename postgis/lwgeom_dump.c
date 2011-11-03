@@ -18,7 +18,6 @@
 
 #include "liblwgeom.h"
 #include "lwgeom_pg.h"
-#include "profile.h"
 
 #include "../postgis_config.h"
 
@@ -57,7 +56,7 @@ GEOMDUMPSTATE;
 PG_FUNCTION_INFO_V1(LWGEOM_dump);
 Datum LWGEOM_dump(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *pglwgeom;
+	GSERIALIZED *pglwgeom;
 	LWCOLLECTION *lwcoll;
 	LWGEOM *lwgeom;
 	FuncCallContext *funcctx;
@@ -80,8 +79,8 @@ Datum LWGEOM_dump(PG_FUNCTION_ARGS)
 
 		oldcontext = MemoryContextSwitchTo(newcontext);
 
-		pglwgeom = (PG_LWGEOM *)PG_DETOAST_DATUM_COPY(PG_GETARG_DATUM(0));
-		lwgeom = pglwgeom_deserialize(pglwgeom);
+		pglwgeom = (GSERIALIZED *)PG_DETOAST_DATUM_COPY(PG_GETARG_DATUM(0));
+		lwgeom = lwgeom_from_gserialized(pglwgeom);
 
 		/* Create function state */
 		state = lwalloc(sizeof(GEOMDUMPSTATE));
@@ -204,7 +203,7 @@ struct POLYDUMPSTATE
 PG_FUNCTION_INFO_V1(LWGEOM_dump_rings);
 Datum LWGEOM_dump_rings(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *pglwgeom;
+	GSERIALIZED *pglwgeom;
 	LWGEOM *lwgeom;
 	FuncCallContext *funcctx;
 	struct POLYDUMPSTATE *state;
@@ -223,13 +222,13 @@ Datum LWGEOM_dump_rings(PG_FUNCTION_ARGS)
 
 		oldcontext = MemoryContextSwitchTo(newcontext);
 
-		pglwgeom = (PG_LWGEOM *)PG_DETOAST_DATUM_COPY(PG_GETARG_DATUM(0));
-		if ( pglwgeom_get_type(pglwgeom) != POLYGONTYPE )
+		pglwgeom = (GSERIALIZED *)PG_DETOAST_DATUM_COPY(PG_GETARG_DATUM(0));
+		if ( gserialized_get_type(pglwgeom) != POLYGONTYPE )
 		{
 			lwerror("Input is not a polygon");
 		}
 
-		lwgeom = pglwgeom_deserialize(pglwgeom);
+		lwgeom = lwgeom_from_gserialized(pglwgeom);
 
 		/* Create function state */
 		state = lwalloc(sizeof(struct POLYDUMPSTATE));

@@ -9,7 +9,18 @@
  * composed only of geometries and has no associated value. A "spatial
  * plus value" collection associates values with a location, i.e.: a raster.
  */
-enum COLLECTION_TYPE { SPATIAL_ONLY, SPATIAL_PLUS_VALUE } ;
+typedef enum { SPATIAL_ONLY, SPATIAL_PLUS_VALUE } COLLECTION_TYPE ;
+
+/**
+ * Declares the types of predefined spatial relationship operations.
+ * These are for use with the "relationship operations".
+ */
+typedef enum {
+	UNION,
+	INTERSECTION,
+	DIFFERENCE,
+	SYMDIFFERENCE
+} RELATION_TYPE;
 
 /**
  * Contains a list of numeric values. This is used to represent the value
@@ -62,7 +73,8 @@ struct evaluator_i {
 /* Spatial collection interface */
 struct spatial_collection_i {
 	COLLECTION_TYPE type ;
-	int32       srid ;
+	int32_t       srid ;
+	GBOX          extent ;
 	PARAMETERS *params ;
 	SPATIAL_COLLECTION *input1 ;
 	SPATIAL_COLLECTION *input2 ;
@@ -72,7 +84,8 @@ struct spatial_collection_i {
 
 SPATIAL_COLLECTION *
 sc_create(COLLECTION_TYPE t,
-		  int32 srid,
+		  int32_t srid,
+		  GBOX *extent,
 		  PARAMETERS *params,
 		  INCLUDES *inc,
 		  EVALUATOR *eval) ;
@@ -80,6 +93,7 @@ sc_create(COLLECTION_TYPE t,
 SPATIAL_COLLECTION *
 sc_twoinput_create(COLLECTION_TYPE t,
 		           PARAMETERS *params,
+		           GBOX *combined_extent,
 		           INCLUDES   *inc,
 		           EVALUATOR  *eval,
 		           SPATIAL_COLLECTION *input1,
@@ -92,7 +106,7 @@ int sc_includes(SPATIAL_COLLECTION *sc, LWPOINT *point);
 int sc_includesIndex(SPATIAL_COLLECTION *sc, LWPOINT *point);
 int sc_hasValue(SPATIAL_COLLECTION *sc) ;
 int sc_hasTwoInputs(SPATIAL_COLLECTION *sc) ;
-int32 sc_get_srid(SPATIAL_COLLECTION *sc) ;
+int32_t sc_get_srid(SPATIAL_COLLECTION *sc) ;
 
 
 
@@ -104,18 +118,42 @@ inc_create(PARAMETERS *params,
 EVALUATOR *
 eval_create(PARAMETERS *params,
 		    EVALUATOR_FN evaluator,
-		    EVALUATOR_FN evaluatorIndex) ;
+		    EVALUATOR_FN evaluatorIndex,
+		    int result_len);
 
 void eval_destroy(EVALUATOR *eval);
 void inc_destroy(INCLUDES *inc) ;
 void sc_destroy(SPATIAL_COLLECTION *sc) ;
+void sc_twoinput_destroy(SPATIAL_COLLECTION *dead) ;
+
 
 VALUE *val_create(int num_values);
 void val_destroy(VALUE *val) ;
+void val_copy(VALUE *to, VALUE *from) ;
+
 
 /* Implementations of the includes interface */
 INCLUDES *sc_create_geometry_includes(LWGEOM *geom) ;
 void sc_destroy_geometry_includes(INCLUDES *dead) ;
+
+/**
+ * A function pointer typedef which describes a function
+ * capable of evaluating a spatial relationship at a point. The arguments
+ * are boolean values which reflect the value of the includes function
+ * for the first and second inputs, respectively. The return value is
+ * the result of the relationship evaluation.
+ */
+typedef int ((*RELATION_FN)(int,int)) ;
+
+/**
+ * A method signature used for functions which calculate the approximate extent
+ * of a result collection. The inputs are polygons representing the outlines
+ * of the two input collections (e.g., the four corners), and the output
+ * approximates the extent of the result. Both input polygons should be in the
+ * same projection.
+ */
+typedef GBOX *((*ENVELOPE_PREP_OP)(LWPOLY *, LWPOLY *)) ;
+
 
 INCLUDES *sc_create_relation_includes(RELATION_FN relation);
 void sc_destroy_relation_includes(INCLUDES *dead) ;
@@ -125,11 +163,13 @@ void sc_destroy_projection_includes(INCLUDES *dead);
 
 
 
+
 /* Implementations of the evaluator interface */
 EVALUATOR *sc_create_mask_evaluator(double true_val, double false_val, int index);
 void sc_destroy_mask_evaluator(EVALUATOR *dead) ;
 
-EVALUATOR *sc_create_first_value_evaluator(void);
+EVALUATOR *
+sc_create_first_value_evaluator(SPATIAL_COLLECTION *first, SPATIAL_COLLECTION *second);
 void sc_destroy_first_value_evaluator(EVALUATOR *dead);
 
 EVALUATOR *sc_create_projection_eval(EVALUATOR *wrapped, projPJ source, projPJ dest) ;
@@ -137,15 +177,64 @@ void sc_destroy_projection_eval(EVALUATOR *dead);
 
 
 
+
 /* implementations of the spatial collection interface */
-SPATIAL_COLLECTION *sc_create_geometry_wrapper(LWGEOM *geom, int32 srid, double inside, double outside);
+SPATIAL_COLLECTION *
+sc_create_geometry_wrapper(LWGEOM *geom, int owned,
+		double inside, double outside) ;
 void sc_destroy_geometry_wrapper(SPATIAL_COLLECTION *dead) ;
 
 SPATIAL_COLLECTION *
 sc_create_projection_wrapper(SPATIAL_COLLECTION *wrapped,
-		                     int32 desired_srid,
+		                     int32_t desired_srid,
 		                     projPJ wrapped_proj, projPJ desired_proj );
 void sc_destroy_projection_wrapper(SPATIAL_COLLECTION *dead);
+
+SPATIAL_COLLECTION *
+sc_create_relation_op(COLLECTION_TYPE t,
+		              SPATIAL_COLLECTION *sc1,
+		              SPATIAL_COLLECTION *sc2,
+		              ENVELOPE_PREP_OP env_fn,
+		              RELATION_FN inc_fn,
+		              EVALUATOR *eval) ;
+SPATIAL_COLLECTION *
+sc_create_sync_relation_op(COLLECTION_TYPE t,
+		              SPATIAL_COLLECTION *sc1,
+		              SPATIAL_COLLECTION *sc2,
+		              RELATION_TYPE relation,
+		              EVALUATOR *eval);
+void sc_destroy_relation_op(SPATIAL_COLLECTION *dead) ;
+
+
+SPATIAL_COLLECTION *
+sc_create_relation_op_proj(COLLECTION_TYPE t,
+		              SPATIAL_COLLECTION *sc1,
+		              SPATIAL_COLLECTION *sc2,
+		              projPJ proj_sc1, projPJ proj_sc2,
+		              int32_t srid, projPJ proj_dest,
+		              ENVELOPE_PREP_OP env_fn,
+		              RELATION_FN inc_fn,
+		              EVALUATOR *eval) ;
+SPATIAL_COLLECTION *
+sc_create_sync_relation_op_proj(COLLECTION_TYPE t,
+		              SPATIAL_COLLECTION *sc1,
+		              SPATIAL_COLLECTION *sc2,
+		              projPJ proj_sc1, projPJ proj_sc2,
+		              int dest_srid, projPJ proj_dest,
+		              RELATION_TYPE relation,
+		              EVALUATOR *eval) ;
+void sc_destroy_relation_op_proj(SPATIAL_COLLECTION *dead) ;
+
+int sc_get_relation_code(char *string, RELATION_TYPE *code) ;
+RELATION_FN sc_get_relation_fn(RELATION_TYPE relation) ;
+ENVELOPE_PREP_OP sc_get_envelope_fn(RELATION_TYPE relation) ;
+
+
+
+
+
+
+
 
 
 

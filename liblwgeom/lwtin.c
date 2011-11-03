@@ -1,9 +1,9 @@
 /**********************************************************************
- * $Id:$
  *
  * PostGIS - Spatial Types for PostgreSQL
  * http://postgis.refractions.net
- * Copyright 2001-2006 Refractions Research Inc.
+ *
+ * Copyright (C) 2001-2006 Refractions Research Inc.
  *
  * This is free software; you can redistribute and/or modify it under
  * the terms of the GNU General Public Licence. See the COPYING file.
@@ -14,68 +14,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include "liblwgeom_internal.h"
+#include "lwgeom_log.h"
 
-
-LWTIN *
-lwtin_deserialize(uint8_t *srl)
-{
-	LWTIN *result;
-	LWGEOM_INSPECTED *insp;
-	int type = lwgeom_getType(srl[0]);
-	int i;
-
-	LWDEBUG(2, "lwtin_deserialize called");
-
-	if ( type != TINTYPE )
-	{
-		lwerror("lwtin called on NON tin: %d - %s", type, lwtype_name(type));
-		return NULL;
-	}
-
-	insp = lwgeom_inspect(srl);
-
-	result = lwalloc(sizeof(LWTIN));
-	result->type = TINTYPE;
-	result->flags = gflags(TYPE_HASZ(insp->type), TYPE_HASM(insp->type), 0);
-	result->srid = insp->srid;
-	result->ngeoms = insp->ngeometries;
-
-	if ( insp->ngeometries )
-	{
-		result->geoms = lwalloc(sizeof(LWTRIANGLE *)*insp->ngeometries);
-	}
-	else
-	{
-		result->geoms = NULL;
-	}
-
-	if (lwgeom_hasBBOX(srl[0]))
-	{
-		BOX2DFLOAT4 *box2df;
-
-		FLAGS_SET_BBOX(result->flags, 1);
-		box2df = lwalloc(sizeof(BOX2DFLOAT4));
-		memcpy(box2df, srl+1, sizeof(BOX2DFLOAT4));
-		result->bbox = gbox_from_box2df(result->flags, box2df);
-		lwfree(box2df);
-	}
-	else result->bbox = NULL;
-
-	for (i=0; i<insp->ngeometries; i++)
-	{
-		result->geoms[i] = lwtriangle_deserialize(insp->sub_geoms[i]);
-		if ( FLAGS_NDIMS(result->geoms[i]->flags) != FLAGS_NDIMS(result->flags) )
-		{
-			lwerror("Mixed dimensions (tin:%d, triangle%d:%d)",
-			        FLAGS_NDIMS(result->flags), i,
-			        FLAGS_NDIMS(result->geoms[i]->flags)
-			       );
-			return NULL;
-		}
-	}
-
-	return result;
-}
 
 
 LWTIN* lwtin_add_lwtriangle(LWTIN *mobj, const LWTRIANGLE *obj)
@@ -148,7 +88,7 @@ int lwtin_is_closed(const LWTIN *tin)
 	LWTRIANGLE *patch;
 
 	/* If surface is not 3D, it's can't be closed */
-	if (!TYPE_HASZ(tin->type)) return 0;
+	if (!FLAGS_GET_Z(tin->flags)) return 0;
 
 	/* Max theorical arcs number if no one is shared ... */
 	narcs = 3 * tin->ngeoms;

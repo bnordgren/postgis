@@ -21,6 +21,7 @@ prefix = @prefix@
 exec_prefix = @exec_prefix@
 libdir = @libdir@
 includedir = @includedir@
+SHELL = @SHELL@
 INSTALL = $(SHELL) ../install-sh
 LIBTOOL = @LIBTOOL@
 
@@ -80,7 +81,9 @@ SA_OBJS = \
 	lwgeom_geos.o \
 	lwgeom_geos_clean.o \
 	lwgeom_geos_split.o \
-	lwgeom_transform.o
+	lwgeom_transform.o \
+	spatial_collection.o \
+	sc_implementation.o
 
 NM_OBJS = \
 	lwspheroid.o 
@@ -93,6 +96,7 @@ SA_HEADERS = \
 	liblwgeom.h \
 	liblwgeom_internal.h \
 	libtgeom.h \
+	lwgeom_log.h \
 	lwgeom_geos.h
 
 all: liblwgeom.la
@@ -126,10 +130,11 @@ clean:
 	rm -rf .libs
 
 distclean: clean
-	rm -f liblwgeom.h
+	$(MAKE) -C cunit distclean
+	rm -f liblwgeom.h Makefile
 
 check: liblwgeom.la
-	make -C cunit check
+	$(MAKE) -C cunit check
 
 # Command to build each of the .lo files
 $(LT_SA_OBJS): %.lo: %.c
@@ -138,13 +143,14 @@ $(LT_SA_OBJS): %.lo: %.c
 $(LT_NM_OBJS): %.lo: %.c
 	$(LIBTOOL) --mode=compile $(CC) $(CFLAGS) $(NUMERICFLAGS) -c -o $@ $<
 
-# Generate WKT parser from Flex/Yacc inputs
-lwin_wkt_parse.c: lwin_wkt_parse.y
-	$(YACC) -o'$@' -d $^
-#       $(YACC) --debug --verbose -o'$@' -d $<
-#       $(YACC) -o'$@' -d $^
-
-lwin_wkt_lex.c: lwin_wkt_lex.l
-	$(LEX) -i $<
+# Manually generate WKT parser from Flex/Bison inputs
+# Bison 2.5, Flex 2.5.35
+parser:
+	$(YACC) -o'lwin_wkt_parse.c' -d lwin_wkt_parse.y
+	$(LEX) -i lwin_wkt_lex.l
+	
+#	$(YACC) --debug --verbose -o'$@' -d $<
+#	$(YACC) -o'$@' -d $^
+#	$(LEX) -i $<
 
 

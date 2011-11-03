@@ -14,9 +14,9 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
-#include <math.h>
 
 #include "liblwgeom_internal.h"
+#include "lwgeom_log.h"
 
 
 LWMLINE *lwmcurve_segmentize(LWMCURVE *mcurve, uint32_t perQuad);
@@ -308,7 +308,7 @@ lwcompound_segmentize(const LWCOMPOUND *icompound, uint32_t perQuad)
 	for (i = 0; i < icompound->ngeoms; i++)
 	{
 		geom = icompound->geoms[i];
-		if (lwgeom_getType(geom->type) == CIRCSTRINGTYPE)
+		if (geom->type == CIRCSTRINGTYPE)
 		{
 			tmp = lwcircstring_segmentize((LWCIRCSTRING *)geom, perQuad);
 			for (j = 0; j < tmp->points->npoints; j++)
@@ -318,7 +318,7 @@ lwcompound_segmentize(const LWCOMPOUND *icompound, uint32_t perQuad)
 			}
 			lwfree(tmp);
 		}
-		else if (lwgeom_getType(geom->type) == LINETYPE)
+		else if (geom->type == LINETYPE)
 		{
 			tmp = (LWLINE *)geom;
 			for (j = 0; j < tmp->points->npoints; j++)
@@ -330,7 +330,7 @@ lwcompound_segmentize(const LWCOMPOUND *icompound, uint32_t perQuad)
 		else
 		{
 			lwerror("Unsupported geometry type %d found.",
-			        lwgeom_getType(geom->type), lwtype_name(lwgeom_getType(geom->type)));
+			        geom->type, lwtype_name(geom->type));
 			return NULL;
 		}
 	}
@@ -389,7 +389,7 @@ lwmcurve_segmentize(LWMCURVE *mcurve, uint32_t perQuad)
 	LWGEOM **lines;
 	int i;
 
-	LWDEBUGF(2, "lwmcurve_segmentize called, geoms=%d, dim=%d.", mcurve->ngeoms, TYPE_NDIMS(mcurve->type));
+	LWDEBUGF(2, "lwmcurve_segmentize called, geoms=%d, dim=%d.", mcurve->ngeoms, FLAGS_NDIMS(mcurve->flags));
 
 	lines = lwalloc(sizeof(LWGEOM *)*mcurve->ngeoms);
 
@@ -436,7 +436,7 @@ lwmsurface_segmentize(LWMSURFACE *msurface, uint32_t perQuad)
 		{
 			polys[i] = (LWGEOM *)lwcurvepoly_segmentize((LWCURVEPOLY *)tmp, perQuad);
 		}
-		else if (lwgeom_getType(tmp->type) == POLYGONTYPE)
+		else if (tmp->type == POLYGONTYPE)
 		{
 			poly = (LWPOLY *)tmp;
 			ptarray = lwalloc(sizeof(POINTARRAY *)*poly->nrings);

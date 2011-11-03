@@ -822,7 +822,7 @@ if test "x$RASTER" = "xraster"; then dnl # {
 	GDAL_MIN_VERSION=1.6.0
 	GDAL_MIN_VERSION_NUMBER=160 dnl TODO: Use GDAL version calculation MAJOR*1000+MINOR*100+REV*10+BUILD
 
-    AC_ARG_WITH([gdal],
+    AC_ARG_WITH([gdalconfig],
 		AC_HELP_STRING([--with-gdalconfig=@<:@ARG@:>@],[specify location of gdal-config (ARG=path)]),
         	[GDAL_CONFIG="$withval"], [GDAL_CONFIG=""])
 
@@ -851,8 +851,10 @@ if test "x$RASTER" = "xraster"; then dnl # {
        if test ! "$GDAL_VERSION_NUMBER" -ge "$GDAL_MIN_VERSION_NUMBER" ; then
 	   	  AC_MSG_RESULT([not found])
 	   	  AC_MSG_ERROR([PostGIS requires GDAL >= $GDAL_MIN_VERSION])
-	   fi
+       fi
 
+       AC_DEFINE_UNQUOTED([POSTGIS_GDAL_VERSION], [$POSTGIS_GDAL_VERSION], [GDAL library version])	
+       AC_SUBST([POSTGIS_GDAL_VERSION])
 	else
 		AC_MSG_RESULT([not found])
 		AC_MSG_ERROR([gdal-config not found. Try --with-gdalconfig=<path to gdal-config>])

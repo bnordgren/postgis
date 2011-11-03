@@ -22,8 +22,6 @@
 --
 -- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-#include "../../libpgcommon/gserialized.h"
-
 -- BEGIN;
 
 ------------------------------------------------------------------------------
@@ -53,7 +51,7 @@ CREATE TYPE raster (
 ------------------------------------------------------------------------------
 
 -----------------------------------------------------------------------
--- RasterLib Version
+-- Raster Version
 -----------------------------------------------------------------------
 
 CREATE OR REPLACE FUNCTION postgis_raster_lib_version()
@@ -65,6 +63,11 @@ CREATE OR REPLACE FUNCTION postgis_raster_lib_build_date()
     RETURNS text
     AS 'MODULE_PATHNAME', 'RASTER_lib_build_date'
     LANGUAGE 'C' IMMUTABLE; -- a new lib will require a new session
+
+CREATE OR REPLACE FUNCTION postgis_gdal_version()
+    RETURNS text
+    AS 'MODULE_PATHNAME', 'RASTER_gdal_version'
+    LANGUAGE 'C' IMMUTABLE;
 
 -----------------------------------------------------------------------
 -- Raster Accessors
@@ -176,12 +179,12 @@ CREATE OR REPLACE FUNCTION st_makeemptyraster(width int, height int, upperleftx 
 
 CREATE OR REPLACE FUNCTION st_makeemptyraster(width int, height int, upperleftx float8, upperlefty float8, pixelsize float8)
     RETURNS raster
-    AS 'select st_makeemptyraster($1, $2, $3, $4, $5, $5, 0, 0, -1)'
+    AS 'select st_makeemptyraster($1, $2, $3, $4, $5, $5, 0, 0, 0)'
     LANGUAGE 'SQL' IMMUTABLE STRICT;
 
 CREATE OR REPLACE FUNCTION st_makeemptyraster(width int, height int, upperleftx float8, upperlefty float8, scalex float8, scaley float8, skewx float8, skewy float8)
     RETURNS raster
-    AS 'select st_makeemptyraster($1, $2, $3, $4, $5, $6, $7, $8, -1)'
+    AS 'select st_makeemptyraster($1, $2, $3, $4, $5, $6, $7, $8, 0)'
     LANGUAGE 'SQL' IMMUTABLE STRICT;
 
 CREATE OR REPLACE FUNCTION st_makeemptyraster(rast raster)
@@ -1154,8 +1157,7 @@ CREATE OR REPLACE FUNCTION st_asjpeg(rast raster, options text[] DEFAULT NULL)
 	BEGIN
 		num_bands := st_numbands($1);
 
-		-- JPEG only allows 1 or 3 bands
-		-- we only use the first
+		-- JPEG allows 1 or 3 bands
 		IF num_bands <> 1 AND num_bands <> 3 THEN
 			RAISE NOTICE 'The JPEG format only permits one or three bands.  The first band will be used.';
 			rast2 := st_band(rast, ARRAY[1]);
@@ -1230,9 +1232,9 @@ CREATE OR REPLACE FUNCTION st_aspng(rast raster, options text[] DEFAULT NULL)
 	BEGIN
 		num_bands := st_numbands($1);
 
-		-- PNG only allows 1 or 3 bands
-		IF num_bands <> 1 AND num_bands <> 3 THEN
-			RAISE NOTICE 'The PNG format only permits one or three bands.  The first band will be used.';
+		-- PNG allows 1, 3 or 4 bands
+		IF num_bands <> 1 AND num_bands <> 3 AND num_bands <> 4 THEN
+			RAISE NOTICE 'The PNG format only permits one, three or four bands.  The first band will be used.';
 			rast2 := st_band($1, ARRAY[1]);
 			num_bands := st_numbands(rast2);
 		ELSE
@@ -1303,7 +1305,8 @@ CREATE OR REPLACE FUNCTION _st_asraster(
 	nodataval double precision[] DEFAULT ARRAY[0]::double precision[],
 	upperleftx double precision DEFAULT NULL, upperlefty double precision DEFAULT NULL,
 	gridx double precision DEFAULT NULL, gridy double precision DEFAULT NULL,
-	skewx double precision DEFAULT 0, skewy double precision DEFAULT 0
+	skewx double precision DEFAULT 0, skewy double precision DEFAULT 0,
+	touched boolean DEFAULT FALSE
 )
 	RETURNS raster
 	AS 'MODULE_PATHNAME', 'RASTER_asRaster'
@@ -1316,10 +1319,11 @@ CREATE OR REPLACE FUNCTION st_asraster(
 	pixeltype text[] DEFAULT ARRAY['8BUI']::text[],
 	value double precision[] DEFAULT ARRAY[1]::double precision[],
 	nodataval double precision[] DEFAULT ARRAY[0]::double precision[],
-	skewx double precision DEFAULT 0, skewy double precision DEFAULT 0
+	skewx double precision DEFAULT 0, skewy double precision DEFAULT 0,
+	touched boolean DEFAULT FALSE
 )
 	RETURNS raster
-	AS $$ SELECT _st_asraster($1, $2, $3, NULL, NULL, $6, $7, $8, NULL, NULL, $4, $5, $9, $10) $$
+	AS $$ SELECT _st_asraster($1, $2, $3, NULL, NULL, $6, $7, $8, NULL, NULL, $4, $5, $9, $10, $11) $$
 	LANGUAGE 'sql' STABLE;
 
 CREATE OR REPLACE FUNCTION st_asraster(
@@ -1329,10 +1333,11 @@ CREATE OR REPLACE FUNCTION st_asraster(
 	value double precision[] DEFAULT ARRAY[1]::double precision[],
 	nodataval double precision[] DEFAULT ARRAY[0]::double precision[],
 	upperleftx double precision DEFAULT NULL, upperlefty double precision DEFAULT NULL,
-	skewx double precision DEFAULT 0, skewy double precision DEFAULT 0
+	skewx double precision DEFAULT 0, skewy double precision DEFAULT 0,
+	touched boolean DEFAULT FALSE
 )
 	RETURNS raster
-	AS $$ SELECT _st_asraster($1, $2, $3, NULL, NULL, $4, $5, $6, $7, $8, NULL, NULL,	$9, $10) $$
+	AS $$ SELECT _st_asraster($1, $2, $3, NULL, NULL, $4, $5, $6, $7, $8, NULL, NULL,	$9, $10, $11) $$
 	LANGUAGE 'sql' STABLE;
 
 CREATE OR REPLACE FUNCTION st_asraster(
@@ -1342,10 +1347,11 @@ CREATE OR REPLACE FUNCTION st_asraster(
 	pixeltype text[] DEFAULT ARRAY['8BUI']::text[],
 	value double precision[] DEFAULT ARRAY[1]::double precision[],
 	nodataval double precision[] DEFAULT ARRAY[0]::double precision[],
-	skewx double precision DEFAULT 0, skewy double precision DEFAULT 0
+	skewx double precision DEFAULT 0, skewy double precision DEFAULT 0,
+	touched boolean DEFAULT FALSE
 )
 	RETURNS raster
-	AS $$ SELECT _st_asraster($1, NULL, NULL, $2, $3, $6, $7, $8, NULL, NULL, $4, $5, $9, $10) $$
+	AS $$ SELECT _st_asraster($1, NULL, NULL, $2, $3, $6, $7, $8, NULL, NULL, $4, $5, $9, $10, $11) $$
 	LANGUAGE 'sql' STABLE;
 
 CREATE OR REPLACE FUNCTION st_asraster(
@@ -1355,10 +1361,11 @@ CREATE OR REPLACE FUNCTION st_asraster(
 	value double precision[] DEFAULT ARRAY[1]::double precision[],
 	nodataval double precision[] DEFAULT ARRAY[0]::double precision[],
 	upperleftx double precision DEFAULT NULL, upperlefty double precision DEFAULT NULL,
-	skewx double precision DEFAULT 0, skewy double precision DEFAULT 0
+	skewx double precision DEFAULT 0, skewy double precision DEFAULT 0,
+	touched boolean DEFAULT FALSE
 )
 	RETURNS raster
-	AS $$ SELECT _st_asraster($1, NULL, NULL, $2, $3, $4, $5, $6, $7, $8, NULL, NULL,	$9, $10) $$
+	AS $$ SELECT _st_asraster($1, NULL, NULL, $2, $3, $4, $5, $6, $7, $8, NULL, NULL,	$9, $10, $11) $$
 	LANGUAGE 'sql' STABLE;
 
 CREATE OR REPLACE FUNCTION st_asraster(
@@ -1368,10 +1375,11 @@ CREATE OR REPLACE FUNCTION st_asraster(
 	pixeltype text,
 	value double precision DEFAULT 1,
 	nodataval double precision DEFAULT 0,
-	skewx double precision DEFAULT 0, skewy double precision DEFAULT 0
+	skewx double precision DEFAULT 0, skewy double precision DEFAULT 0,
+	touched boolean DEFAULT FALSE
 )
 	RETURNS raster
-	AS $$ SELECT _st_asraster($1, $2, $3, NULL, NULL, ARRAY[$6]::text[], ARRAY[$7]::double precision[], ARRAY[$8]::double precision[], NULL, NULL, $4, $5, $9, $10) $$
+	AS $$ SELECT _st_asraster($1, $2, $3, NULL, NULL, ARRAY[$6]::text[], ARRAY[$7]::double precision[], ARRAY[$8]::double precision[], NULL, NULL, $4, $5, $9, $10, $11) $$
 	LANGUAGE 'sql' STABLE;
 
 CREATE OR REPLACE FUNCTION st_asraster(
@@ -1381,10 +1389,11 @@ CREATE OR REPLACE FUNCTION st_asraster(
 	value double precision DEFAULT 1,
 	nodataval double precision DEFAULT 0,
 	upperleftx double precision DEFAULT NULL, upperlefty double precision DEFAULT NULL,
-	skewx double precision DEFAULT 0, skewy double precision DEFAULT 0
+	skewx double precision DEFAULT 0, skewy double precision DEFAULT 0,
+	touched boolean DEFAULT FALSE
 )
 	RETURNS raster
-	AS $$ SELECT _st_asraster($1, $2, $3, NULL, NULL, ARRAY[$4]::text[], ARRAY[$5]::double precision[], ARRAY[$6]::double precision[], $7, $8, NULL, NULL, $9, $10) $$
+	AS $$ SELECT _st_asraster($1, $2, $3, NULL, NULL, ARRAY[$4]::text[], ARRAY[$5]::double precision[], ARRAY[$6]::double precision[], $7, $8, NULL, NULL, $9, $10, $11) $$
 	LANGUAGE 'sql' STABLE;
 
 CREATE OR REPLACE FUNCTION st_asraster(
@@ -1394,10 +1403,11 @@ CREATE OR REPLACE FUNCTION st_asraster(
 	pixeltype text,
 	value double precision DEFAULT 1,
 	nodataval double precision DEFAULT 0,
-	skewx double precision DEFAULT 0, skewy double precision DEFAULT 0
+	skewx double precision DEFAULT 0, skewy double precision DEFAULT 0,
+	touched boolean DEFAULT FALSE
 )
 	RETURNS raster
-	AS $$ SELECT _st_asraster($1, NULL, NULL, $2, $3, ARRAY[$6]::text[], ARRAY[$7]::double precision[], ARRAY[$8]::double precision[], NULL, NULL, $4, $5, $9, $10) $$
+	AS $$ SELECT _st_asraster($1, NULL, NULL, $2, $3, ARRAY[$6]::text[], ARRAY[$7]::double precision[], ARRAY[$8]::double precision[], NULL, NULL, $4, $5, $9, $10, $11) $$
 	LANGUAGE 'sql' STABLE;
 
 CREATE OR REPLACE FUNCTION st_asraster(
@@ -1407,10 +1417,11 @@ CREATE OR REPLACE FUNCTION st_asraster(
 	value double precision DEFAULT 1,
 	nodataval double precision DEFAULT 0,
 	upperleftx double precision DEFAULT NULL, upperlefty double precision DEFAULT NULL,
-	skewx double precision DEFAULT 0, skewy double precision DEFAULT 0
+	skewx double precision DEFAULT 0, skewy double precision DEFAULT 0,
+	touched boolean DEFAULT FALSE
 )
 	RETURNS raster
-	AS $$ SELECT _st_asraster($1, NULL, NULL, $2, $3, ARRAY[$4]::text[], ARRAY[$5]::double precision[], ARRAY[$6]::double precision[], $7, $8, NULL, NULL,$9, $10) $$
+	AS $$ SELECT _st_asraster($1, NULL, NULL, $2, $3, ARRAY[$4]::text[], ARRAY[$5]::double precision[], ARRAY[$6]::double precision[], $7, $8, NULL, NULL,$9, $10, $11) $$
 	LANGUAGE 'sql' STABLE;
 
 CREATE OR REPLACE FUNCTION st_asraster(
@@ -1418,7 +1429,8 @@ CREATE OR REPLACE FUNCTION st_asraster(
 	ref raster,
 	pixeltype text[] DEFAULT ARRAY['8BUI']::text[],
 	value double precision[] DEFAULT ARRAY[1]::double precision[],
-	nodataval double precision[] DEFAULT ARRAY[0]::double precision[]
+	nodataval double precision[] DEFAULT ARRAY[0]::double precision[],
+	touched boolean DEFAULT FALSE
 )
 	RETURNS raster
 	AS $$
@@ -1446,7 +1458,7 @@ CREATE OR REPLACE FUNCTION st_asraster(
 			g := geom;
 		END IF;
 	
-		RETURN _st_asraster(g, scale_x, scale_y, NULL, NULL, $3, $4, $5, NULL, NULL, ul_x, ul_y, skew_x, skew_y);
+		RETURN _st_asraster(g, scale_x, scale_y, NULL, NULL, $3, $4, $5, NULL, NULL, ul_x, ul_y, skew_x, skew_y, $6);
 	END;
 	$$ LANGUAGE 'plpgsql' STABLE;
 
@@ -1455,10 +1467,11 @@ CREATE OR REPLACE FUNCTION st_asraster(
 	ref raster,
 	pixeltype text,
 	value double precision DEFAULT 1,
-	nodataval double precision DEFAULT 0
+	nodataval double precision DEFAULT 0,
+	touched boolean DEFAULT FALSE
 )
 	RETURNS raster
-	AS $$ SELECT st_asraster($1, $2, ARRAY[$3]::text[], ARRAY[$4]::double precision[], ARRAY[$5]::double precision[]) $$
+	AS $$ SELECT st_asraster($1, $2, ARRAY[$3]::text[], ARRAY[$4]::double precision[], ARRAY[$5]::double precision[], $6) $$
 	LANGUAGE 'sql' STABLE;
 
 -----------------------------------------------------------------------
@@ -1574,24 +1587,78 @@ CREATE OR REPLACE FUNCTION st_snaptogrid(rast raster, gridx double precision, gr
 	LANGUAGE 'sql' STABLE STRICT;
 
 -----------------------------------------------------------------------
--- MapAlgebra
+-- One Raster ST_MapAlgebra
 -----------------------------------------------------------------------
--- This function can not be STRICT, because nodatavalueexpr can be NULL (could be just '' though)
+-- This function can not be STRICT, because nodatavaluerepl can be NULL (could be just '' though)
 -- or pixeltype can not be determined (could be st_bandpixeltype(raster, band) though)
-CREATE OR REPLACE FUNCTION st_mapalgebra(rast raster, band integer,
-        expression text, nodatavalueexpr text DEFAULT NULL, pixeltype text DEFAULT NULL)
+CREATE OR REPLACE FUNCTION st_mapalgebraexpr(rast raster, band integer, pixeltype text,
+        expression text, nodatavaluerepl text DEFAULT NULL)
     RETURNS raster
-    AS 'MODULE_PATHNAME', 'RASTER_mapAlgebra'
+    AS 'MODULE_PATHNAME', 'RASTER_mapAlgebraExpr'
     LANGUAGE 'C' IMMUTABLE;
 
--- This function can not be STRICT, because nodatavalueexpr can be NULL (could be just '' though)
+-- This function can not be STRICT, because nodatavaluerepl can be NULL (could be just '' though)
 -- or pixeltype can not be determined (could be st_bandpixeltype(raster, band) though)
-CREATE OR REPLACE FUNCTION st_mapalgebra(rast raster, expression text,
-        nodatavalueexpr text DEFAULT NULL, pixeltype text DEFAULT NULL)
+CREATE OR REPLACE FUNCTION st_mapalgebraexpr(rast raster, pixeltype text, expression text,
+        nodatavaluerepl text DEFAULT NULL)
     RETURNS raster
-    AS $$ SELECT st_mapalgebra($1, 1, $2, $3, $4) $$
+    AS $$ SELECT st_mapalgebraexpr($1, 1, $2, $3, $4) $$
     LANGUAGE SQL;
 
+-- All arguments supplied, use the C implementation.
+CREATE OR REPLACE FUNCTION st_mapalgebrafct(rast raster, band integer, 
+        pixeltype text, userfunction regprocedure, variadic args text[]) 
+    RETURNS raster
+    AS 'MODULE_PATHNAME', 'RASTER_mapAlgebraFct'
+    LANGUAGE 'C' IMMUTABLE;
+
+-- Variant 1: missing user args
+CREATE OR REPLACE FUNCTION st_mapalgebrafct(rast raster, band integer,
+        pixeltype text, userfunction regprocedure)
+    RETURNS raster
+    AS $$ SELECT st_mapalgebrafct($1, $2, $3, $4, NULL) $$
+    LANGUAGE SQL;
+
+-- Variant 2: missing pixeltype; default to pixeltype of rast
+CREATE OR REPLACE FUNCTION st_mapalgebrafct(rast raster, band integer,
+        userfunction regprocedure, variadic args text[])
+    RETURNS raster
+    AS $$ SELECT st_mapalgebrafct($1, $2, NULL, $3, VARIADIC $4) $$
+    LANGUAGE SQL;
+ 
+-- Variant 3: missing pixeltype and user args; default to pixeltype of rast
+CREATE OR REPLACE FUNCTION st_mapalgebrafct(rast raster, band integer,
+        userfunction regprocedure)
+    RETURNS raster
+    AS $$ SELECT st_mapalgebrafct($1, $2, NULL, $3, NULL) $$
+    LANGUAGE SQL;
+
+-- Variant 4: missing band; default to band 1
+CREATE OR REPLACE FUNCTION st_mapalgebrafct(rast raster, pixeltype text,
+        userfunction regprocedure, variadic args text[])
+    RETURNS raster
+    AS $$ SELECT st_mapalgebrafct($1, 1, $2, $3, VARIADIC $4) $$
+    LANGUAGE SQL;
+
+-- Variant 5: missing band and user args; default to band 1
+CREATE OR REPLACE FUNCTION st_mapalgebrafct(rast raster, pixeltype text,
+        userfunction regprocedure)
+    RETURNS raster
+    AS $$ SELECT st_mapalgebrafct($1, 1, $2, $3, NULL) $$
+    LANGUAGE SQL;
+
+-- Variant 6: missing band, and pixeltype; default to band 1, pixeltype of rast.
+CREATE OR REPLACE FUNCTION st_mapalgebrafct(rast raster, userfunction regprocedure,
+        variadic args text[])
+    RETURNS raster
+    AS $$ SELECT st_mapalgebrafct($1, 1, NULL, $2, VARIADIC $3) $$
+    LANGUAGE SQL;
+
+-- Variant 7: missing band, pixeltype, and user args; default to band 1, pixeltype of rast.
+CREATE OR REPLACE FUNCTION st_mapalgebrafct(rast raster, userfunction regprocedure)
+    RETURNS raster
+    AS $$ SELECT st_mapalgebrafct($1, 1, NULL, $2, NULL) $$
+    LANGUAGE SQL;
 
 -----------------------------------------------------------------------
 -- Get information about the raster
@@ -1601,15 +1668,10 @@ CREATE OR REPLACE FUNCTION st_isempty(rast raster)
     AS 'MODULE_PATHNAME', 'RASTER_isEmpty'
     LANGUAGE 'C' IMMUTABLE STRICT;
 
-CREATE OR REPLACE FUNCTION st_hasnoband(rast raster, nband int)
+CREATE OR REPLACE FUNCTION st_hasnoband(rast raster, nband int DEFAULT 1)
     RETURNS boolean
     AS 'MODULE_PATHNAME', 'RASTER_hasNoBand'
     LANGUAGE 'C' IMMUTABLE STRICT;
-
-CREATE OR REPLACE FUNCTION st_hasnoband(rast raster)
-    RETURNS boolean
-    AS 'select st_hasnoband($1, 1)'
-    LANGUAGE 'SQL' IMMUTABLE STRICT;
 
 -----------------------------------------------------------------------
 -- Raster Band Accessors
@@ -2106,7 +2168,7 @@ CREATE OR REPLACE FUNCTION st_world2rastercoordx(rast raster, xw float8, yw floa
     LANGUAGE 'plpgsql' IMMUTABLE STRICT;
 
 ---------------------------------------------------------------------------------
--- ST_World2RasteCoordX(rast raster, xw float8)
+-- ST_World2RasterCoordX(rast raster, xw float8)
 -- Returns the column number of the pixels covering the provided world X coordinate
 -- for a non-rotated raster.
 -- This function works even if the world coordinate is outside the raster extent.
@@ -2460,11 +2522,7 @@ CREATE OPERATOR &<| (
 CREATE OPERATOR && (
     LEFTARG = raster, RIGHTARG = raster, PROCEDURE = st_overlap,
     COMMUTATOR = '&&',
-#ifdef GSERIALIZED_ON
     RESTRICT = contsel, JOIN = contjoinsel
-#else
-    RESTRICT = geometry_gist_sel, JOIN = geometry_gist_joinsel
-#endif
     );
 
 CREATE OPERATOR &> (
@@ -2510,182 +2568,214 @@ CREATE OPERATOR ~ (
     );
 
 -----------------------------------------------------------------------
+-- Raster/Raster Spatial Relationship
+-----------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION st_samealignment(rastA raster, rastB raster)
+	RETURNS boolean
+	AS 'MODULE_PATHNAME', 'RASTER_sameAlignment'
+	LANGUAGE 'C' IMMUTABLE STRICT;
+
+CREATE OR REPLACE FUNCTION st_samealignment(
+	ulx1 double precision, uly1 double precision, scalex1 double precision, scaley1 double precision, skewx1 double precision, skewy1 double precision,
+	ulx2 double precision, uly2 double precision, scalex2 double precision, scaley2 double precision, skewx2 double precision, skewy2 double precision
+)
+	RETURNS boolean
+	AS $$ SELECT st_samealignment(st_makeemptyraster(1, 1, $1, $2, $3, $4, $5, $6), st_makeemptyraster(1, 1, $7, $8, $9, $10, $11, $12)) $$
+	LANGUAGE 'SQL' IMMUTABLE STRICT;
+
+CREATE OR REPLACE FUNCTION _st_intersects(rastA raster, nbandA integer, rastB raster, nbandB integer)
+	RETURNS boolean
+	AS 'MODULE_PATHNAME', 'RASTER_intersects'
+	LANGUAGE 'C' IMMUTABLE;
+
+CREATE OR REPLACE FUNCTION st_intersects(rastA raster, nbandA integer, rastB raster, nbandB integer)
+	RETURNS boolean
+	AS $$ SELECT $1 && $3 AND _st_intersects($1, $2, $3, $4) $$
+	LANGUAGE 'SQL' IMMUTABLE;
+
+CREATE OR REPLACE FUNCTION st_intersects(rastA raster, rastB raster)
+	RETURNS boolean
+	AS $$ SELECT $1 && $2 AND _st_intersects($1, 1, $2, 1) $$
+	LANGUAGE 'SQL' IMMUTABLE STRICT;
+
+-----------------------------------------------------------------------
 -- Raster/Geometry Spatial Relationship
 -----------------------------------------------------------------------
 
+CREATE OR REPLACE FUNCTION _st_intersects(rast raster, geom geometry, nband integer DEFAULT NULL)
+	RETURNS boolean
+	AS $$
+	DECLARE
+		gr raster;
+		scale double precision;
+	BEGIN
+		IF ST_Intersects(geom, ST_ConvexHull(rast)) IS NOT TRUE THEN
+			RETURN FALSE;
+		ELSEIF nband IS NULL THEN
+			RETURN TRUE;
+		END IF;
+
+		-- scale is set to 1/100th of raster for granularity
+		SELECT least(scalex, scaley) / 100. INTO scale FROM ST_Metadata(rast);
+		gr := _st_asraster(geom, scale, scale);
+		IF gr IS NULL THEN
+			RAISE EXCEPTION 'Unable to convert geometry to a raster';
+			RETURN FALSE;
+		END IF;
+
+		RETURN ST_Intersects(rast, nband, gr, 1);
+	END;
+	$$ LANGUAGE 'plpgsql' IMMUTABLE;
+
+CREATE OR REPLACE FUNCTION st_intersects(rast raster, geom geometry, nband integer DEFAULT NULL)
+	RETURNS boolean
+	AS $$ SELECT $1 && $2 AND _st_intersects($1, $2, $3) $$
+	LANGUAGE 'SQL' IMMUTABLE;
+
+CREATE OR REPLACE FUNCTION st_intersects(rast raster, nband integer, geom geometry)
+	RETURNS boolean
+	AS $$ SELECT $1 && $3 AND _st_intersects($1, $3, $2) $$
+	LANGUAGE 'SQL' IMMUTABLE STRICT;
+
 -----------------------------------------------------------------------
--- _st_intersects(geomin geometry, rast raster, band integer, hasnodata boolean)
--- If hasnodata is true, check for the presence of withvalue pixels in the area
+-- _st_intersects(geom geometry, rast raster, nband integer)
+-- If band is provided, check for the presence of withvalue pixels in the area
 -- shared by the raster and the geometry. If only nodata value pixels are found, the
 -- geometry does not intersect with the raster.
 -----------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION _st_intersects(geomin geometry, rast raster, band integer, hasnodata boolean)
-    RETURNS boolean AS
-    $$
-    DECLARE
-        nodata float8 := 0.0;
-        geomintersect geometry;
-        x1w double precision := 0.0;
-        x2w double precision := 0.0;
-        y1w double precision := 0.0;
-        y2w double precision := 0.0;
-        x1 integer := 0;
-        x2 integer := 0;
-        x3 integer := 0;
-        x4 integer := 0;
-        y1 integer := 0;
-        y2 integer := 0;
-        y3 integer := 0;
-        y4 integer := 0;
-        x integer := 0;
-        y integer := 0;
-        xinc integer := 0;
-        yinc integer := 0;
-        pixelval double precision;
-        bintersect boolean := FALSE;
-        gtype text;
-        scale float8;
-				w int;
-				h int;
-    BEGIN
+-- This function can not be STRICT
+CREATE OR REPLACE FUNCTION _st_intersects(geom geometry, rast raster, nband integer DEFAULT NULL)
+	RETURNS boolean AS $$
+	DECLARE
+		hasnodata boolean := TRUE;
+		nodata float8 := 0.0;
+		convexhull geometry;
+		geomintersect geometry;
+		x1w double precision := 0.0;
+		x2w double precision := 0.0;
+		y1w double precision := 0.0;
+		y2w double precision := 0.0;
+		x1 integer := 0;
+		x2 integer := 0;
+		x3 integer := 0;
+		x4 integer := 0;
+		y1 integer := 0;
+		y2 integer := 0;
+		y3 integer := 0;
+		y4 integer := 0;
+		x integer := 0;
+		y integer := 0;
+		xinc integer := 0;
+		yinc integer := 0;
+		pixelval double precision;
+		bintersect boolean := FALSE;
+		gtype text;
+		scale float8;
+		w int;
+		h int;
+	BEGIN
+		convexhull := ST_ConvexHull(rast);
+		IF nband IS NOT NULL THEN
+			SELECT hasnodatavalue INTO hasnodata FROM ST_BandMetaData(rast, nband);
+		END IF;
 
-        -- Get the intersection between with the geometry.
-        -- We will search for withvalue pixel only in this area.
-        geomintersect := st_intersection(geomin, st_convexhull(rast));
+		IF ST_Intersects(geom, convexhull) IS NOT TRUE THEN
+			RETURN FALSE;
+		ELSEIF nband IS NULL OR hasnodata IS FALSE THEN
+			RETURN TRUE;
+		END IF;
 
---RAISE NOTICE 'geomintersect1=%', astext(geomintersect);
+		-- Get the intersection between with the geometry.
+		-- We will search for withvalue pixel only in this area.
+		geomintersect := st_intersection(geom, convexhull);
 
-        -- If the intersection is empty, return false
-        IF st_isempty(geomintersect) THEN
-            RETURN FALSE;
-        END IF;
+--RAISE NOTICE 'geomintersect=%', st_astext(geomintersect);
 
-        -- If the band does not have a nodatavalue, there is no need to search for with value pixels
-        IF NOT hasnodata OR st_bandnodatavalue(rast, band) IS NULL THEN
-            RETURN TRUE;
-        END IF;
+		-- If the intersection is empty, return false
+		IF st_isempty(geomintersect) THEN
+			RETURN FALSE;
+		END IF;
 
-        -- We create a minimalistic buffer around the intersection in order to scan every pixels
-        -- that would touch the edge or intersect with the geometry
-        SELECT (scalex * skewy), width, height INTO scale, w, h FROM ST_Metadata(rast);
-        geomintersect := st_buffer(geomintersect, scale / 1000000);
+		-- We create a minimalistic buffer around the intersection in order to scan every pixels
+		-- that would touch the edge or intersect with the geometry
+		SELECT sqrt(scalex * scalex + skewy * skewy), width, height INTO scale, w, h FROM ST_Metadata(rast);
+		IF scale != 0 THEN
+			geomintersect := st_buffer(geomintersect, scale / 1000000);
+		END IF;
 
---RAISE NOTICE 'geomintersect2=%', astext(geomintersect);
+--RAISE NOTICE 'geomintersect2=%', st_astext(geomintersect);
 
-        -- Find the world coordinates of the bounding box of the intersecting area
-        x1w := st_xmin(geomintersect);
-        y1w := st_ymin(geomintersect);
-        x2w := st_xmax(geomintersect);
-        y2w := st_ymax(geomintersect);
-        nodata := st_bandnodatavalue(rast, band);
+		-- Find the world coordinates of the bounding box of the intersecting area
+		x1w := st_xmin(geomintersect);
+		y1w := st_ymin(geomintersect);
+		x2w := st_xmax(geomintersect);
+		y2w := st_ymax(geomintersect);
+		nodata := st_bandnodatavalue(rast, nband);
 
 --RAISE NOTICE 'x1w=%, y1w=%, x2w=%, y2w=%', x1w, y1w, x2w, y2w;
 
-        -- Convert world coordinates to raster coordinates
-        x1 := st_world2rastercoordx(rast, x1w, y1w);
-        y1 := st_world2rastercoordy(rast, x1w, y1w);
-        x2 := st_world2rastercoordx(rast, x2w, y1w);
-        y2 := st_world2rastercoordy(rast, x2w, y1w);
-        x3 := st_world2rastercoordx(rast, x1w, y2w);
-        y3 := st_world2rastercoordy(rast, x1w, y2w);
-        x4 := st_world2rastercoordx(rast, x2w, y2w);
-        y4 := st_world2rastercoordy(rast, x2w, y2w);
+		-- Convert world coordinates to raster coordinates
+		x1 := st_world2rastercoordx(rast, x1w, y1w);
+		y1 := st_world2rastercoordy(rast, x1w, y1w);
+		x2 := st_world2rastercoordx(rast, x2w, y1w);
+		y2 := st_world2rastercoordy(rast, x2w, y1w);
+		x3 := st_world2rastercoordx(rast, x1w, y2w);
+		y3 := st_world2rastercoordy(rast, x1w, y2w);
+		x4 := st_world2rastercoordx(rast, x2w, y2w);
+		y4 := st_world2rastercoordy(rast, x2w, y2w);
 
 --RAISE NOTICE 'x1=%, y1=%, x2=%, y2=%, x3=%, y3=%, x4=%, y4=%', x1, y1, x2, y2, x3, y3, x4, y4;
 
-        -- Order the raster coordinates for the upcoming FOR loop.
-        x1 := int4smaller(int4smaller(int4smaller(x1, x2), x3), x4);
-        y1 := int4smaller(int4smaller(int4smaller(y1, y2), y3), y4);
-        x2 := int4larger(int4larger(int4larger(x1, x2), x3), x4);
-        y2 := int4larger(int4larger(int4larger(y1, y2), y3), y4);
+		-- Order the raster coordinates for the upcoming FOR loop.
+		x1 := int4smaller(int4smaller(int4smaller(x1, x2), x3), x4);
+		y1 := int4smaller(int4smaller(int4smaller(y1, y2), y3), y4);
+		x2 := int4larger(int4larger(int4larger(x1, x2), x3), x4);
+		y2 := int4larger(int4larger(int4larger(y1, y2), y3), y4);
 
-        -- Make sure the range is not lower than 1.
-        -- This can happen when world coordinate are exactly on the left border
-        -- of the raster and that they do not span on more than one pixel.
-        x1 := int4smaller(int4larger(x1, 1), w);
-        y1 := int4smaller(int4larger(y1, 1), h);
+		-- Make sure the range is not lower than 1.
+		-- This can happen when world coordinate are exactly on the left border
+		-- of the raster and that they do not span on more than one pixel.
+		x1 := int4smaller(int4larger(x1, 1), w);
+		y1 := int4smaller(int4larger(y1, 1), h);
 
-        -- Also make sure the range does not exceed the width and height of the raster.
-        -- This can happen when world coordinate are exactly on the lower right border
-        -- of the raster.
-        x2 := int4smaller(x2, w);
-        y2 := int4smaller(y2, h);
+		-- Also make sure the range does not exceed the width and height of the raster.
+		-- This can happen when world coordinate are exactly on the lower right border
+		-- of the raster.
+		x2 := int4smaller(x2, w);
+		y2 := int4smaller(y2, h);
 
 --RAISE NOTICE 'x1=%, y1=%, x2=%, y2=%', x1, y1, x2, y2;
 
-        -- Search exhaustively for withvalue pixel on a moving 3x3 grid
-        -- (very often more efficient than searching on a mere 1x1 grid)
-        FOR xinc in 0..2 LOOP
-            FOR yinc in 0..2 LOOP
-                FOR x IN x1+xinc..x2 BY 3 LOOP
-                    FOR y IN y1+yinc..y2 BY 3 LOOP
-                        -- Check first if the pixel intersects with the geometry. Often many won't.
-                        bintersect := NOT st_isempty(st_intersection(st_pixelaspolygon(rast, band, x, y), geomin));
+		-- Search exhaustively for withvalue pixel on a moving 3x3 grid
+		-- (very often more efficient than searching on a mere 1x1 grid)
+		FOR xinc in 0..2 LOOP
+			FOR yinc in 0..2 LOOP
+				FOR x IN x1+xinc..x2 BY 3 LOOP
+					FOR y IN y1+yinc..y2 BY 3 LOOP
+						-- Check first if the pixel intersects with the geometry. Often many won't.
+						bintersect := NOT st_isempty(st_intersection(st_pixelaspolygon(rast, nband, x, y), geom));
+						
+						IF bintersect THEN
+							-- If the pixel really intersects, check its value. Return TRUE if with value.
+							pixelval := st_value(rast, nband, x, y);
+							IF pixelval != nodata THEN
+								RETURN TRUE;
+							END IF;
+						END IF;
+					END LOOP;
+				END LOOP;
+			END LOOP;
+		END LOOP;
 
-                        IF bintersect THEN
-                            -- If the pixel really intersects, check its value. Return TRUE if with value.
-                            pixelval := st_value(rast, band, x, y);
-                            IF pixelval != nodata THEN
-                                RETURN TRUE;
-                            END IF;
-                        END IF;
-                    END LOOP;
-                END LOOP;
-            END LOOP;
-        END LOOP;
-        RETURN FALSE;
-    END;
-    $$
-    LANGUAGE 'plpgsql' IMMUTABLE STRICT;
-
-
--- This function can not be STRICT
-CREATE OR REPLACE FUNCTION st_intersects(geometry, raster, integer)
-    RETURNS boolean AS
-    $$ SELECT $1 && $2 AND _st_intersects($1, $2, $3, TRUE);
-    $$ LANGUAGE 'SQL' IMMUTABLE;
+		RETURN FALSE;
+	END;
+	$$ LANGUAGE 'plpgsql' IMMUTABLE;
 
 -- This function can not be STRICT
-CREATE OR REPLACE FUNCTION st_intersects(raster, integer, geometry)
-    RETURNS boolean AS
-    $$ SELECT st_intersects($3, $1, $2);
-    $$ LANGUAGE 'SQL' IMMUTABLE;
-
--- This function can not be STRICT
-CREATE OR REPLACE FUNCTION st_intersects(geometry, raster)
-    RETURNS boolean AS
-    $$ SELECT st_intersects($1, $2, 1);
-    $$ LANGUAGE 'SQL' IMMUTABLE;
-
--- This function can not be STRICT
-CREATE OR REPLACE FUNCTION st_intersects(raster, geometry)
-    RETURNS boolean AS
-    $$ SELECT st_intersects($2, $1, 1);
-    $$ LANGUAGE 'SQL' IMMUTABLE;
-
--- This function can not be STRICT
-CREATE OR REPLACE FUNCTION st_intersects(geometry, raster, integer, boolean)
-    RETURNS boolean AS
-    $$ SELECT $1 && $2 AND _st_intersects($1, $2, $3, $4);
-    $$ LANGUAGE 'SQL' IMMUTABLE;
-
--- This function can not be STRICT
-CREATE OR REPLACE FUNCTION st_intersects(raster, integer, boolean, geometry)
-    RETURNS boolean AS
-    $$ SELECT st_intersects($4, $1, $2, $3);
-    $$ LANGUAGE 'SQL' IMMUTABLE;
-
--- This function can not be STRICT
-CREATE OR REPLACE FUNCTION st_intersects(geometry, raster, boolean)
-    RETURNS boolean AS
-    $$ SELECT st_intersects($1, $2, 1, $3);
-    $$ LANGUAGE 'SQL' IMMUTABLE;
-
--- This function can not be STRICT
-CREATE OR REPLACE FUNCTION st_intersects(raster, boolean, geometry)
-    RETURNS boolean AS
-    $$ SELECT st_intersects($3, $1, 1, $2);
-    $$ LANGUAGE 'SQL' IMMUTABLE;
+CREATE OR REPLACE FUNCTION st_intersects(geom geometry, rast raster, nband integer DEFAULT NULL)
+	RETURNS boolean AS
+	$$ SELECT $1 && $2 AND _st_intersects($1, $2, $3); $$
+	LANGUAGE 'SQL' IMMUTABLE;
 
 -----------------------------------------------------------------------
 -- _st_intersection(geom geometry, rast raster, band integer)
@@ -2696,58 +2786,50 @@ CREATE OR REPLACE FUNCTION st_intersects(raster, boolean, geometry)
 -- Raster nodata value areas are not vectorized and hence do not intersect
 -- with any geometries.
 -----------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION ST_Intersection(geomin geometry, rast raster, band integer)
-  RETURNS SETOF geomval AS
-$BODY$
-    DECLARE
-        intersects boolean := FALSE;
-    BEGIN
-        intersects := ST_Intersects(geomin, rast, band);
-        IF intersects THEN
-            -- Return the intersections of the geometry with the vectorized parts of
-            -- the raster and the values associated with those parts, if really their
-            -- intersection is not empty.
-            RETURN QUERY
-                SELECT intgeom,
-                       val
-                FROM (SELECT ST_Intersection((gv).geom, geomin) AS intgeom,
-                             (gv).val
-                      FROM ST_DumpAsPolygons(rast, band) gv
-                      WHERE ST_Intersects((gv).geom, geomin)
-                     ) foo
-                WHERE NOT ST_IsEmpty(intgeom);
-        ELSE
-            -- If the geometry does not intersect with the raster, return an empty
-            -- geometry and a null value
-            RETURN QUERY
-                SELECT emptygeom,
-                       NULL::float8
-                FROM ST_GeomCollFromText('GEOMETRYCOLLECTION EMPTY', ST_SRID($1)) emptygeom;
-        END IF;
-    END;
-    $BODY$
-  LANGUAGE 'plpgsql' IMMUTABLE STRICT;
+CREATE OR REPLACE FUNCTION st_intersection(geomin geometry, rast raster, band integer DEFAULT 1)
+	RETURNS SETOF geomval AS $$
+	DECLARE
+		intersects boolean := FALSE;
+	BEGIN
+		intersects := ST_Intersects(geomin, rast, band);
+		IF intersects THEN
+			-- Return the intersections of the geometry with the vectorized parts of
+			-- the raster and the values associated with those parts, if really their
+			-- intersection is not empty.
+			RETURN QUERY
+				SELECT
+					intgeom,
+					val
+				FROM (
+					SELECT
+						ST_Intersection((gv).geom, geomin) AS intgeom,
+						(gv).val
+					FROM ST_DumpAsPolygons(rast, band) gv
+					WHERE ST_Intersects((gv).geom, geomin)
+				) foo
+				WHERE NOT ST_IsEmpty(intgeom);
+		ELSE
+			-- If the geometry does not intersect with the raster, return an empty
+			-- geometry and a null value
+			RETURN QUERY
+				SELECT
+					emptygeom,
+					NULL::float8
+				FROM ST_GeomCollFromText('GEOMETRYCOLLECTION EMPTY', ST_SRID($1)) emptygeom;
+		END IF;
+	END;
+	$$
+	LANGUAGE 'plpgsql' IMMUTABLE STRICT;
 
 CREATE OR REPLACE FUNCTION st_intersection(rast raster, geom geometry)
-    RETURNS SETOF geomval AS
-    $$
-        SELECT (gv).geom, (gv).val FROM st_intersection($2, $1, 1) gv;
-    $$
-    LANGUAGE SQL IMMUTABLE STRICT;
-
-CREATE OR REPLACE FUNCTION st_intersection(geom geometry, rast raster)
-    RETURNS SETOF geomval AS
-    $$
-        SELECT (gv).geom, (gv).val FROM st_intersection($1, $2, 1) gv;
-    $$
-    LANGUAGE SQL IMMUTABLE STRICT;
+	RETURNS SETOF geomval
+	AS $$ SELECT (gv).geom, (gv).val FROM st_intersection($2, $1, 1) gv; $$
+	LANGUAGE SQL IMMUTABLE STRICT;
 
 CREATE OR REPLACE FUNCTION st_intersection(rast raster, band integer, geom geometry)
-    RETURNS SETOF geomval AS
-    $$
-        SELECT (gv).geom, (gv).val FROM st_intersection($3, $1, $2) gv;
-    $$
-    LANGUAGE SQL IMMUTABLE STRICT;
+	RETURNS SETOF geomval
+	AS $$ SELECT (gv).geom, (gv).val FROM st_intersection($3, $1, $2) gv; $$
+	LANGUAGE SQL IMMUTABLE STRICT;
 
 ------------------------------------------------------------------------------
 -- RASTER_COLUMNS
@@ -2756,51 +2838,53 @@ CREATE OR REPLACE FUNCTION st_intersection(rast raster, band integer, geom geome
 -- http://trac.osgeo.org/postgis/wiki/WKTRaster/SpecificationFinal01
 ------------------------------------------------------------------------------
 CREATE TABLE raster_columns (
-    r_table_catalog varchar(256) not null,
-    r_table_schema varchar(256) not null,
-    r_table_name varchar(256) not null,
-    r_column varchar(256) not null,
-    srid integer not null,
-    pixel_types varchar[] not null,
-    out_db boolean not null,
-    regular_blocking boolean not null,
-    nodata_values double precision[],
-    scale_x double precision,
-    scale_y double precision,
-    blocksize_x integer,
-    blocksize_y integer,
-    extent geometry,
+	r_table_catalog varchar(256) not null,
+	r_table_schema varchar(256) not null,
+	r_table_name varchar(256) not null,
+	r_column varchar(256) not null,
+	srid integer not null,
+	pixel_types varchar[] not null,
+	out_db boolean not null,
+	regular_blocking boolean not null,
+	nodata_values double precision[],
+	scale_x double precision,
+	scale_y double precision,
+	blocksize_x integer,
+	blocksize_y integer,
+	extent geometry,
 
-    CONSTRAINT raster_columns_pk PRIMARY KEY (
-        r_table_catalog,
-        r_table_schema,
-        r_table_name,
-        r_column )
-    ) WITH OIDS;
-
+	CONSTRAINT raster_columns_pk PRIMARY KEY (
+		r_table_catalog,
+		r_table_schema,
+		r_table_name,
+		r_column
+	)
+)
+	WITHOUT OIDS;
 
 ------------------------------------------------------------------------------
 -- RASTER_OVERVIEWS
 ------------------------------------------------------------------------------
 CREATE TABLE raster_overviews (
-    o_table_catalog character varying(256) NOT NULL,
-    o_table_schema character varying(256) NOT NULL,
-    o_table_name character varying(256) NOT NULL,
-    o_column character varying(256) NOT NULL,
-    r_table_catalog character varying(256) NOT NULL,
-    r_table_schema character varying(256) NOT NULL,
-    r_table_name character varying(256) NOT NULL,
-    r_column character varying(256) NOT NULL,
-    out_db boolean NOT NULL,
-    overview_factor integer NOT NULL,
+	o_table_catalog character varying(256) NOT NULL,
+	o_table_schema character varying(256) NOT NULL,
+	o_table_name character varying(256) NOT NULL,
+	o_column character varying(256) NOT NULL,
+	r_table_catalog character varying(256) NOT NULL,
+	r_table_schema character varying(256) NOT NULL,
+	r_table_name character varying(256) NOT NULL,
+	r_column character varying(256) NOT NULL,
+	out_db boolean NOT NULL,
+	overview_factor integer NOT NULL,
 
-    CONSTRAINT raster_overviews_pk PRIMARY KEY (
-      o_table_catalog,
-      o_table_schema,
-      o_table_name,
-      o_column, overview_factor )
-    ) WITH OIDS;
-
+	CONSTRAINT raster_overviews_pk PRIMARY KEY (
+		o_table_catalog,
+		o_table_schema,
+		o_table_name,
+		o_column, overview_factor
+	)
+)
+	WITHOUT OIDS;
 
 ------------------------------------------------------------------------------
 -- AddRasterColumn
@@ -2834,8 +2918,10 @@ CREATE OR REPLACE FUNCTION AddRasterColumn(p_catalog_name varchar,
 
     BEGIN
 
+		/*
         RAISE DEBUG 'Parameters: catalog=%, schema=%, table=%, column=%, srid=%, pixel_types=%, out_db=%, regular_blocking=%, nodata_values=%, scale_x=%, scale_y=%, blocksize_x=%, blocksize_y=%',
                      p_catalog_name, p_schema_name, p_table_name, p_column_name, p_srid, p_pixel_types, p_out_db, p_regular_blocking, p_nodata_values, p_scale_x, p_scale_y, p_blocksize_x, p_blocksize_y;
+		*/
 
         -- Validate required parametersa and combinations
         IF ( (p_catalog_name IS NULL) OR (p_schema_name IS NULL)
@@ -2884,7 +2970,7 @@ CREATE OR REPLACE FUNCTION AddRasterColumn(p_catalog_name varchar,
                 RAISE EXCEPTION 'Invalid SRID';
                 RETURN 'fail';
             END IF;
-            RAISE DEBUG 'Verified SRID = %', p_srid;
+            --RAISE DEBUG 'Verified SRID = %', p_srid;
         END IF;
 
 
@@ -2899,7 +2985,7 @@ CREATE OR REPLACE FUNCTION AddRasterColumn(p_catalog_name varchar,
             FOR pti IN array_lower(pixel_types, 1) .. array_upper(pixel_types, 1) LOOP
                 IF p_pixel_types[npti] = pixel_types[pti] THEN
                     pixel_types_found := 1;
-                    RAISE DEBUG 'Identified pixel type %', p_pixel_types[npti];
+                    --RAISE DEBUG 'Identified pixel type %', p_pixel_types[npti];
                 END IF;
             END LOOP;
 
@@ -2972,7 +3058,7 @@ CREATE OR REPLACE FUNCTION AddRasterColumn(p_catalog_name varchar,
             sql := 'SELECT nspname FROM pg_namespace '
                 || 'WHERE text(nspname) = ' || quote_literal(p_schema_name)
                 || 'LIMIT 1';
-            RAISE DEBUG '%', sql;
+            --RAISE DEBUG '%', sql;
             EXECUTE sql INTO real_schema;
 
             IF ( real_schema IS NULL ) THEN
@@ -2982,7 +3068,7 @@ CREATE OR REPLACE FUNCTION AddRasterColumn(p_catalog_name varchar,
         END IF;
 
         IF ( real_schema IS NULL ) THEN
-            RAISE DEBUG 'Detecting schema';
+            --RAISE DEBUG 'Detecting schema';
             sql := 'SELECT n.nspname AS schemaname '
                 || 'FROM pg_catalog.pg_class c '
                 || 'JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace '
@@ -2991,7 +3077,7 @@ CREATE OR REPLACE FUNCTION AddRasterColumn(p_catalog_name varchar,
                 || quote_literal('pg_catalog') || ', ' || quote_literal('pg_toast') || ')'
                 || ' AND pg_catalog.pg_table_is_visible(c.oid)'
                 || ' AND c.relname = ' || quote_literal(p_table_name);
-            RAISE DEBUG '%', sql;
+            --RAISE DEBUG '%', sql;
             EXECUTE sql INTO real_schema;
 
             IF ( real_schema IS NULL ) THEN
@@ -3006,7 +3092,7 @@ CREATE OR REPLACE FUNCTION AddRasterColumn(p_catalog_name varchar,
         sql := 'ALTER TABLE '
             || quote_ident(real_schema) || '.' || quote_ident(p_table_name)
             || ' ADD COLUMN ' || quote_ident(p_column_name) ||  ' raster ';
-        RAISE DEBUG '%', sql;
+        --RAISE DEBUG '%', sql;
         EXECUTE sql;
 
 
@@ -3016,7 +3102,7 @@ CREATE OR REPLACE FUNCTION AddRasterColumn(p_catalog_name varchar,
             || ' AND r_table_schema = ' || quote_literal(real_schema)
             || ' AND r_table_name = ' || quote_literal(p_table_name)
             || ' AND r_column = ' || quote_literal(p_column_name);
-        RAISE DEBUG '%', sql;
+        --RAISE DEBUG '%', sql;
         EXECUTE sql;
 
 
@@ -3040,7 +3126,7 @@ CREATE OR REPLACE FUNCTION AddRasterColumn(p_catalog_name varchar,
             || COALESCE(quote_literal(p_blocksize_x), 'NULL') || ','
             || COALESCE(quote_literal(p_blocksize_y), 'NULL') || ','
             || COALESCE(quote_literal(p_extent::text), 'NULL') || ')';
-        RAISE DEBUG '%', sql;
+        --RAISE DEBUG '%', sql;
         EXECUTE sql;
 
 
@@ -3051,7 +3137,7 @@ CREATE OR REPLACE FUNCTION AddRasterColumn(p_catalog_name varchar,
             || quote_ident('enforce_srid_' || p_column_name)
             || ' CHECK (ST_SRID(' || quote_ident(p_column_name)
             || ') = ' || p_srid::text || ')';
-        RAISE DEBUG '%', sql;
+        --RAISE DEBUG '%', sql;
         EXECUTE sql;
 
 
@@ -3301,11 +3387,61 @@ CREATE OR REPLACE FUNCTION DropRasterTable(table_name varchar)
 -----------------------------------------------------------------------
 -- Raster Operations
 -----------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION ST_Intersection(r1 raster, r2 raster, 
-									mask boolean DEFAULT TRUE, 
-									srid INT DEFAULT NULL)
+
+CREATE OR REPLACE FUNCTION _RT_relation_rr(r1 raster, r2 raster,
+		relation text, r1_bands integer array, r2_bands integer array,
+		r1_nodata integer, r2_nodata integer)
 	RETURNS raster 
-    AS 'MODULE_PATHNAME','RASTER_intersection_rr2r'
+    AS 'MODULE_PATHNAME','RASTER_relation_rr'
     LANGUAGE 'C' IMMUTABLE;
+
+CREATE OR REPLACE FUNCTION ST_Intersection(r1 raster, r2 raster,
+		r1_bands integer ARRAY, r2_bands integer array,
+		r1_nodata integer, r2_nodata integer)
+	RETURNS raster AS
+	$$
+	BEGIN
+		RETURN _RT_relation_rr(r1, r2, 'intersection', r1_bands, r2_bands,
+			r1_nodata, r2_nodata) ;
+	END;
+	$$
+	LANGUAGE 'plpgsql' VOLATILE STRICT ;
+
+CREATE OR REPLACE FUNCTION ST_Union(r1 raster, r2 raster,
+		r1_bands integer ARRAY, r2_bands integer array,
+		r1_nodata integer, r2_nodata integer)
+	RETURNS raster AS
+	$$
+	BEGIN
+		RETURN _RT_relation_rr(r1, r2, 'union', r1_bands, r2_bands,
+			r1_nodata, r2_nodata) ;
+	END;
+	$$
+	LANGUAGE 'plpgsql' VOLATILE STRICT ;
+
+CREATE OR REPLACE FUNCTION ST_Difference(r1 raster, r2 raster,
+		r1_bands integer ARRAY, r2_bands integer array,
+		r1_nodata integer, r2_nodata integer)
+	RETURNS raster AS
+	$$
+	BEGIN
+		RETURN _RT_relation_rr(r1, r2, 'difference', r1_bands, r2_bands,
+			r1_nodata, r2_nodata) ;
+	END;
+	$$
+	LANGUAGE 'plpgsql' VOLATILE STRICT ;
+
+CREATE OR REPLACE FUNCTION ST_SymDifference(r1 raster, r2 raster,
+		r1_bands integer ARRAY, r2_bands integer array,
+		r1_nodata integer, r2_nodata integer)
+	RETURNS raster AS
+	$$
+	BEGIN
+		RETURN _RT_relation_rr(r1, r2, 'symdifference', r1_bands, r2_bands,
+			r1_nodata, r2_nodata) ;
+	END ;
+	$$
+	LANGUAGE 'plpgsql' VOLATILE STRICT ;
+
 
 -- COMMIT;

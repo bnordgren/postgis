@@ -1,9 +1,9 @@
 /**********************************************************************
- * $Id$
  *
  * PostGIS - Spatial Types for PostgreSQL
  * http://postgis.refractions.net
- * Copyright 2001-2003 Refractions Research Inc.
+ *
+ * Copyright (C) 2001-2003 Refractions Research Inc.
  *
  * This is free software; you can redistribute and/or modify it under
  * the terms of the GNU General Public Licence. See the COPYING file.
@@ -208,9 +208,9 @@ distance_ellipse(double lat1, double long1,
 #if POSTGIS_DEBUG_LEVEL >= 4
 	result2 =  distance_sphere_method(lat1, long1,lat2,long2, sphere);
 
-	LWDEBUGF(4, "delta = %lf, skae says: %.15lf,2 circle says: %.15lf",
+	POSTGIS_DEBUGF(4, "delta = %lf, skae says: %.15lf,2 circle says: %.15lf",
 	         (result2-result),result,result2);
-	LWDEBUGF(4, "2 circle says: %.15lf",result2);
+	POSTGIS_DEBUGF(4, "2 circle says: %.15lf",result2);
 #endif
 
 	if (result != result)  /* NaN check
@@ -322,9 +322,9 @@ distance_ellipse_calculation(double lat1, double long1,
 PG_FUNCTION_INFO_V1(LWGEOM_length2d_ellipsoid);
 Datum LWGEOM_length2d_ellipsoid(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *geom = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
 	SPHEROID *sphere = (SPHEROID *) PG_GETARG_POINTER(1);
-	LWGEOM *lwgeom = pglwgeom_deserialize(geom);
+	LWGEOM *lwgeom = lwgeom_from_gserialized(geom);
 	double dist = lwgeom_length_spheroid(lwgeom, sphere);
 	lwgeom_release(lwgeom);
 	PG_RETURN_FLOAT8(dist);
@@ -344,8 +344,8 @@ Datum LWGEOM_length2d_ellipsoid(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_length_ellipsoid_linestring);
 Datum LWGEOM_length_ellipsoid_linestring(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	LWGEOM *lwgeom = pglwgeom_deserialize(geom);
+	GSERIALIZED *geom = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	LWGEOM *lwgeom = lwgeom_from_gserialized(geom);
 	SPHEROID *sphere = (SPHEROID *) PG_GETARG_POINTER(1);
 	double length = 0.0;
 
@@ -468,11 +468,11 @@ double distance_sphere_method(double lat1, double long1,double lat2,double long2
 PG_FUNCTION_INFO_V1(geometry_distance_spheroid);
 Datum geometry_distance_spheroid(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom1 = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_LWGEOM *geom2 = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
+	GSERIALIZED *geom1 = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *geom2 = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
 	SPHEROID *sphere = (SPHEROID *)PG_GETARG_POINTER(2);
-	int type1 = pglwgeom_get_type(geom1);
-	int type2 = pglwgeom_get_type(geom2);
+	int type1 = gserialized_get_type(geom1);
+	int type2 = gserialized_get_type(geom2);
 	bool use_spheroid = PG_GETARG_BOOL(3);
 	LWGEOM *lwgeom1, *lwgeom2;
 	double distance;
@@ -501,15 +501,15 @@ Datum geometry_distance_spheroid(PG_FUNCTION_ARGS)
 	}
 
 
-	if (pglwgeom_get_srid(geom1) != pglwgeom_get_srid(geom2))
+	if (gserialized_get_srid(geom1) != gserialized_get_srid(geom2))
 	{
 		elog(ERROR, "geometry_distance_spheroid: Operation on two GEOMETRIES with different SRIDs\n");
 		PG_RETURN_NULL();
 	}
 
 	/* Get #LWGEOM structures */
-	lwgeom1 = pglwgeom_deserialize(geom1);
-	lwgeom2 = pglwgeom_deserialize(geom2);
+	lwgeom1 = lwgeom_from_gserialized(geom1);
+	lwgeom2 = lwgeom_from_gserialized(geom2);
 	
 	/* We are going to be calculating geodetic distances */
 	lwgeom_set_geodetic(lwgeom1, LW_TRUE);

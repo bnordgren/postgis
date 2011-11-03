@@ -1,9 +1,9 @@
 /**********************************************************************
- * $Id$
  *
  * PostGIS - Spatial Types for PostgreSQL
  * http://postgis.refractions.net
- * Copyright 2001-2006 Refractions Research Inc.
+ *
+ * Copyright (C) 2001-2006 Refractions Research Inc.
  *
  * This is free software; you can redistribute and/or modify it under
  * the terms of the GNU General Public Licence. See the COPYING file.
@@ -15,165 +15,9 @@
 #include <stdarg.h>
 
 #include "liblwgeom_internal.h"
+#include "lwgeom_log.h"
 #include "libtgeom.h"
 
-
-LWGEOM *
-lwgeom_deserialize(uint8_t *srl)
-{
-	int type = TYPE_GETTYPE(srl[0]);
-
-	LWDEBUGF(2, "lwgeom_deserialize got %d - %s", type, lwtype_name(type));
-
-	switch (type)
-	{
-	case POINTTYPE:
-		return (LWGEOM *)lwpoint_deserialize(srl);
-	case LINETYPE:
-		return (LWGEOM *)lwline_deserialize(srl);
-	case CIRCSTRINGTYPE:
-		return (LWGEOM *)lwcircstring_deserialize(srl);
-	case POLYGONTYPE:
-		return (LWGEOM *)lwpoly_deserialize(srl);
-	case TRIANGLETYPE:
-		return (LWGEOM *)lwtriangle_deserialize(srl);
-	case MULTIPOINTTYPE:
-		return (LWGEOM *)lwmpoint_deserialize(srl);
-	case MULTILINETYPE:
-		return (LWGEOM *)lwmline_deserialize(srl);
-	case MULTIPOLYGONTYPE:
-		return (LWGEOM *)lwmpoly_deserialize(srl);
-	case COLLECTIONTYPE:
-		return (LWGEOM *)lwcollection_deserialize(srl);
-	case COMPOUNDTYPE:
-		return (LWGEOM *)lwcompound_deserialize(srl);
-	case CURVEPOLYTYPE:
-		return (LWGEOM *)lwcurvepoly_deserialize(srl);
-	case MULTICURVETYPE:
-		return (LWGEOM *)lwmcurve_deserialize(srl);
-	case MULTISURFACETYPE:
-		return (LWGEOM *)lwmsurface_deserialize(srl);
-	case POLYHEDRALSURFACETYPE:
-		return (LWGEOM *)lwpsurface_deserialize(srl);
-	case TINTYPE:
-		return (LWGEOM *)lwtin_deserialize(srl);
-	default:
-		lwerror("lwgeom_deserialize: Unknown geometry type: %s", lwtype_name(type));
-		return NULL;
-	}
-
-}
-
-size_t
-lwgeom_serialize_size(LWGEOM *lwgeom)
-{
-	
-//	if( lwgeom->type != COLLECTIONTYPE && lwgeom_is_empty(lwgeom) )
-//	{
-//		LWGEOM *tmp = (LWGEOM*)lwcollection_construct_empty(COLLECTIONTYPE, lwgeom->srid, FLAGS_GET_Z(lwgeom->flags), FLAGS_GET_M(lwgeom->flags));
-//		lwgeom = tmp;
-//	}
-	
-	switch (lwgeom->type)
-	{
-	case POINTTYPE:
-		return lwpoint_serialize_size((LWPOINT *)lwgeom);
-	case LINETYPE:
-		return lwline_serialize_size((LWLINE *)lwgeom);
-	case POLYGONTYPE:
-		return lwpoly_serialize_size((LWPOLY *)lwgeom);
-	case TRIANGLETYPE:
-		return lwtriangle_serialize_size((LWTRIANGLE *)lwgeom);
-	case CIRCSTRINGTYPE:
-		return lwcircstring_serialize_size((LWCIRCSTRING *)lwgeom);
-	case CURVEPOLYTYPE:
-	case COMPOUNDTYPE:
-	case MULTIPOINTTYPE:
-	case MULTILINETYPE:
-	case MULTICURVETYPE:
-	case MULTIPOLYGONTYPE:
-	case MULTISURFACETYPE:
-	case POLYHEDRALSURFACETYPE:
-	case TINTYPE:
-	case COLLECTIONTYPE:
-		return lwcollection_serialize_size((LWCOLLECTION *)lwgeom);
-	default:
-		lwerror("lwgeom_serialize_size: Unknown geometry type: %s",
-		        lwtype_name(lwgeom->type));
-
-		return 0;
-	}
-}
-
-void
-lwgeom_serialize_buf(LWGEOM *lwgeom, uint8_t *buf, size_t *retsize)
-{
-	LWDEBUGF(2, "lwgeom_serialize_buf called with a %s",
-	         lwtype_name(lwgeom->type));
-
-//	if( lwgeom->type != COLLECTIONTYPE && lwgeom_is_empty(lwgeom) )
-//	{
-//		LWGEOM *tmp = (LWGEOM*)lwcollection_construct_empty(COLLECTIONTYPE, lwgeom->srid, FLAGS_GET_Z(lwgeom->flags), FLAGS_GET_M(lwgeom->flags));
-//		lwgeom = tmp;
-//	}
-
-	switch (lwgeom->type)
-	{
-	case POINTTYPE:
-		lwpoint_serialize_buf((LWPOINT *)lwgeom, buf, retsize);
-		break;
-	case LINETYPE:
-		lwline_serialize_buf((LWLINE *)lwgeom, buf, retsize);
-		break;
-	case POLYGONTYPE:
-		lwpoly_serialize_buf((LWPOLY *)lwgeom, buf, retsize);
-		break;
-	case TRIANGLETYPE:
-		lwtriangle_serialize_buf((LWTRIANGLE *)lwgeom, buf, retsize);
-		break;
-	case CIRCSTRINGTYPE:
-		lwcircstring_serialize_buf((LWCIRCSTRING *)lwgeom, buf, retsize);
-		break;
-	case CURVEPOLYTYPE:
-	case COMPOUNDTYPE:
-	case MULTIPOINTTYPE:
-	case MULTILINETYPE:
-	case MULTICURVETYPE:
-	case MULTIPOLYGONTYPE:
-	case MULTISURFACETYPE:
-	case POLYHEDRALSURFACETYPE:
-	case TINTYPE:
-	case COLLECTIONTYPE:
-		lwcollection_serialize_buf((LWCOLLECTION *)lwgeom, buf,
-		                           retsize);
-		break;
-	default:
-		lwerror("lwgeom_serialize_buf: Unknown geometry type: %s",
-		        lwtype_name(lwgeom->type));
-		return;
-	}
-	return;
-}
-
-uint8_t *
-lwgeom_serialize(LWGEOM *lwgeom)
-{
-	size_t size = lwgeom_serialize_size(lwgeom);
-	size_t retsize;
-	uint8_t *serialized = lwalloc(size);
-
-	lwgeom_serialize_buf(lwgeom, serialized, &retsize);
-
-#if POSTGIS_DEBUG_LEVEL > 0
-	if ( retsize != size )
-	{
-		lwerror("lwgeom_serialize: computed size %d, returned size %d",
-		        size, retsize);
-	}
-#endif
-
-	return serialized;
-}
 
 /** Force Right-hand-rule on LWGEOM polygons **/
 void
@@ -230,93 +74,6 @@ lwgeom_reverse(LWGEOM *lwgeom)
 		for (i=0; i<col->ngeoms; i++)
 			lwgeom_reverse(col->geoms[i]);
 		return;
-	}
-}
-
-BOX3D *lwgeom_compute_box3d(const LWGEOM *lwgeom)
-{
-    /* Null can't have a box */
-	if ( ! lwgeom ) return NULL;
-
-    /* Empty things can't have a box */
-    if ( lwgeom_is_empty(lwgeom) )
-        return NULL;
-
-	switch (lwgeom->type)
-	{
-	case POINTTYPE:
-		return lwpoint_compute_box3d((LWPOINT *)lwgeom);
-	case LINETYPE:
-		return lwline_compute_box3d((LWLINE *)lwgeom);
-	case CIRCSTRINGTYPE:
-		return lwcircstring_compute_box3d((LWCIRCSTRING *)lwgeom);
-	case POLYGONTYPE:
-		return lwpoly_compute_box3d((LWPOLY *)lwgeom);
-	case TRIANGLETYPE:
-		return lwtriangle_compute_box3d((LWTRIANGLE *)lwgeom);
-	case COMPOUNDTYPE:
-	case CURVEPOLYTYPE:
-	case MULTIPOINTTYPE:
-	case MULTILINETYPE:
-	case MULTICURVETYPE:
-	case MULTIPOLYGONTYPE:
-	case MULTISURFACETYPE:
-	case POLYHEDRALSURFACETYPE:
-	case TINTYPE:
-	case COLLECTIONTYPE:
-		return lwcollection_compute_box3d((LWCOLLECTION *)lwgeom);
-	}
-	/* Never get here, please. */
-    lwerror("Unhandled type in lwgeom_compute_box3d: %d", lwgeom->type);
-	return NULL;
-}
-
-
-int
-lwgeom_compute_box2d_p(const LWGEOM *lwgeom, BOX2DFLOAT4 *buf)
-{
-	LWDEBUGF(2, "lwgeom_compute_box2d_p called of %p of type %s.",
-	         lwgeom, lwtype_name(lwgeom->type));
-
-	switch (lwgeom->type)
-	{
-	case POINTTYPE:
-		return lwpoint_compute_box2d_p((LWPOINT *)lwgeom, buf);
-	case LINETYPE:
-		return lwline_compute_box2d_p((LWLINE *)lwgeom, buf);
-	case CIRCSTRINGTYPE:
-		return lwcircstring_compute_box2d_p((LWCIRCSTRING *)lwgeom, buf);
-	case POLYGONTYPE:
-		return lwpoly_compute_box2d_p((LWPOLY *)lwgeom, buf);
-	case TRIANGLETYPE:
-		return lwtriangle_compute_box2d_p((LWTRIANGLE *)lwgeom, buf);
-	case COMPOUNDTYPE:
-	case CURVEPOLYTYPE:
-	case MULTIPOINTTYPE:
-	case MULTILINETYPE:
-	case MULTICURVETYPE:
-	case MULTIPOLYGONTYPE:
-	case MULTISURFACETYPE:
-	case POLYHEDRALSURFACETYPE:
-	case TINTYPE:
-	case COLLECTIONTYPE:
-		return lwcollection_compute_box2d_p((LWCOLLECTION *)lwgeom, buf);
-	}
-	return 0;
-}
-
-/**
- * do not forget to lwfree() result
- */
-BOX2DFLOAT4*
-lwgeom_compute_box2d(const LWGEOM *lwgeom)
-{
-	BOX2DFLOAT4 *result = lwalloc(sizeof(BOX2DFLOAT4));
-	if ( lwgeom_compute_box2d_p(lwgeom, result) ) return result;
-	else
-	{
-		lwfree(result);
-		return NULL;
 	}
 }
 
@@ -900,6 +657,14 @@ lwgeom_has_m(const LWGEOM *geom)
 	return FLAGS_GET_M(geom->flags);
 }
 
+int 
+lwgeom_ndims(const LWGEOM *geom)
+{
+	if ( ! geom ) return 0;
+	return FLAGS_NDIMS(geom->flags);
+}
+
+
 void
 lwgeom_set_geodetic(LWGEOM *geom, int value)
 {
@@ -1040,7 +805,7 @@ lwgeom_is_collection(const LWGEOM *geom)
 
 /** Return TRUE if the geometry may contain sub-geometries, i.e. it is a MULTI* or COMPOUNDCURVE */
 int
-lwtype_is_collection(int type)
+lwtype_is_collection(uint8_t type)
 {
 
 	switch (type)
@@ -1066,7 +831,7 @@ lwtype_is_collection(int type)
 * Given an lwtype number, what homogeneous collection can hold it?
 */
 int 
-lwtype_get_collectiontype(int type)
+lwtype_get_collectiontype(uint8_t type)
 {
 	switch (type)
 	{
@@ -1358,7 +1123,7 @@ int lwgeom_is_empty(const LWGEOM *geom)
 
 int lwgeom_has_srid(const LWGEOM *geom)
 {
-	if ( (int)(geom->srid) > 0 )
+	if ( geom->srid != SRID_UNKNOWN )
 		return LW_TRUE;
 
 	return LW_FALSE;

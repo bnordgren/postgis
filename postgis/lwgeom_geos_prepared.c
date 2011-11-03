@@ -48,8 +48,6 @@
 **
 **/
 
-#ifdef PREPARED_GEOM
-
 /*
 ** Backend prepared hash table
 **
@@ -272,7 +270,7 @@ DeletePrepGeomHashEntry(MemoryContext mcxt)
 ** cycling keys don't cause too much preparing.
 */
 PrepGeomCache*
-GetPrepGeomCache(FunctionCallInfoData *fcinfo, PG_LWGEOM *pg_geom1, PG_LWGEOM *pg_geom2)
+GetPrepGeomCache(FunctionCallInfoData *fcinfo, GSERIALIZED *pg_geom1, GSERIALIZED *pg_geom2)
 {
 	MemoryContext old_context;
 	PrepGeomCache* cache = fcinfo->flinfo->fn_extra;
@@ -450,5 +448,4 @@ GetPrepGeomCache(FunctionCallInfoData *fcinfo, PG_LWGEOM *pg_geom1, PG_LWGEOM *p
 	return cache;
 
 }
-#endif /* PREPARED_GEOM */
 

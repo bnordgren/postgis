@@ -10,12 +10,12 @@
  *
  **********************************************************************/
 
-#include <stdio.h>
 #include <limits.h>
 #include <assert.h>
 #include <stdlib.h>
 
 #include "liblwgeom_internal.h"
+#include "lwgeom_log.h"
 #include "libtgeom.h"
 
 

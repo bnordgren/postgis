@@ -35,7 +35,7 @@ static void test_typmod_macros(void)
 	rv = TYPMOD_GET_SRID(typmod);
 	CU_ASSERT_EQUAL(rv, srid);
 
-	srid = -1;
+	srid = SRID_UNKNOWN;
 	TYPMOD_SET_SRID(typmod,srid);
 	rv = TYPMOD_GET_SRID(typmod);
 	CU_ASSERT_EQUAL(rv, srid);
@@ -108,9 +108,9 @@ static void test_serialized_srid(void)
 	gserialized_set_srid(&s, srid);
 	rv = gserialized_get_srid(&s);
 	//printf("srid=%d rv=%d\n",srid,rv);
-	CU_ASSERT_EQUAL(rv, srid);
+	CU_ASSERT_EQUAL(rv, SRID_UNKNOWN);
 
-	srid = -1;
+	srid = SRID_UNKNOWN;
 	gserialized_set_srid(&s, srid);
 	rv = gserialized_get_srid(&s);
 	CU_ASSERT_EQUAL(rv, srid);
@@ -231,7 +231,8 @@ static void test_lwgeom_from_gserialized(void)
 static void test_geometry_type_from_string(void)
 {
 	int rv;
-	int type = 0, z = 0, m = 0;
+	uint8_t type = 0;
+	int z = 0, m = 0;
 	char *str;
 
 	str = "  POINTZ";
@@ -323,7 +324,7 @@ static void test_lwcollection_extract(void)
 
 	geom = lwgeom_from_wkt("GEOMETRYCOLLECTION(POINT(0 0))", LW_PARSER_CHECK_NONE);
 	col = lwcollection_extract((LWCOLLECTION*)geom, 1);
-	CU_ASSERT_EQUAL(TYPE_GETTYPE(col->type), MULTIPOINTTYPE);
+	CU_ASSERT_EQUAL(col->type, MULTIPOINTTYPE);
 
 	/* How to properly release 'col' ? 
 	 * See http://http://trac.osgeo.org/postgis/ticket/1102
@@ -489,7 +490,7 @@ static void test_lwgeom_flip_coordinates(void)
 	);
 
 	do_lwgeom_flip_coordinates(
-	    "SRID=-1;POINT(1 2)",
+	    "SRID=0;POINT(1 2)",
 	    "POINT(2 1)"
 	);
 }

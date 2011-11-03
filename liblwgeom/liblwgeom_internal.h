@@ -1,11 +1,12 @@
 /**********************************************************************
- * $Id: liblwgeom_internal.h 4497 2009-09-14 18:33:54Z pramsey $
  *
  * PostGIS - Spatial Types for PostgreSQL
  * http://postgis.refractions.net
- * Copyright 2001-2006 Refractions Research Inc.
- * Copyright 2007-2008 Mark Cave-Ayland
- * Copyright 2008 Paul Ramsey <pramsey@cleverelephant.ca>
+ *
+ * Copyright (C) 2011 Sandro Santilli <strk@keybit.net>
+ * Copyright (C) 2011 Paul Ramsey <pramsey@cleverelephant.ca>
+ * Copyright (C) 2007-2008 Mark Cave-Ayland
+ * Copyright (C) 2001-2006 Refractions Research Inc.
  *
  * This is free software; you can redistribute and/or modify it under
  * the terms of the GNU General Public Licence. See the COPYING file.
@@ -16,13 +17,17 @@
 #define _LIBLWGEOM_INTERNAL_H 1
 
 #include <assert.h>
-#include "liblwgeom.h"
-#include <string.h>
-#include <math.h>
+#include <stdarg.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+
 #if HAVE_IEEEFP_H
 #include <ieeefp.h>
 #endif
+
+#include "liblwgeom.h"
+
 
 /**
 * PI
@@ -36,6 +41,7 @@
 #define FP_IS_ZERO(A) (fabs(A) <= FP_TOLERANCE)
 #define FP_MAX(A, B) (((A) > (B)) ? (A) : (B))
 #define FP_MIN(A, B) (((A) < (B)) ? (A) : (B))
+#define FP_ABS(a)   ((a) <	(0) ? -(a) : (a))
 #define FP_EQUALS(A, B) (fabs((A)-(B)) <= FP_TOLERANCE)
 #define FP_NEQUALS(A, B) (fabs((A)-(B)) > FP_TOLERANCE)
 #define FP_LT(A, B) (((A) + FP_TOLERANCE) < (B))
@@ -117,7 +123,6 @@
 * Internal prototypes
 */
 
-
 /* Machine endianness */
 #define XDR 0
 #define NDR 1
@@ -153,6 +158,12 @@ int lwpoint_is_empty(const LWPOINT *point);
 int lwline_count_vertices(LWLINE *line);
 int lwpoly_count_vertices(LWPOLY *poly);
 int lwcollection_count_vertices(LWCOLLECTION *col);
+
+/*
+* Read from byte buffer
+*/
+extern uint32_t lw_get_uint32_t(const uint8_t *loc);
+extern int32_t lw_get_int32_t(const uint8_t *loc);
 
 /*
 * DP simplification
@@ -225,6 +236,12 @@ double lwpoly_area(const LWPOLY *poly);
 double lwcurvepoly_area(const LWCURVEPOLY *curvepoly);
 double lwtriangle_area(const LWTRIANGLE *triangle);
 
+/**
+* Pull a #GBOX from the header of a #GSERIALIZED, if one is available. If
+* it is not, return LW_FAILURE.
+*/
+extern int gserialized_read_gbox_p(const GSERIALIZED *g, GBOX *gbox);
+
 /*
 * Length calculations
 */
@@ -257,6 +274,35 @@ void ptarray_affine(POINTARRAY *pa, const AFFINE *affine);
 * PointArray
 */
 char ptarray_isccw(const POINTARRAY *pa);
+
+/*
+* Clone support
+*/
+LWLINE *lwline_clone(const LWLINE *lwgeom);
+LWPOLY *lwpoly_clone(const LWPOLY *lwgeom);
+LWTRIANGLE *lwtriangle_clone(const LWTRIANGLE *lwgeom);
+LWCOLLECTION *lwcollection_clone(const LWCOLLECTION *lwgeom);
+LWCIRCSTRING *lwcircstring_clone(const LWCIRCSTRING *curve);
+POINTARRAY *ptarray_clone(const POINTARRAY *ptarray);
+GBOX *box2d_clone(const GBOX *lwgeom);
+LWLINE *lwline_clone_deep(const LWLINE *lwgeom);
+LWPOLY *lwpoly_clone_deep(const LWPOLY *lwgeom);
+LWCOLLECTION *lwcollection_clone_deep(const LWCOLLECTION *lwgeom);
+
+/*
+ * Write into *ret the coordinates of the closest point on
+ * segment A-B to the reference input point R
+ */
+void closest_point_on_segment(POINT2D *R, POINT2D *A, POINT2D *B, POINT2D *ret);
+
+/* 
+* Repeated points
+*/
+POINTARRAY *ptarray_remove_repeated_points(POINTARRAY *in);
+LWGEOM* lwmpoint_remove_repeated_points(LWMPOINT *in);
+LWGEOM* lwline_remove_repeated_points(LWLINE *in);
+LWGEOM* lwcollection_remove_repeated_points(LWCOLLECTION *in);
+LWGEOM* lwpoly_remove_repeated_points(LWPOLY *in);
 
 
 #endif /* _LIBLWGEOM_INTERNAL_H */

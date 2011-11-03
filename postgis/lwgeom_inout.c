@@ -16,16 +16,10 @@
 #include "mb/pg_wchar.h"
 # include "lib/stringinfo.h" /* for binary input */
 
-
 #include "liblwgeom.h"
-
-
-
 #include "lwgeom_pg.h"
-#include "profile.h"
 
 void elog_ERROR(const char* string);
-
 
 Datum LWGEOM_in(PG_FUNCTION_ARGS);
 Datum LWGEOM_out(PG_FUNCTION_ARGS);
@@ -46,7 +40,7 @@ Datum LWGEOM_to_latlon(PG_FUNCTION_ARGS);
  *  LWGEOM_in( 'POINT(0 0)')            --> assumes SRID=SRID_UNKNOWN
  *  LWGEOM_in( 'SRID=99;0101000000000000000000F03F000000000000004')
  *  LWGEOM_in( '0101000000000000000000F03F000000000000004')
- *  returns a PG_LWGEOM object
+ *  returns a GSERIALIZED object
  */
 PG_FUNCTION_INFO_V1(LWGEOM_in);
 Datum LWGEOM_in(PG_FUNCTION_ARGS)
@@ -55,7 +49,7 @@ Datum LWGEOM_in(PG_FUNCTION_ARGS)
 	char *str = input;
 	LWGEOM_PARSER_RESULT lwg_parser_result;
 	LWGEOM *lwgeom;
-	PG_LWGEOM *ret;
+	GSERIALIZED *ret;
 	int srid = 0;
 
 	lwgeom_parser_result_init(&lwg_parser_result);
@@ -98,7 +92,7 @@ Datum LWGEOM_in(PG_FUNCTION_ARGS)
 		/* Add a bbox if necessary */
 		if ( lwgeom_needs_bbox(lwgeom) ) lwgeom_add_bbox(lwgeom);
 		pfree(wkb);
-		ret = pglwgeom_serialize(lwgeom);
+		ret = geometry_serialize(lwgeom);
 		lwgeom_free(lwgeom);
 	}
 	/* WKT then. */
@@ -111,7 +105,7 @@ Datum LWGEOM_in(PG_FUNCTION_ARGS)
 		lwgeom = lwg_parser_result.geom;
 		if ( lwgeom_needs_bbox(lwgeom) )
 			lwgeom_add_bbox(lwgeom);		
-		ret = pglwgeom_serialize(lwgeom);
+		ret = geometry_serialize(lwgeom);
 		lwgeom_parser_result_free(&lwg_parser_result);
 	}
 	
@@ -145,7 +139,7 @@ PG_FUNCTION_INFO_V1(LWGEOM_to_latlon);
 Datum LWGEOM_to_latlon(PG_FUNCTION_ARGS)
 {
 	/* Get the parameters */
-	PG_LWGEOM *pg_lwgeom = (PG_LWGEOM *) PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *pg_lwgeom = (GSERIALIZED *) PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
 	text *format_text = PG_GETARG_TEXT_P(1);
 
 	LWGEOM *lwgeom;
@@ -159,13 +153,13 @@ Datum LWGEOM_to_latlon(PG_FUNCTION_ARGS)
 	char * formatted_text;
 
 	/* Only supports points. */
-	uint8_t geom_type = pglwgeom_get_type(pg_lwgeom);
+	uint8_t geom_type = gserialized_get_type(pg_lwgeom);
 	if (POINTTYPE != geom_type)
 	{
 		lwerror("Only points are supported, you tried type %s.", lwtype_name(geom_type));
 	}
 	/* Convert to LWGEOM type */
-	lwgeom = pglwgeom_deserialize(pg_lwgeom);
+	lwgeom = lwgeom_from_gserialized(pg_lwgeom);
 
 	if (format_text != NULL)
 	{
@@ -212,12 +206,12 @@ Datum LWGEOM_to_latlon(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_out);
 Datum LWGEOM_out(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom = (PG_LWGEOM*)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *geom = (GSERIALIZED*)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
 	LWGEOM *lwgeom;
 	char *hexwkb;
 	size_t hexwkb_size;
 
-	lwgeom = pglwgeom_deserialize(geom);
+	lwgeom = lwgeom_from_gserialized(geom);
 	hexwkb = lwgeom_to_hexwkb(lwgeom, WKB_EXTENDED, &hexwkb_size);
 	lwgeom_free(lwgeom);
 	
@@ -230,7 +224,7 @@ Datum LWGEOM_out(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_asHEXEWKB);
 Datum LWGEOM_asHEXEWKB(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom = (PG_LWGEOM*)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *geom = (GSERIALIZED*)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
 	LWGEOM *lwgeom;
 	char *hexwkb;
 	size_t hexwkb_size;
@@ -256,7 +250,7 @@ Datum LWGEOM_asHEXEWKB(PG_FUNCTION_ARGS)
 	}
 
 	/* Create WKB hex string */
-	lwgeom = pglwgeom_deserialize(geom);
+	lwgeom = lwgeom_from_gserialized(geom);
 	hexwkb = lwgeom_to_hexwkb(lwgeom, variant | WKB_EXTENDED, &hexwkb_size);
 	lwgeom_free(lwgeom);
 	
@@ -283,26 +277,22 @@ Datum LWGEOM_asHEXEWKB(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_to_text);
 Datum LWGEOM_to_text(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom = (PG_LWGEOM*)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *geom = (GSERIALIZED*)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
 	LWGEOM *lwgeom;
 	char *hexwkb;
 	size_t hexwkb_size;
 	text *result;
-	size_t text_size;
 
 	/* Generate WKB hex text */
-	lwgeom = pglwgeom_deserialize(geom);
+	lwgeom = lwgeom_from_gserialized(geom);
 	hexwkb = lwgeom_to_hexwkb(lwgeom, WKB_EXTENDED, &hexwkb_size);
 	lwgeom_free(lwgeom);
 	
-	/* Prepare the PgSQL text return type, which doesn't include a null terminator */
-	text_size = hexwkb_size-1+VARHDRSZ;
-	result = palloc(text_size);
-	memcpy(VARDATA(result), hexwkb, hexwkb_size-1);
-	SET_VARSIZE(result, text_size);
+	/* Copy into text obect */
+	result = cstring2text(hexwkb);
+	pfree(hexwkb);
 	
 	/* Clean up and return */
-	pfree(hexwkb);
 	PG_FREE_IF_COPY(geom, 0);
 	PG_RETURN_TEXT_P(result);
 }
@@ -319,7 +309,7 @@ Datum LWGEOMFromWKB(PG_FUNCTION_ARGS)
 {
 	bytea *bytea_wkb = (bytea*)PG_GETARG_BYTEA_P(0);
 	int32 srid = 0;
-	PG_LWGEOM *geom;
+	GSERIALIZED *geom;
 	LWGEOM *lwgeom;
 	uint8_t *wkb = (uint8_t*)VARDATA(bytea_wkb);
 	
@@ -334,7 +324,7 @@ Datum LWGEOMFromWKB(PG_FUNCTION_ARGS)
 	if ( lwgeom_needs_bbox(lwgeom) )
 		lwgeom_add_bbox(lwgeom);
 
-	geom = pglwgeom_serialize(lwgeom);
+	geom = geometry_serialize(lwgeom);
 	lwgeom_free(lwgeom);
 	PG_FREE_IF_COPY(bytea_wkb, 0);
 	PG_RETURN_POINTER(geom);
@@ -347,7 +337,7 @@ Datum LWGEOMFromWKB(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(WKBFromLWGEOM);
 Datum WKBFromLWGEOM(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom = (PG_LWGEOM*)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *geom = (GSERIALIZED*)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
 	LWGEOM *lwgeom;
 	uint8_t *wkb;
 	size_t wkb_size;
@@ -372,7 +362,7 @@ Datum WKBFromLWGEOM(PG_FUNCTION_ARGS)
 	}
 
 	/* Create WKB hex string */
-	lwgeom = pglwgeom_deserialize(geom);
+	lwgeom = lwgeom_from_gserialized(geom);
 	wkb = lwgeom_to_wkb(lwgeom, variant | WKB_EXTENDED , &wkb_size);
 	lwgeom_free(lwgeom);
 	
@@ -392,49 +382,29 @@ Datum WKBFromLWGEOM(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_addBBOX);
 Datum LWGEOM_addBBOX(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_LWGEOM *result;
+	GSERIALIZED *geom = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *result;
 	LWGEOM *lwgeom;
 
-	lwgeom = pglwgeom_deserialize(geom);
+	lwgeom = lwgeom_from_gserialized(geom);
 	lwgeom_add_bbox(lwgeom);
-	result = pglwgeom_serialize(lwgeom);
+	result = geometry_serialize(lwgeom);
 	
 	PG_FREE_IF_COPY(geom, 0);
 	PG_RETURN_POINTER(result);
-}
-
-char
-is_worth_caching_serialized_bbox(const uint8_t *in)
-{
-#if ! POSTGIS_AUTOCACHE_BBOX
-	return false;
-#endif
-	if ( TYPE_GETTYPE((uint8_t)in[0]) == POINTTYPE ) return false;
-	return true;
-}
-
-char
-is_worth_caching_lwgeom_bbox(const LWGEOM *in)
-{
-#if ! POSTGIS_AUTOCACHE_BBOX
-	return false;
-#endif
-	if ( TYPE_GETTYPE(in->type) == POINTTYPE ) return false;
-	return true;
 }
 
 /* removes a bbox from a geometry */
 PG_FUNCTION_INFO_V1(LWGEOM_dropBBOX);
 Datum LWGEOM_dropBBOX(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *geom = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
 
 	/* No box? we're done already! */
-	if ( ! pglwgeom_has_bbox(geom) )
+	if ( ! gserialized_has_bbox(geom) )
 		PG_RETURN_POINTER(geom);
 	
-	PG_RETURN_POINTER(pglwgeom_drop_bbox(geom));
+	PG_RETURN_POINTER(gserialized_drop_gidx(geom));
 }
 
 
@@ -482,7 +452,7 @@ PG_FUNCTION_INFO_V1(LWGEOM_recv);
 Datum LWGEOM_recv(PG_FUNCTION_ARGS)
 {
 	StringInfo buf = (StringInfo) PG_GETARG_POINTER(0);
-	PG_LWGEOM *geom;
+	GSERIALIZED *geom;
 	LWGEOM *lwgeom;
 	
 	lwgeom = lwgeom_from_wkb((uint8_t*)buf->data, buf->len, LW_PARSER_CHECK_ALL);
@@ -493,7 +463,7 @@ Datum LWGEOM_recv(PG_FUNCTION_ARGS)
 	/* Set cursor to the end of buffer (so the backend is happy) */
 	buf->cursor = buf->len;
 
-	geom = pglwgeom_serialize(lwgeom);
+	geom = geometry_serialize(lwgeom);
 	lwgeom_free(lwgeom);
 	PG_RETURN_POINTER(geom);
 }
@@ -529,11 +499,11 @@ Datum LWGEOM_to_bytea(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_from_bytea);
 Datum LWGEOM_from_bytea(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *result;
+	GSERIALIZED *result;
 
 	POSTGIS_DEBUG(2, "LWGEOM_from_bytea start");
 
-	result = (PG_LWGEOM *)DatumGetPointer(DirectFunctionCall1(
+	result = (GSERIALIZED *)DatumGetPointer(DirectFunctionCall1(
 	                                          LWGEOMFromWKB, PG_GETARG_DATUM(0)));
 
 	PG_RETURN_POINTER(result);

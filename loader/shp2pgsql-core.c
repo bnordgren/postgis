@@ -1,10 +1,11 @@
 /**********************************************************************
- * $Id$
  *
  * PostGIS - Spatial Types for PostgreSQL
  * http://www.postgis.org
- * Copyright 2008 OpenGeo.org
- * Copyright 2009 Mark Cave-Ayland <mark.cave-ayland@siriusit.co.uk>
+ * 
+ * Copyright (C) 2008 OpenGeo.org
+ * Copyright (C) 2009 Mark Cave-Ayland <mark.cave-ayland@siriusit.co.uk>
+ *
  * This is free software; you can redistribute and/or modify it under
  * the terms of the GNU General Public Licence. See the COPYING file.
  *
@@ -14,6 +15,7 @@
 
 #include "shp2pgsql-core.h"
 #include "../liblwgeom/liblwgeom.h" /* for lw_vasprintf */
+#include "../liblwgeom/lwgeom_log.h" /* for LWDEBUG macros */
 
 
 /* Internal ring/point structures */
@@ -1711,12 +1713,6 @@ ShpLoaderGetSQLFooter(SHPLOADERSTATE *state, char **strfooter)
 {
 	stringbuffer_t *sb;
 	char *ret;
-	char *ops;
-
-	if ( state->config->geography )
-		ops = "gist_geography_ops";
-	else
-		ops = "gist_geometry_ops";
 
 	/* Create the stringbuffer containing the header; we use this API as it's easier
 	   for handling string resizing during append */
@@ -1732,7 +1728,7 @@ ShpLoaderGetSQLFooter(SHPLOADERSTATE *state, char **strfooter)
 		{
 			stringbuffer_aprintf(sb, "\"%s\".",state->config->schema);
 		}
-		stringbuffer_aprintf(sb, "\"%s\" USING GIST (\"%s\" %s)", state->config->table, state->geo_col, ops);
+		stringbuffer_aprintf(sb, "\"%s\" USING GIST (\"%s\")", state->config->table, state->geo_col);
 		/* Tablespace is also optional. */
 		if (state->config->idxtablespace != NULL)
 		{

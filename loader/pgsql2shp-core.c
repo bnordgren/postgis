@@ -3,7 +3,8 @@
  *
  * PostGIS - Spatial Types for PostgreSQL
  * http://www.postgis.org
- * Copyright 2001-2003 Refractions Research Inc.
+ *
+ * Copyright (C) 2001-2003 Refractions Research Inc.
  *
  * This is free software; you can redistribute and/or modify it under
  * the terms of the GNU General Public Licence. See the COPYING file.
@@ -47,6 +48,7 @@
 #include "getopt.h"
 
 #include "../liblwgeom/liblwgeom.h" /* for LWGEOM struct and funx */
+#include "../liblwgeom/lwgeom_log.h" /* for LWDEBUG macros */
 
 /* Maximum DBF field width (according to ARCGIS) */
 #define MAX_DBF_FIELD_SIZE 254
@@ -945,7 +947,8 @@ getTableInfo(SHPDUMPERSTATE *state)
 		   enough to up-convert the non-MULTI geometry to a MULTI in this case. */
 
 		int dummy, i;
-		int type = 0, typefound = 0, typemismatch = 0;
+		uint8_t type = 0;
+		int typefound = 0, typemismatch = 0;
 
 		state->rowcount = 0;
 

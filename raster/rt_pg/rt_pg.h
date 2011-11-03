@@ -33,7 +33,7 @@
 
 #include "rt_api.h"
 #include "../../postgis_config.h"
-#include "gserialized.h"
+#include "../raster_config.h"
 
 /* Debugging macros */
 #if POSTGIS_DEBUG_LEVEL > 0

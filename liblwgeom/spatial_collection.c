@@ -1,17 +1,20 @@
 #include "liblwgeom.h"
 #include "spatial_collection.h"
+#include "string.h"
 
 SPATIAL_COLLECTION *
 sc_create(COLLECTION_TYPE t,
-		  int32 srid,
+		  int32_t srid,
+		  GBOX *extent,
 		  PARAMETERS *params,
 		  INCLUDES *inc,
 		  EVALUATOR *eval)
 {
 	SPATIAL_COLLECTION *sc ;
 
-	/* collection must have an includes */
+	/* collection must have an includes and extent */
 	if (inc == NULL) return NULL ;
+	if (extent == NULL) return NULL ;
 
 	sc = (SPATIAL_COLLECTION *)lwalloc(sizeof(SPATIAL_COLLECTION)) ;
 	if ( sc != NULL ) {
@@ -26,6 +29,9 @@ sc_create(COLLECTION_TYPE t,
 		sc->inclusion = inc ;
 		sc->evaluator = eval ;
 
+		/* copy the extent */
+		memcpy(&(sc->extent), extent, sizeof(GBOX)) ;
+
 		/* set up reverse links */
 		sc->inclusion->collection = sc ;
 		if (sc->evaluator != NULL) {
@@ -39,6 +45,7 @@ sc_create(COLLECTION_TYPE t,
 SPATIAL_COLLECTION *
 sc_twoinput_create(COLLECTION_TYPE t,
 		           PARAMETERS *params,
+		           GBOX       *combined_extent,
 		           INCLUDES   *inc,
 		           EVALUATOR  *eval,
 		           SPATIAL_COLLECTION *input1,
@@ -46,7 +53,13 @@ sc_twoinput_create(COLLECTION_TYPE t,
 {
 	SPATIAL_COLLECTION *sc ;
 
-	sc = sc_create(t, params, inc, eval) ;
+	if (input1 == NULL || input2 == NULL) return NULL ;
+	if (input1->srid != input2->srid) {
+		// emit warning message
+		return NULL ;
+	}
+
+	sc = sc_create(t, input1->srid, combined_extent, params, inc, eval) ;
 	if (sc != NULL) {
 		sc->input1 = input1 ;
 		sc->input2 = input2 ;
@@ -87,8 +100,8 @@ eval_create(PARAMETERS *params,
 
 	if (eval != NULL) {
 		eval->params = params ;
-		eval->evaluator = evaluator ;
-		eval->evaluatorIndex = evaluatorIndex ;
+		eval->evaluate = evaluator ;
+		eval->evaluateIndex = evaluatorIndex ;
 		eval->collection = NULL ;
 		eval->result = val_create(result_len) ;
 	}
@@ -103,6 +116,9 @@ eval_destroy(EVALUATOR *eval)
 		/* if there's an associated collection, un-associate it before freeing */
 		if (eval->collection != NULL) {
 			eval->collection->evaluator = NULL ;
+		}
+		if (eval->result != NULL) {
+			val_destroy(eval->result) ;
 		}
 		lwfree(eval) ;
 	}
@@ -135,6 +151,14 @@ sc_destroy(SPATIAL_COLLECTION *sc)
 		}
 
 		lwfree(sc) ;
+	}
+}
+
+void
+sc_twoinput_destroy(SPATIAL_COLLECTION *dead)
+{
+	if (dead != NULL) {
+		sc_destroy(dead) ;
 	}
 }
 
@@ -171,6 +195,15 @@ val_destroy(VALUE *val)
 	if (val != NULL) {
 		lwfree(val) ;
 	}
+}
+
+void
+val_copy(VALUE *to, VALUE *from)
+{
+	if (to == NULL || from == NULL) return ;
+	if (to->length != from->length) return ;
+
+	memcpy(to, from, sizeof(double)*to->length) ;
 }
 
 VALUE *
@@ -234,9 +267,44 @@ sc_hasTwoInputs(SPATIAL_COLLECTION *sc)
 	return (sc->input1 != NULL) && (sc->input2 != NULL) ;
 }
 
-int32
+int32_t
 sc_get_srid(SPATIAL_COLLECTION *sc)
 {
 	if (sc == NULL) return -1 ;
 	return sc->srid ;
+}
+
+
+/**
+ * Sets the relation type code given a string. Returns true
+ * if the code was successfully set and false if not. Acceptable
+ * strings are: "union", "intersection", "difference" and "symdifference".
+ *
+ * @param string the string used to select a #RELATION_TYPE code.
+ * @param code pointer to the code to set.
+ * @returns true if code successfully set, false if not.
+ */
+int
+sc_get_relation_code(char *string, RELATION_TYPE *code)
+{
+	int success ;
+
+	if (code == NULL) return 0 ;
+
+	success = 0 ;
+	if (!strcmp(string, "intersection")) {
+		*code = INTERSECTION ;
+		success = 1;
+	} else if (!strcmp(string, "difference")) {
+		*code = DIFFERENCE ;
+		success = 1;
+	} else if (!strcmp(string, "symdifference")) {
+		*code = SYMDIFFERENCE ;
+		success = 1;
+	} else if (!strcmp(string, "union")) {
+		*code = UNION ;
+		success = 1;
+	}
+
+	return success ;
 }

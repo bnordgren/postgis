@@ -36,8 +36,8 @@ Datum LWGEOM_line_desegmentize(PG_FUNCTION_ARGS);
 PG_FUNCTION_INFO_V1(LWGEOM_has_arc);
 Datum LWGEOM_has_arc(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	LWGEOM *lwgeom = pglwgeom_deserialize(geom);
+	GSERIALIZED *geom = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	LWGEOM *lwgeom = lwgeom_from_gserialized(geom);
 	uint32 result = lwgeom_has_arc(lwgeom);
 	lwgeom_free(lwgeom);
 	PG_RETURN_BOOL(result == 1);
@@ -52,9 +52,9 @@ Datum LWGEOM_has_arc(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_curve_segmentize);
 Datum LWGEOM_curve_segmentize(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *geom = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
 	uint32 perQuad = PG_GETARG_INT32(1);
-	PG_LWGEOM *ret;
+	GSERIALIZED *ret;
 	LWGEOM *igeom = NULL, *ogeom = NULL;
 
 	POSTGIS_DEBUG(2, "LWGEOM_curve_segmentize called.");
@@ -70,14 +70,14 @@ Datum LWGEOM_curve_segmentize(PG_FUNCTION_ARGS)
 		POSTGIS_DEBUGF(3, "perQuad = %d", perQuad);
 	}
 #endif
-	igeom = pglwgeom_deserialize(geom);
+	igeom = lwgeom_from_gserialized(geom);
 	if ( ! lwgeom_has_arc(igeom) )
 	{
 		PG_RETURN_POINTER(geom);
 	}
 	ogeom = lwgeom_segmentize(igeom, perQuad);
 	if (ogeom == NULL) PG_RETURN_NULL();
-	ret = pglwgeom_serialize(ogeom);
+	ret = geometry_serialize(ogeom);
 	lwgeom_release(igeom);
 	lwgeom_release(ogeom);
 	PG_FREE_IF_COPY(geom, 0);
@@ -87,20 +87,20 @@ Datum LWGEOM_curve_segmentize(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(LWGEOM_line_desegmentize);
 Datum LWGEOM_line_desegmentize(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_LWGEOM *ret;
+	GSERIALIZED *geom = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *ret;
 	LWGEOM *igeom = NULL, *ogeom = NULL;
 
 	POSTGIS_DEBUG(2, "LWGEOM_line_desegmentize.");
 
-	igeom = pglwgeom_deserialize(geom);
+	igeom = lwgeom_from_gserialized(geom);
 	ogeom = lwgeom_desegmentize(igeom);
 	if (ogeom == NULL)
 	{
 		lwgeom_release(igeom);
 		PG_RETURN_NULL();
 	}
-	ret = pglwgeom_serialize(ogeom);
+	ret = geometry_serialize(ogeom);
 	lwgeom_release(igeom);
 	lwgeom_release(ogeom);
 	PG_FREE_IF_COPY(geom, 0);

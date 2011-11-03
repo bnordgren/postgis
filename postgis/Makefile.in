@@ -18,7 +18,7 @@ DATA_built=postgis.sql uninstall_postgis.sql postgis_upgrade_20_minor.sql legacy
 DATA=../spatial_ref_sys.sql
 
 # SQL objects (files requiring C pre-processing)
-SQL_OBJS=postgis.sql.in uninstall_postgis.sql.in legacy.sql.in uninstall_legacy.sql.in legacy_compatibility_layer.sql.in
+SQL_OBJS=postgis.sql.in uninstall_postgis.sql.in legacy.sql.in uninstall_legacy.sql.in legacy_compatibility_layer.sql.in 
 
 # PostgreSQL objects
 PG_OBJS=lwgeom_debug.o \
@@ -27,13 +27,11 @@ PG_OBJS=lwgeom_debug.o \
 	lwgeom_ogc.o \
 	lwgeom_functions_analytic.o \
 	lwgeom_inout.o \
-	lwgeom_estimate.o \
 	lwgeom_functions_basic.o \
 	lwgeom_gist.o \
 	lwgeom_btree.o \
 	lwgeom_box.o \
 	lwgeom_box3d.o \
-	lwgeom_box2dfloat4.o \
 	lwgeom_geos.o \
 	lwgeom_geos_prepared.o \
 	lwgeom_geos_clean.o \
@@ -48,14 +46,14 @@ PG_OBJS=lwgeom_debug.o \
 	lwgeom_sqlmm.o \
 	lwgeom_rtree.o \
 	lwgeom_transform.o \
-	geography_inout.o \
 	gserialized_typmod.o \
 	gserialized_gist_2d.o \
 	gserialized_gist_nd.o \
+	geography_inout.o \
 	geography_btree.o \
 	geography_estimate.o \
 	geography_measurement.o \
-	geometry_gist_selectivity.o 
+	geometry_estimate.o 
 
 # Objects to build using PGXS
 OBJS=$(PG_OBJS)
@@ -68,7 +66,7 @@ OBJS=$(PG_OBJS)
 # older version of PostGIS, rather than with the static liblwgeom.a 
 # supplied with newer versions of PostGIS
 PG_CPPFLAGS += @CPPFLAGS@ -I../liblwgeom -I../libpgcommon
-SHLIB_LINK = ../liblwgeom/.libs/liblwgeom.a ../libpgcommon/libpgcommon.a @SHLIB_LINK@ 
+SHLIB_LINK_F = ../liblwgeom/.libs/liblwgeom.a ../libpgcommon/libpgcommon.a @SHLIB_LINK@ 
 
 # Extra files to remove during 'make clean'
 EXTRA_CLEAN=$(SQL_OBJS)
@@ -77,6 +75,10 @@ EXTRA_CLEAN=$(SQL_OBJS)
 PG_CONFIG = @PGCONFIG@ 
 PGXS := @PGXS@
 include $(PGXS)
+
+# This is to workaround a bug in PGXS 8.4 win32 link line,
+# see http://trac.osgeo.org/postgis/ticket/1158#comment:57
+SHLIB_LINK := $(SHLIB_LINK_F) $(SHLIB_LINK)
 
 # PGXS override feature. The ability to allow PostGIS to install itself
 # in a versioned directory is only available in PostgreSQL >= 8.5. To
@@ -107,7 +109,9 @@ $(PG_OBJS): ../liblwgeom/.libs/liblwgeom.a ../libpgcommon/libpgcommon.a
 %.sql: %.sql.in
 	sed 's,MODULE_PATHNAME,$$libdir/postgis-@POSTGIS_MAJOR_VERSION@.@POSTGIS_MINOR_VERSION@,g' $< >$@
 
-postgis_upgrade_20_minor.sql: postgis.sql
+postgis_upgrade_20_minor.sql.in: postgis_drop_before.sql.in.c postgis.sql
+	cat $^ > $@
+postgis_upgrade_20_minor.sql: postgis_upgrade_20_minor.sql.in
 	$(PERL) ../utils/postgis_proc_upgrade.pl $< 2.0 > $@
 
 # Generate any .sql.in files from .sql.in.c files by running them through the C pre-processor 

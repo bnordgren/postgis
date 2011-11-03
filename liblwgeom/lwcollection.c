@@ -1,9 +1,9 @@
 /**********************************************************************
- * $Id$
  *
  * PostGIS - Spatial Types for PostgreSQL
  * http://postgis.refractions.net
- * Copyright 2001-2006 Refractions Research Inc.
+ *
+ * Copyright (C) 2001-2006 Refractions Research Inc.
  *
  * This is free software; you can redistribute and/or modify it under
  * the terms of the GNU General Public Licence. See the COPYING file.
@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "liblwgeom_internal.h"
+#include "lwgeom_log.h"
 
 
 #define CHECK_LWGEOM_ZM 1
@@ -92,175 +93,10 @@ lwcollection_construct_empty(uint8_t type, int srid, char hasz, char hasm)
 	return ret;
 }
 
-
-LWCOLLECTION *
-lwcollection_deserialize(uint8_t *srl)
-{
-	LWCOLLECTION *result;
-	LWGEOM_INSPECTED *insp;
-	char typefl = srl[0];
-	int type = lwgeom_getType(typefl);
-	int i;
-
-	if ( type != COLLECTIONTYPE )
-	{
-		lwerror("lwcollection_deserialize called on NON geometrycollection: %d - %s", type, lwtype_name(type));
-		return NULL;
-	}
-
-	insp = lwgeom_inspect(srl);
-
-	result = lwalloc(sizeof(LWCOLLECTION));
-	result->type = type;
-	result->flags = gflags(TYPE_HASZ(typefl),TYPE_HASM(typefl),0);
-	result->srid = insp->srid;
-	result->ngeoms = insp->ngeometries;
-
-	if (lwgeom_hasBBOX(srl[0]))
-	{
-		BOX2DFLOAT4 *box2df;
-		
-		FLAGS_SET_BBOX(result->flags, 1);		
-		box2df = lwalloc(sizeof(BOX2DFLOAT4));
-		memcpy(box2df, srl+1, sizeof(BOX2DFLOAT4));
-		result->bbox = gbox_from_box2df(result->flags, box2df);
-		lwfree(box2df);
-	}
-	else
-	{
-		result->bbox = NULL;
-	}
-
-
-	if ( insp->ngeometries )
-	{
-		result->geoms = lwalloc(sizeof(LWGEOM *)*insp->ngeometries);
-		for (i=0; i<insp->ngeometries; i++)
-		{
-			result->geoms[i] = lwgeom_deserialize(insp->sub_geoms[i]);
-		}
-	}
-	else
-	{
-		result->geoms = NULL;
-	}
-
-	return result;
-}
-
 LWGEOM *
 lwcollection_getsubgeom(LWCOLLECTION *col, int gnum)
 {
 	return (LWGEOM *)col->geoms[gnum];
-}
-
-/**
- *	@brief find serialized size of this collection
- *	@param col #LWCOLLECTION to find serialized size of
- */
-size_t
-lwcollection_serialize_size(LWCOLLECTION *col)
-{
-	size_t size = 5; /* type + nsubgeoms */
-	int i;
-
-	if ( col->srid != SRID_UNKNOWN ) size += 4; /* srid */
-	if ( col->bbox ) size += sizeof(BOX2DFLOAT4);
-
-	LWDEBUGF(2, "lwcollection_serialize_size[%p]: start size: %d", col, size);
-
-
-	for (i=0; i<col->ngeoms; i++)
-	{
-		size += lwgeom_serialize_size(col->geoms[i]);
-
-		LWDEBUGF(3, "lwcollection_serialize_size[%p]: with geom%d: %d", col, i, size);
-	}
-
-	LWDEBUGF(3, "lwcollection_serialize_size[%p]:  returning %d", col, size);
-
-	return size;
-}
-
-/** @brief convert an #LWCOLLECTION into its serialized form writing it into
- *          the given buffer, and returning number of bytes written into
- *          the given int pointer.
- */
-void
-lwcollection_serialize_buf(LWCOLLECTION *coll, uint8_t *buf, size_t *retsize)
-{
-	size_t size=1; /* type  */
-	size_t subsize=0;
-	char has_srid;
-	uint8_t *loc;
-	int i;
-
-	LWDEBUGF(2, "lwcollection_serialize_buf called (%s with %d elems)",
-	         lwtype_name(coll->type), coll->ngeoms);
-
-	has_srid = (coll->srid != SRID_UNKNOWN);
-
-	buf[0] = lwgeom_makeType_full(FLAGS_GET_Z(coll->flags),
-	                              FLAGS_GET_M(coll->flags),
-	                              has_srid,
-	                              coll->type,
-	                              coll->bbox ? 1 : 0 );
-	loc = buf+1;
-
-	/* Add BBOX if requested */
-	if ( coll->bbox )
-	{
-		BOX2DFLOAT4 *box2df;
-
-		box2df = box2df_from_gbox(coll->bbox);
-		memcpy(loc, box2df, sizeof(BOX2DFLOAT4));
-		lwfree(box2df);
-		size += sizeof(BOX2DFLOAT4);
-		loc += sizeof(BOX2DFLOAT4);
-	}
-
-	/* Add SRID if requested */
-	if (has_srid)
-	{
-		memcpy(loc, &coll->srid, 4);
-		size += 4;
-		loc += 4;
-	}
-
-	/* Write number of subgeoms */
-	memcpy(loc, &coll->ngeoms, 4);
-	size += 4;
-	loc += 4;
-
-	/* Serialize subgeoms */
-	for (i=0; i<coll->ngeoms; i++)
-	{
-		lwgeom_serialize_buf(coll->geoms[i], loc, &subsize);
-		size += subsize;
-		loc += subsize;
-	}
-
-	if (retsize) *retsize = size;
-
-	LWDEBUG(3, "lwcollection_serialize_buf returning");
-}
-
-int
-lwcollection_compute_box2d_p(const LWCOLLECTION *col, BOX2DFLOAT4 *box)
-{
-	BOX2DFLOAT4 boxbuf;
-	uint32_t i;
-
-	if ( ! col->ngeoms ) return 0;
-	if ( ! lwgeom_compute_box2d_p(col->geoms[0], box) ) return 0;
-	for (i=1; i<col->ngeoms; i++)
-	{
-		if ( ! lwgeom_compute_box2d_p(col->geoms[i], &boxbuf) )
-			return 0;
-		if ( ! box2d_union_p(box, &boxbuf, box) )
-			return 0;
-	}
-	return 1;
 }
 
 /**
@@ -477,57 +313,6 @@ void lwcollection_free(LWCOLLECTION *col)
 	lwfree(col);
 }
 
-BOX3D *lwcollection_compute_box3d(LWCOLLECTION *col)
-{
-	int i;
-	BOX3D *boxfinal = NULL;
-	BOX3D *boxtmp1 = NULL;
-	BOX3D *boxtmp2 = NULL;
-	for ( i = 0; i < col->ngeoms; i++ )
-	{
-		if ( col->geoms[i] )
-		{
-			switch ( col->geoms[i]->type )
-			{
-			case POINTTYPE:
-				boxtmp1 = lwpoint_compute_box3d((LWPOINT*)(col->geoms[i]));
-				break;
-			case LINETYPE:
-				boxtmp1 = lwline_compute_box3d((LWLINE*)(col->geoms[i]));
-				break;
-			case POLYGONTYPE:
-				boxtmp1 = lwpoly_compute_box3d((LWPOLY*)(col->geoms[i]));
-				break;
-			case CIRCSTRINGTYPE:
-				boxtmp1 = lwcircstring_compute_box3d((LWCIRCSTRING *)(col->geoms[i]));
-				break;
-			case COMPOUNDTYPE:
-			case CURVEPOLYTYPE:
-			case MULTIPOINTTYPE:
-			case MULTILINETYPE:
-			case MULTIPOLYGONTYPE:
-			case MULTICURVETYPE:
-			case MULTISURFACETYPE:
-			case COLLECTIONTYPE:
-				boxtmp1 = lwcollection_compute_box3d((LWCOLLECTION*)(col->geoms[i]));
-				break;
-			}
-			boxtmp2 = boxfinal;
-			boxfinal = box3d_union(boxtmp1, boxtmp2);
-			if ( boxtmp1 && boxtmp1 != boxfinal )
-			{
-				lwfree(boxtmp1);
-				boxtmp1 = NULL;
-			}
-			if ( boxtmp2 && boxtmp2 != boxfinal )
-			{
-				lwfree(boxtmp2);
-				boxtmp2 = NULL;
-			}
-		}
-	}
-	return boxfinal;
-}
 
 /**
 * Takes a potentially heterogeneous collection and returns a homogeneous

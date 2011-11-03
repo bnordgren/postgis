@@ -121,7 +121,7 @@
 --  	for primary keys and sequences for serial fields...
 --  
 --   ST_CreateTopoGeo
---  	Being working on. TODO: continue implementation
+--  	Complete
 --  
 --   ST_AddIsoNode
 --  	Complete
@@ -172,10 +172,12 @@
 --  	Implemented using polygonize()
 --  
 --   ST_RemEdgeNewFace
---    Unimplemented
+--    Complete
+--    Also updates the Relation table
 --  
 --   ST_RemEdgeModFace
---    Unimplemented
+--  	Complete
+--    Also updates the Relation table
 --  
 --   ST_ValidateTopoGeo
 --    Unimplemented (probably a wrapper around ValidateTopology)
@@ -207,10 +209,9 @@ CREATE TABLE topology.topology (
 	id SERIAL NOT NULL PRIMARY KEY,
 	name VARCHAR NOT NULL UNIQUE,
 	SRID INTEGER NOT NULL,
-	precision FLOAT8 NOT NULL
+	precision FLOAT8 NOT NULL,
+	hasz BOOLEAN NOT NULL DEFAULT false
 );
-
-ALTER TABLE topology.topology ADD hasz BOOLEAN NOT NULL DEFAULT false;
 
 --{ LayerTrigger()
 --
@@ -1865,10 +1866,10 @@ RETURNS integer AS
 ' SELECT topology.CreateTopology($1, $2, 0); '
 LANGUAGE 'SQL' VOLATILE STRICT;
 
---  CreateTopology(name) -- srid = -1, precision = 0
+--  CreateTopology(name) -- srid = unknown, precision = 0
 CREATE OR REPLACE FUNCTION topology.CreateTopology(varchar)
 RETURNS integer AS
-' SELECT topology.CreateTopology($1, -1, 0); '
+$$ SELECT topology.CreateTopology($1, ST_SRID('POINT EMPTY'::geometry), 0); $$
 LANGUAGE 'SQL' VOLATILE STRICT;
 
 --} CreateTopology

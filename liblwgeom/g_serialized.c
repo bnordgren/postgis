@@ -2,6 +2,7 @@
  * $Id$
  *
  * PostGIS - Spatial Types for PostgreSQL
+ *
  * Copyright 2009 Paul Ramsey <pramsey@cleverelephant.ca>
  *
  * This is free software; you can redistribute and/or modify it under
@@ -10,10 +11,36 @@
  **********************************************************************/
 
 #include "liblwgeom_internal.h"
+#include "lwgeom_log.h"
 
 /***********************************************************************
 * GSERIALIZED metadata utility functions.
 */
+
+int gserialized_has_bbox(const GSERIALIZED *gser)
+{
+	return FLAGS_GET_BBOX(gser->flags);
+}
+
+int gserialized_has_z(const GSERIALIZED *gser)
+{
+	return FLAGS_GET_Z(gser->flags);
+}
+
+int gserialized_has_m(const GSERIALIZED *gser)
+{
+	return FLAGS_GET_M(gser->flags);
+}
+
+int gserialized_get_zm(const GSERIALIZED *gser)
+{
+	return 2 * FLAGS_GET_Z(gser->flags) + FLAGS_GET_M(gser->flags);
+}
+
+int gserialized_ndims(const GSERIALIZED *gser)
+{
+	return FLAGS_NDIMS(gser->flags);
+}
 
 uint32_t gserialized_get_type(const GSERIALIZED *s)
 {
@@ -43,19 +70,19 @@ int32_t gserialized_get_srid(const GSERIALIZED *s)
 	if ( srid == 0 ) 
 		return SRID_UNKNOWN;
 	else
-		return srid;
+		return clamp_srid(srid);
 }
 
 void gserialized_set_srid(GSERIALIZED *s, int32_t srid)
 {
 	LWDEBUGF(3, "Called with srid = %d", srid);
 
-	/* 0 is our internal unknown value. We'll map back and forth here for now */
+	srid = clamp_srid(srid);
+
+	/* 0 is our internal unknown value.
+	 * We'll map back and forth here for now */
 	if ( srid == SRID_UNKNOWN )
 		srid = 0;
-		
-	if ( srid > SRID_MAXIMUM )
-		lwerror("gserialized_set_srid called with value (%d) > SRID_MAXIMUM (%d)",srid,SRID_MAXIMUM);
 		
 	s->srid[0] = (srid & 0x001F0000) >> 16;
 	s->srid[1] = (srid & 0x0000FF00) >> 8;
@@ -99,7 +126,7 @@ char* gserialized_to_string(const GSERIALIZED *g)
 	return lwgeom_to_wkt(lwgeom_from_gserialized(g), WKT_ISO, 12, 0);
 }
 
-int gserialized_get_gbox_p(const GSERIALIZED *g, GBOX *gbox)
+int gserialized_read_gbox_p(const GSERIALIZED *g, GBOX *gbox)
 {
 
 	/* Null input! */
@@ -108,6 +135,7 @@ int gserialized_get_gbox_p(const GSERIALIZED *g, GBOX *gbox)
 	/* Initialize the flags on the box */
 	gbox->flags = g->flags;
 
+	/* Has pre-calculated box */
 	if ( FLAGS_GET_BBOX(g->flags) )
 	{
 		int i = 0;
@@ -137,10 +165,93 @@ int gserialized_get_gbox_p(const GSERIALIZED *g, GBOX *gbox)
 		}
 		return LW_SUCCESS;
 	}
-	else
+
+	/* No pre-calculated box, but for cartesian entries we can do some magic */
+	if ( ! FLAGS_GET_GEODETIC(g->flags) )
 	{
-		return LW_FAILURE;
+		uint32_t type = gserialized_get_type(g);
+		/* Boxes of points are easy peasy */
+		if ( type == POINTTYPE )
+		{
+			int i = 1; /* Start past <pointtype><padding> */
+			double *dptr = (double*)(g->data);
+			gbox->xmin = gbox->xmax = dptr[i++];
+			gbox->ymin = gbox->ymax = dptr[i++];
+			if ( FLAGS_GET_Z(g->flags) )
+			{
+				gbox->zmin = gbox->zmax = dptr[i++];
+			}
+			if ( FLAGS_GET_M(g->flags) )
+			{
+				gbox->mmin = gbox->mmax = dptr[i++];
+			}
+			return LW_SUCCESS;
+		}
+		/* We can calculate the box of a two-point cartesian line trivially */
+		else if ( type == LINETYPE )
+		{
+			int ndims = FLAGS_NDIMS(g->flags);
+			int i = 0; /* Start past <linetype><npoints> */
+			double *dptr = (double*)(g->data);
+			int *iptr = (int*)(g->data);
+			int npoints = iptr[1]; /* Read the npoints */
+			
+			/* This only works with 2-point lines */
+			if ( npoints != 2 )
+				return LW_FAILURE;
+				
+			/* Advance to X */
+			i++;
+			gbox->xmin = FP_MIN(dptr[i], dptr[i+ndims]);
+			gbox->xmax = FP_MAX(dptr[i], dptr[i+ndims]);
+			
+			/* Advance to Y */
+			i++;
+			gbox->ymin = FP_MIN(dptr[i], dptr[i+ndims]);
+			gbox->ymax = FP_MAX(dptr[i], dptr[i+ndims]);
+			
+			if ( FLAGS_GET_Z(g->flags) )
+			{
+				/* Advance to Z */
+				i++;
+				gbox->zmin = FP_MIN(dptr[i], dptr[i+ndims]);
+				gbox->zmax = FP_MAX(dptr[i], dptr[i+ndims]);
+			}
+			if ( FLAGS_GET_M(g->flags) )
+			{
+				/* Advance to M */
+				i++;
+				gbox->zmin = FP_MIN(dptr[i], dptr[i+ndims]);
+				gbox->zmax = FP_MAX(dptr[i], dptr[i+ndims]);
+			}
+			return LW_SUCCESS;
+		}
+		/* We could also do single-entry multi-points */
+		else if ( type == MULTIPOINTTYPE )
+		{
+			/* TODO: Make this actually happen */
+			return LW_FAILURE;
+		}
 	}
+	return LW_FAILURE;
+}
+
+
+/**
+* Read the bounding box off a serialization and calculate one if
+* it is not already there.
+*/
+int gserialized_get_gbox_p(const GSERIALIZED *geom, GBOX *box)
+{
+	LWGEOM *lwgeom;
+	int ret = gserialized_read_gbox_p(geom, box);
+	if ( LW_FAILURE == ret ) {
+		/* See http://trac.osgeo.org/postgis/ticket/1023 */
+		lwgeom = lwgeom_from_gserialized(geom);
+		ret = lwgeom_calculate_gbox(lwgeom, box);
+		lwgeom_free(lwgeom);
+	}
+	return ret;
 }
 
 
@@ -969,6 +1080,9 @@ static LWCOLLECTION* lwcollection_from_gserialized_buffer(uint8_t *data_ptr, uin
 	else
 		collection->geoms = NULL;
 
+	/* Sub-geometries are never de-serialized with boxes (#1254) */
+	FLAGS_SET_BBOX(g_flags, 0);
+
 	for ( i = 0; i < ngeoms; i++ )
 	{
 		uint32_t subtype = lw_get_uint32_t(data_ptr);
@@ -1059,7 +1173,7 @@ LWGEOM* lwgeom_from_gserialized(const GSERIALIZED *g)
 	lwgeom->type = g_type;
 	lwgeom->flags = g_flags;
 
-	if ( gserialized_get_gbox_p(g, &bbox) == LW_SUCCESS )
+	if ( gserialized_read_gbox_p(g, &bbox) == LW_SUCCESS )
 	{
 		lwgeom->bbox = gbox_copy(&bbox);
 	}

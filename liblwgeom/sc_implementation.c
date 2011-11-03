@@ -1,6 +1,7 @@
 #include "liblwgeom.h"
 #include "spatial_collection.h"
 #include "proj_api.h"
+#include "string.h"
 
 
 /**
@@ -24,6 +25,7 @@ geometry_includes(INCLUDES *inc, LWPOINT *point)
 	if (inc->params == NULL) return 0 ;
 
 	geom = (LWGEOM *)(inc->params) ;
+	if (geom->srid != point->srid) return 0;
 
 	return lwgeom_intersects(geom, lwpoint_as_lwgeom(point)) ;
 }
@@ -85,14 +87,14 @@ projection_includes(INCLUDES *inc, LWPOINT *point)
 	params = (struct proj_wrap_inc_s *)(inc->params) ;
 
 	/* copy the point so the outside world doesn't see it change. */
-	point2d = lwgeom_make2d(point->srid,
+	point2d = lwpoint_make2d(point->srid,
 			     lwpoint_get_x(point), lwpoint_get_y(point));
 
 	/* note that this is a cast, not a copy */
 	point2d_g = lwpoint_as_lwgeom(point2d) ;
 
 	/* project the point */
-	lwgeom_transform(point2d_g, params->source, params->dest) ;
+	lwgeom_transform(point2d_g, params->dest, params->source) ;
 
 	/* now call the wrapped object with the projected coordinates */
 	result = params->wrapped->includes(params->wrapped, point2d) ;
@@ -173,14 +175,6 @@ int relation_symdifference(int r1, int r2)
 	return (r1 && !r2) || (!r1 && r2) ;
 }
 
-/**
- * RELATION_FN is a function pointer typedef which describes a function
- * capable of evaluating a spatial relationship at a point. The arguments
- * are boolean values which reflect the value of the includes function
- * for the first and second inputs, respectively. The return value is
- * the result of the relationship evaluation.
- */
-typedef int (RELATION_FN*)(int,int) ;
 
 
 /**
@@ -197,7 +191,7 @@ relation_includes(INCLUDES *inc, LWPOINT *point)
 	RELATION_FN relation ;
 	int in1_included, in2_included ;
 
-	if (inc == NULL || point == NULL || relation == NULL) return -1 ;
+	if (inc == NULL || point == NULL ) return -1 ;
 	if (inc->params == NULL) return -1 ;
 	if (inc->collection == NULL) return -1 ;
 
@@ -236,6 +230,7 @@ sc_destroy_relation_includes(INCLUDES *dead)
 
 /** @}*/ /* end of sc_relation_include documentation group */
 
+
 /** @}*/ /* end of includes_i documentation group */
 
 /**
@@ -270,7 +265,7 @@ struct mask_params_s {
  */
 VALUE *
 mask_evaluator_util(EVALUATOR *eval, LWPOINT *point, INCLUDE_FN includes) {
-	struct mask_params_s params ;
+	struct mask_params_s *params ;
 	VALUE *result ;
 	double result_scalar ;
 
@@ -363,7 +358,7 @@ sc_create_mask_evaluator(double true_val, double false_val, int index)
 		idx_fn = mask_index_evaluator ;
 	}
 
-	return eval_create((PARAMETERS *)params, mask_evaluator, idx_fn) ;
+	return eval_create((PARAMETERS *)params, mask_evaluator, idx_fn, 1) ;
 }
 
 /**
@@ -399,21 +394,21 @@ projection_evaluator(EVALUATOR *eval, LWPOINT *point)
 {
 	LWGEOM *point2d_g ;
 	LWPOINT *point2d ;
-	struct proj_wrap_inc_s *params ;
+	struct proj_wrap_eval_s *params ;
 	VALUE *result ;
 
 	if (eval == NULL || eval->params == NULL || point == NULL) return 0 ;
 	params = (struct proj_wrap_eval_s *)(eval->params) ;
 
 	/* copy the point so the outside world doesn't see it change. */
-	point2d = lwgeom_make2d(point->srid,
+	point2d = lwpoint_make2d(point->srid,
 			     lwpoint_get_x(point), lwpoint_get_y(point));
 
 	/* note that this is a cast, not a copy */
 	point2d_g = lwpoint_as_lwgeom(point2d) ;
 
 	/* project the point */
-	lwgeom_transform(point2d_g, params->source, params->dest) ;
+	lwgeom_transform(point2d_g, params->dest, params->source) ;
 
 	/* now call the wrapped object with the projected coordinates */
 	result = params->wrapped->evaluate(params->wrapped, point2d) ;
@@ -436,7 +431,7 @@ sc_create_projection_eval(EVALUATOR *wrapped, projPJ source, projPJ dest)
 	params->dest = dest ;
 
 	/* create the includes object */
-	return inc_create((PARAMETERS *)params, projection_evaluator, NULL);
+	return eval_create((PARAMETERS *)params, projection_evaluator, NULL, 1);
 }
 
 void
@@ -485,7 +480,7 @@ first_value_util(EVALUATOR *eval,
 {
 	VALUE *result, *result_in1, *result_in2 ;
 	SPATIAL_COLLECTION *sc ;
-	INCLUDES_FN inc1, inc2 ;
+	INCLUDE_FN inc1, inc2 ;
 	EVALUATOR_FN eval1, eval2 ;
 	int have_value ;
 	int i ;
@@ -494,9 +489,7 @@ first_value_util(EVALUATOR *eval,
 	if (eval == NULL || point == NULL) return NULL;
 	if (eval->collection == NULL) return NULL ;
 	if (eval->result == NULL) return NULL ;
-	if (eval->result->length != 1) return NULL ;
 
-	params = (struct mask_params_s *)(eval->params) ;
 	result = eval->result ;
 	sc = eval->collection ;
 
@@ -526,30 +519,31 @@ first_value_util(EVALUATOR *eval,
 		return NULL ;
 
 	/* ensure all the results have the same number of values */
-	if ( !( (result->length != sc->input1->evaluator->result->length) &&
-			(result->length != sc->input2->evaluator->result->length)) )
+	if ( !((result->length == sc->input1->evaluator->result->length) &&
+		   (result->length == sc->input2->evaluator->result->length)))
 	{
 		return NULL ;
 	}
 
+	have_value = 0 ;
 	if (inc1(sc->input1->inclusion, point)) {
-		result1 = eval1(sc->input1->evaluator, point) ;
-		have_value = (result1 != NULL) ;
+		result_in1 = eval1(sc->input1->evaluator, point) ;
+		have_value = (result_in1 != NULL) ;
 		/* populate the result with the result from the first input */
 		if (have_value) {
 			for (i=0; i<result->length; i++) {
-				result->data[i] = result1->data[i] ;
+				result->data[i] = result_in1->data[i] ;
 			}
 		}
 	}
 
 	if (!have_value && inc2(sc->input2->inclusion, point)) {
-		result2 = eval2(sc->input2->evaluator, point) ;
-		have_value = (result2 != NULL) ;
+		result_in2 = eval2(sc->input2->evaluator, point) ;
+		have_value = (result_in2 != NULL) ;
 		/* populate the result with the result from the first input */
 		if (have_value) {
 			for (i=0; i<result->length; i++) {
-				result->data[i] = result2->data[i] ;
+				result->data[i] = result_in2->data[i] ;
 			}
 		}
 	}
@@ -588,9 +582,19 @@ first_value_evaluatorIndex(EVALUATOR *eval, LWPOINT *point)
  * will return a value from one of the two inputs.
  */
 EVALUATOR *
-sc_create_first_value_evaluator(void)
+sc_create_first_value_evaluator(SPATIAL_COLLECTION *first, SPATIAL_COLLECTION *second)
 {
-	return eval_create(NULL, first_value_evaluator, first_value_evaluatorIndex) ;
+	if (first == NULL || second == NULL) return NULL ;
+	if (first->evaluator == NULL || second->evaluator == NULL) return NULL ;
+	if (first->evaluator->result == NULL || second->evaluator->result == NULL) {
+		return NULL  ;
+	}
+
+	if (first->evaluator->result->length != second->evaluator->result->length) {
+		return NULL ;
+	}
+	return eval_create(NULL, first_value_evaluator, first_value_evaluatorIndex,
+			first->evaluator->result->length) ;
 }
 
 /**
@@ -603,7 +607,7 @@ sc_destroy_first_value_evaluator(EVALUATOR *dead)
 	eval_destroy(dead) ;
 }
 
-/** @} */ /* end of firsval_evaluator_i documentation group */
+/** @} */ /* end of firstval_evaluator_i documentation group */
 
 /** @} */ /* end of evaluator_i documentation group */
 
@@ -621,29 +625,54 @@ sc_destroy_first_value_evaluator(EVALUATOR *dead)
  */
 
 /**
+ * Structure allows the geometry wrapper to take ownership of the
+ * wrapped geometry, freeing it when done.
+ */
+struct geo_wrap_s {
+	LWGEOM *geom ;
+	int     owned ;
+};
+
+/**
  * Constructor to create a geometry wrapper collection object.
  *
  * @param geom the geometry to wrap
+ * @param owned flag indicates that the collection should take ownership
+ *              of the wrapped geometry object (e.g., geometry will be
+ *              freed when collection is destroyed).
  * @param inside the "value" associated with the geometry's interior
  * @param outside the "value" associated with the geometry's exterior
  */
 SPATIAL_COLLECTION *
-sc_create_geometry_wrapper(LWGEOM *geom, int32 srid, double inside, double outside)
+sc_create_geometry_wrapper(LWGEOM *geom, int owned,
+		double inside, double outside)
 {
 	INCLUDES *inclusion ;
 	EVALUATOR *evaluator ;
+	struct geo_wrap_s *params ;
+
 
 	inclusion = sc_create_geometry_includes(geom) ;
 	evaluator = sc_create_mask_evaluator(inside, outside, 0) ;
+	params = (struct geo_wrap_s *)lwalloc(sizeof(struct geo_wrap_s)) ;
 
-	if ( inclusion == NULL || evaluator==NULL )
+	if ( inclusion == NULL || evaluator==NULL || params == NULL )
 	{
 		if (inclusion != NULL ) sc_destroy_geometry_includes(inclusion) ;
 		if (evaluator != NULL ) sc_destroy_mask_evaluator(evaluator) ;
+		if (params != NULL ) lwfree(params) ;
 		return NULL ;
 	}
 
-	return sc_create(SPATIAL_ONLY, srid, NULL, inclusion, evaluator) ;
+	/* record the geometry */
+	params->geom = geom ;
+	params->owned = owned ;
+
+	/* ensure the geometry has an extent */
+	lwgeom_add_bbox(geom);
+
+	return sc_create(SPATIAL_ONLY, geom->srid, geom->bbox,
+			params, inclusion, evaluator) ;
 }
 
 /**
@@ -654,10 +683,18 @@ sc_create_geometry_wrapper(LWGEOM *geom, int32 srid, double inside, double outsi
 void
 sc_destroy_geometry_wrapper(SPATIAL_COLLECTION *dead)
 {
+	struct geo_wrap_s *params ;
 	if (dead == NULL) return ;
 
 	sc_destroy_geometry_includes(dead->inclusion) ;
 	sc_destroy_mask_evaluator(dead->evaluator) ;
+	if (dead->params != NULL) {
+		params = (struct geo_wrap_s *)(dead->params) ;
+		if ((params->geom != NULL) && params->owned) {
+			lwgeom_free(params->geom) ;
+		}
+		lwfree(params) ;
+	}
 	sc_destroy(dead) ;
 }
 
@@ -683,13 +720,78 @@ struct proj_wrap_s {
 	projPJ dest ;
 };
 
+LWPOLY *
+gbox_to_lwpoly(GBOX *bbox)
+{
+	POINTARRAY **rings ;
+	POINTARRAY *pts ;
+	POINT4D     p4d ;
+
+    rings = (POINTARRAY **) lwalloc(sizeof (POINTARRAY*));
+    if (!rings) {
+        return NULL ;
+    }
+    rings[0] = ptarray_construct(0, 0, 5);
+    /* TODO: handle error on ptarray construction */
+    /* XXX jorgearevalo: the error conditions aren't managed in ptarray_construct */
+    if (!rings[0]) {
+        return NULL;
+    }
+    pts = rings[0];
+
+    /* first corner */
+    p4d.x = bbox->xmin ;
+    p4d.y = bbox->ymin ;
+    ptarray_set_point4d(pts, 0, &p4d);
+    ptarray_set_point4d(pts, 4, &p4d); /* needed for closing it? */
+
+    /* second corner */
+    p4d.x = bbox->xmin ;
+    p4d.y = bbox->ymax ;
+    ptarray_set_point4d(pts, 1, &p4d);
+
+    /* third corner */
+    p4d.x = bbox->xmax ;
+    p4d.y = bbox->ymax ;
+    ptarray_set_point4d(pts, 2, &p4d);
+
+    /* fourth corner */
+    p4d.x = bbox->xmax ;
+    p4d.y = bbox->ymin ;
+    ptarray_set_point4d(pts, 3, &p4d);
+
+    /* make the polygon */
+    return lwpoly_construct(SRID_UNKNOWN, 0, 1, rings);
+}
+
+void
+project_gbox(GBOX *bbox, projPJ from, projPJ to)
+{
+	LWPOLY *extent ;
+
+	/* make a polygon out of the gbox */
+	extent = gbox_to_lwpoly(bbox) ;
+	if (extent == NULL) return ;
+
+    /* project it and recalculate the mins and maxes */
+    lwgeom_transform(lwpoly_as_lwgeom(extent), from, to) ;
+    lwgeom_drop_bbox(lwpoly_as_lwgeom(extent)) ;
+    lwgeom_add_bbox(lwpoly_as_lwgeom(extent)) ;
+
+    /* copy this over the input bbox */
+	memcpy(bbox, extent->bbox, sizeof(GBOX)) ;
+
+	lwpoly_free(extent) ;
+}
+
 SPATIAL_COLLECTION *
 sc_create_projection_wrapper(SPATIAL_COLLECTION *wrapped,
-		                     int32 desired_srid,
+		                     int32_t desired_srid,
 		                     projPJ wrapped_proj, projPJ desired_proj )
 {
 	INCLUDES *inclusion ;
 	EVALUATOR *evaluator ;
+	GBOX extent ;
 	struct proj_wrap_s *params ;
 
 	if (wrapped == NULL) return NULL ;
@@ -714,7 +816,11 @@ sc_create_projection_wrapper(SPATIAL_COLLECTION *wrapped,
 		return NULL ;
 	}
 
-	return sc_create(wrapped->type, desired_srid,
+	/* calculate the projected extent */
+	memcpy(&extent, &(wrapped->extent), sizeof(GBOX)) ;
+	project_gbox(&extent, wrapped_proj, desired_proj) ;
+
+	return sc_create(wrapped->type, desired_srid, &extent,
 			         (PARAMETERS *)params, inclusion, evaluator) ;
 }
 
@@ -735,5 +841,497 @@ sc_destroy_projection_wrapper(SPATIAL_COLLECTION *dead)
 
 /** @} */  /* end of proj_wrap_collection documentation group */
 
+/**
+ * \defgroup relation_collection Creates a collection formed by the spatial relationship of two input collections.
+ * @{
+ */
+
+/**
+ * Calculates the extent of two collections related by the intersection
+ * operation.
+ */
+GBOX *relation_env_intersection(LWPOLY *r1, LWPOLY *r2)
+{
+	LWGEOM *env ;
+	GBOX *bounds ;
+
+
+	env = lwgeom_intersection(lwpoly_as_lwgeom(r1),
+			                   lwpoly_as_lwgeom(r2)) ;
+	lwgeom_add_bbox(env) ;
+	bounds = gbox_copy(env->bbox);
+	lwgeom_free(env) ;
+	return bounds ;
+}
+
+/**
+ * Calculates the extent of two collections related by the difference
+ * operation.
+ */
+GBOX *relation_env_difference(LWPOLY *r1, LWPOLY *r2)
+{
+	LWGEOM *env ;
+	GBOX *bounds ;
+
+	env = lwgeom_difference(lwpoly_as_lwgeom(r1),
+			                   lwpoly_as_lwgeom(r2)) ;
+	lwgeom_add_bbox(env) ;
+	bounds = gbox_copy(env->bbox);
+	lwgeom_free(env) ;
+	return bounds ;
+}
+
+/**
+ * Calculates the extent of two collections related by the union
+ * operation.
+ */
+GBOX *relation_env_union(LWPOLY *r1, LWPOLY *r2)
+{
+	LWGEOM *env ;
+	GBOX *bounds ;
+
+	env = lwgeom_union(lwpoly_as_lwgeom(r1),
+			                   lwpoly_as_lwgeom(r2)) ;
+	lwgeom_add_bbox(env) ;
+	bounds = gbox_copy(env->bbox);
+	lwgeom_free(env) ;
+	return bounds ;
+}
+
+/**
+ * Calculates the extent of two collections related by the symmetric
+ * difference operation.
+ */
+GBOX *relation_env_symdifference(LWPOLY *r1, LWPOLY *r2)
+{
+	LWGEOM *env ;
+	GBOX *bounds ;
+
+	env = lwgeom_symdifference(lwpoly_as_lwgeom(r1),
+			                   lwpoly_as_lwgeom(r2)) ;
+	lwgeom_add_bbox(env) ;
+	bounds = gbox_copy(env->bbox);
+	lwgeom_free(env) ;
+	return bounds ;
+}
+
+/**
+ * \defgroup relation_op Relates two input collections in the same projection.
+ *
+ * @{
+ */
+
+/**
+ * performs the heavy lifting for #sc_create_relation_op and
+ * #sc_create_relation_op_proj.
+ */
+static SPATIAL_COLLECTION *
+sc_create_relation_op_internal(COLLECTION_TYPE t,
+		              SPATIAL_COLLECTION *sc1,
+		              SPATIAL_COLLECTION *sc2,
+		              PARAMETERS *params,
+		              ENVELOPE_PREP_OP env_fn,
+		              RELATION_FN inc_fn,
+		              EVALUATOR *eval)
+{
+	SPATIAL_COLLECTION *result ;
+	INCLUDES *inc ;
+	LWPOLY *sc1_outline ;
+	LWPOLY *sc2_outline ;
+	GBOX *result_env ;
+
+	/* sanity checks on inputs */
+	if (sc1 == NULL || sc2==NULL) return NULL ;
+	if (env_fn == NULL || inc_fn == NULL) return NULL ;
+	if (eval == NULL) return NULL ;
+
+	/* something which should print out an error */
+	if (sc1->srid != sc2->srid) return NULL ;
+
+	/* create the INCLUDES given the desired function */
+	inc = sc_create_relation_includes(inc_fn) ;
+	if (inc == NULL) return NULL ;
+
+	/* calculate an approximate envelope for the result */
+	sc1_outline = gbox_to_lwpoly(&(sc1->extent)) ;
+	sc2_outline = gbox_to_lwpoly(&(sc2->extent)) ;
+	if (sc1_outline == NULL || sc2_outline == NULL) {
+		sc_destroy_relation_includes(inc) ;
+		if (sc1_outline != NULL) lwpoly_free(sc1_outline) ;
+		if (sc2_outline != NULL) lwpoly_free(sc2_outline) ;
+		return NULL ;
+	}
+	result_env = env_fn(sc1_outline, sc2_outline) ;
+	lwpoly_free(sc1_outline) ;
+	lwpoly_free(sc2_outline) ;
+	if (result_env == NULL) {
+		sc_destroy_relation_includes(inc) ;
+		return NULL ;
+	}
+
+	/* create the two-input collection */
+	result = sc_twoinput_create(t, params, result_env, inc, eval, sc1, sc2) ;
+	if (result == NULL) {
+		sc_destroy_relation_includes(inc) ;
+		return NULL ;
+	}
+
+	return result ;
+}
+
+/**
+ * A collection implementation encapsulating the spatial relationship
+ * of two input collections. The user may specify an existing
+ * #ENVELOPE_PREP_OP to calculate the spatial extent of the result.
+ * A #RELATION_FN may also be provided to determine whether an
+ * individual point is included in the result. An arbitrary
+ * #EVALUATOR may also be provided (which must be compatible with
+ * the inputs).
+ *
+ * The result and the two inputs must be in the same projection
+ * (same srid).
+ *
+ * This constructor is probably not what you want, unless you have
+ * written a custom #ENVELOPE_PREP_OP or #RELATION_FN (or need to
+ * specify some nonstandard combination.) See the #sc_create_sync_relation_op
+ * for a constructor which synchronizes the #ENVELOPE_PREP_OP and
+ * #RELATION_FN to an enumerated #RELATION_TYPE.
+ *
+ * When the result is expressed in a different projection than
+ * one or both inputs, see #sc_create_relation_op_proj or
+ * #sc_create_sync_relation_op_proj.
+ *
+ * @returns the resultant collection
+ * @param t type of the collection (#SPATIAL_ONLY or #SPATIAL_PLUS_VALUE).
+ * @param sc1 the first input collection
+ * @param sc2 the second input collection
+ * @param env_fn an #ENVELOPE_PREP_OP to calculate the extent of the result
+ *               given sc1 and sc2
+ * @param inc_fn a #RELATION_FN to calculate whether an individual point
+ *               is included in the result, given sc1 and sc2
+ * @param eval   an #EVALUATOR which provides a resultant value given
+ *               the values of sc1 and/or sc2. May be NULL if t is
+ *               #SPATIAL_ONLY
+ */
+SPATIAL_COLLECTION *
+sc_create_relation_op(COLLECTION_TYPE t,
+		              SPATIAL_COLLECTION *sc1,
+		              SPATIAL_COLLECTION *sc2,
+		              ENVELOPE_PREP_OP env_fn,
+		              RELATION_FN inc_fn,
+		              EVALUATOR *eval)
+{
+	return sc_create_relation_op_internal(t, sc1, sc2, NULL,
+			env_fn, inc_fn, eval) ;
+}
+
+
+
+/**
+ * A collection implementation encapsulating the spatial relationship
+ * of two input collections. The user specifies the relation by supplying
+ * a #RELATION_TYPE value.  An arbitrary
+ * #EVALUATOR may also be provided (which must be compatible with
+ * the inputs).
+ *
+ * The result and the two inputs must be in the same projection
+ * (same srid).
+ *
+ * When the result is expressed in a different projection than
+ * one or both inputs, see #sc_create_relation_op_proj or
+ * #sc_create_sync_relation_op_proj.
+ *
+ * @returns the resultant collection
+ * @param t type of the collection (#SPATIAL_ONLY or #SPATIAL_PLUS_VALUE).
+ * @param sc1 the first input collection
+ * @param sc2 the second input collection
+ * @param relation specifies a supported, predefined spatial relationship
+ * @param eval   an #EVALUATOR which provides a resultant value given
+ *               the values of sc1 and/or sc2. May be NULL if t is
+ *               #SPATIAL_ONLY
+ */
+SPATIAL_COLLECTION *
+sc_create_sync_relation_op(COLLECTION_TYPE t,
+		              SPATIAL_COLLECTION *sc1,
+		              SPATIAL_COLLECTION *sc2,
+		              RELATION_TYPE relation,
+		              EVALUATOR *eval)
+{
+	RELATION_FN      inc_fn ;
+	ENVELOPE_PREP_OP env_fn ;
+
+	if (sc1 == NULL || sc2 == NULL) return NULL ;
+
+	/*
+	 * get the envelope and includes functions
+	 * (and make sure they correspond).
+	 */
+	inc_fn = sc_get_relation_fn(relation) ;
+	env_fn = sc_get_envelope_fn(relation) ;
+	if (inc_fn == NULL || env_fn == NULL) return NULL ;
+
+	return sc_create_relation_op(t, sc1, sc2,
+			env_fn, inc_fn, eval) ;
+}
+
+
+void
+sc_destroy_relation_op(SPATIAL_COLLECTION *dead)
+{
+	if (dead != NULL) {
+		if (dead->inclusion != NULL) {
+			sc_destroy_relation_includes(dead->inclusion) ;
+		}
+		sc_twoinput_destroy(dead) ;
+	}
+}
+
+/** @} */ /* end of the relation_op documentation group */
+
+/**
+ * \defgroup relation_proj Wraps each input with a projection wrapper, and installs the specified relationship functions.
+ *
+ * @{
+ */
+
+struct relation_op_proj_s {
+	SPATIAL_COLLECTION *sc1_wrap ;
+	SPATIAL_COLLECTION *sc2_wrap ;
+};
+
+
+/**
+ * A collection implementation encapsulating the spatial relationship
+ * of two input collections. The user may specify an existing
+ * #ENVELOPE_PREP_OP to calculate the spatial extent of the result.
+ * A #RELATION_FN may also be provided to determine whether an
+ * individual point is included in the result. An arbitrary
+ * #EVALUATOR may also be provided (which must be compatible with
+ * the inputs).
+ *
+ * Projection information must be specified for the result and
+ * both inputs. If necessary, each input is wrapped with a
+ * projection wrapper into the destination projection.
+ *
+ * This constructor is probably not what you want, unless you have
+ * written a custom #ENVELOPE_PREP_OP or #RELATION_FN (or need to
+ * specify some nonstandard combination.) See the #sc_create_sync_relation_op
+ * for a constructor which synchronizes the #ENVELOPE_PREP_OP and
+ * #RELATION_FN to an enumerated #RELATION_TYPE.
+ *
+ *
+ * When the result and the two inputs are known to be in the same
+ * projection, see #sc_create_relation_op or
+ * #sc_create_sync_relation_op.
+ *
+ * @returns the resultant collection
+ * @param t type of the collection (#SPATIAL_ONLY or #SPATIAL_PLUS_VALUE).
+ * @param sc1 the first input collection
+ * @param sc2 the second input collection
+ * @param proj_sc1 projection information for first input
+ * @param proj_sc2 projection information for second input
+ * @param srid     srid of the result
+ * @param proj_dest projection information for the result
+ * @param env_fn an #ENVELOPE_PREP_OP to calculate the extent of the result
+ *               given sc1 and sc2
+ * @param inc_fn a #RELATION_FN to calculate whether an individual point
+ *               is included in the result, given sc1 and sc2
+ * @param eval   an #EVALUATOR which provides a resultant value given
+ *               the values of sc1 and/or sc2. May be NULL if t is
+ *               #SPATIAL_ONLY
+ */
+
+SPATIAL_COLLECTION *
+sc_create_relation_op_proj(COLLECTION_TYPE t,
+		              SPATIAL_COLLECTION *sc1,
+		              SPATIAL_COLLECTION *sc2,
+		              projPJ proj_sc1, projPJ proj_sc2,
+		              int32_t srid, projPJ proj_dest,
+		              ENVELOPE_PREP_OP env_fn,
+		              RELATION_FN inc_fn,
+		              EVALUATOR *eval)
+{
+	SPATIAL_COLLECTION *sc1_used ;
+	SPATIAL_COLLECTION *sc2_used ;
+	struct relation_op_proj_s *params ;
+
+	if (sc1 == NULL || sc2 == NULL) return NULL ;
+	if (proj_sc1 == NULL || proj_sc2 == NULL || proj_dest == NULL) return NULL ;
+
+	params = (struct relation_op_proj_s *)lwalloc(sizeof(struct relation_op_proj_s));
+	if (params==NULL) return NULL ;
+	params->sc1_wrap = NULL ;
+	params->sc2_wrap = NULL ;
+
+	/* wrap sc1 if necessary */
+	sc1_used = sc1 ;
+	if (sc1->srid != srid) {
+		params->sc1_wrap =
+				sc_create_projection_wrapper(sc1, srid, proj_sc1, proj_dest) ;
+		if (params->sc1_wrap == NULL) {
+			lwfree(params) ;
+			return NULL ;
+		}
+		sc1_used = params->sc1_wrap ;
+	}
+
+	/* wrap sc2 if necessary */
+	sc2_used = sc2 ;
+	if (sc2->srid != srid) {
+		params->sc2_wrap =
+				sc_create_projection_wrapper(sc2, srid, proj_sc2, proj_dest) ;
+		if (params->sc2_wrap == NULL) {
+			if (params->sc1_wrap != NULL) {
+				sc_destroy_projection_wrapper(params->sc1_wrap) ;
+			}
+			lwfree(params) ;
+			return NULL ;
+		}
+		sc2_used = params->sc2_wrap ;
+	}
+
+	return sc_create_relation_op_internal(t, sc1_used, sc2_used,
+			params, env_fn, inc_fn, eval) ;
+}
+
+/**
+ * A collection implementation encapsulating the spatial relationship
+ * of two input collections. The user may specifies a supported,
+ * predefined spatial operation using the #RELATION_TYPE enumeration.
+ * An arbitrary
+ * #EVALUATOR may also be provided (which must be compatible with
+ * the inputs).
+ *
+ * Projection information must be specified for
+ * both inputs. The projection of the first input is used as the
+ * projection of the result.
+ *
+ * When the result and the two inputs are known to be in the same
+ * projection, see #sc_create_relation_op or
+ * #sc_create_sync_relation_op.
+ *
+ * @returns the resultant collection
+ * @param t type of the collection (#SPATIAL_ONLY or #SPATIAL_PLUS_VALUE).
+ * @param sc1 the first input collection
+ * @param sc2 the second input collection
+ * @param proj_sc1 projection information for first input
+ * @param proj_sc2 projection information for second input
+ * @param relation the desired predefined spatial relationship
+ * @param eval   an #EVALUATOR which provides a resultant value given
+ *               the values of sc1 and/or sc2. May be NULL if t is
+ *               #SPATIAL_ONLY
+ */
+SPATIAL_COLLECTION *
+sc_create_sync_relation_op_proj(COLLECTION_TYPE t,
+		              SPATIAL_COLLECTION *sc1,
+		              SPATIAL_COLLECTION *sc2,
+		              projPJ proj_sc1, projPJ proj_sc2,
+		              int dest_srid, projPJ proj_dest,
+		              RELATION_TYPE relation,
+		              EVALUATOR *eval)
+{
+	RELATION_FN      inc_fn ;
+	ENVELOPE_PREP_OP env_fn ;
+
+	if (sc1 == NULL || sc2 == NULL) return NULL ;
+
+	/*
+	 * get the envelope and includes functions
+	 * (and make sure they correspond).
+	 */
+	inc_fn = sc_get_relation_fn(relation) ;
+	env_fn = sc_get_envelope_fn(relation) ;
+	if (inc_fn == NULL || env_fn == NULL) return NULL ;
+
+	return sc_create_relation_op_proj(t, sc1, sc2,
+			proj_sc1, proj_sc2,
+			dest_srid, proj_dest,
+			env_fn, inc_fn, eval) ;
+}
+
+void
+sc_destroy_relation_op_proj(SPATIAL_COLLECTION *dead)
+{
+	if (dead != NULL) {
+		if (dead->params != NULL) {
+			struct relation_op_proj_s *p ;
+			p = (struct relation_op_proj_s *)(dead->params) ;
+			if (p->sc1_wrap != NULL) {
+				sc_destroy_projection_wrapper(p->sc1_wrap) ;
+			}
+			if (p->sc2_wrap != NULL) {
+				sc_destroy_projection_wrapper(p->sc2_wrap) ;
+			}
+		}
+	}
+	sc_destroy_relation_op(dead) ;
+}
+
+/** @} */ /* end of the relation_proj documentation group */
+
+
+/** @} */ /* end of relation_collection documentation group */
+
 /** @} */  /* end of spatial_collection_i documentation group */
 
+
+/**
+ * Converts a #RELATION_TYPE value to a #RELATION_FN.
+ * Returns NULL if the value is not recognized.
+ */
+RELATION_FN
+sc_get_relation_fn(RELATION_TYPE relation)
+{
+	RELATION_FN result ;
+
+	result = NULL ;
+	switch (relation) {
+	case INTERSECTION :
+		result = relation_intersection ;
+		break ;
+	case UNION :
+		result = relation_union ;
+		break ;
+	case DIFFERENCE :
+		result = relation_difference ;
+		break ;
+	case SYMDIFFERENCE :
+		result = relation_symdifference ;
+		break ;
+	default:
+		; /* leave it null */
+	}
+
+	return result ;
+}
+
+/**
+ * Converts a #RELATION_TYPE value to an
+ * #ENVELOPE_PREP_OP function pointer. Returns
+ * NULL if the value is not recognized.
+ */
+ENVELOPE_PREP_OP
+sc_get_envelope_fn(RELATION_TYPE relation)
+{
+	ENVELOPE_PREP_OP result ;
+
+	result = NULL ;
+	switch (relation) {
+	case INTERSECTION :
+		result = relation_env_intersection ;
+		break ;
+	case UNION :
+		result = relation_env_union ;
+		break ;
+	case DIFFERENCE :
+		result = relation_env_difference ;
+		break ;
+	case SYMDIFFERENCE :
+		result = relation_env_symdifference ;
+		break ;
+	default:
+		; /* leave it null */
+	}
+
+	return result ;
+}

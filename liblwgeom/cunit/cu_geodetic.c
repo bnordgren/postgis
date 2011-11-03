@@ -89,7 +89,7 @@ static void test_gbox_from_spherical_coordinates(void)
 
 	pa = ptarray_construct_reference_data(0, 0, 2, (uint8_t*)ll);
 	
-	lwline = lwline_as_lwgeom(lwline_construct(-1, 0, pa));
+	lwline = lwline_as_lwgeom(lwline_construct(SRID_UNKNOWN, 0, pa));
 	FLAGS_SET_GEODETIC(lwline->flags, 1);
 
 	srandomdev();
@@ -515,7 +515,7 @@ static void test_lwgeom_check_geodetic(void)
 
 }
 
-
+/*
 static void test_gbox_calculation(void)
 {
 
@@ -557,6 +557,7 @@ static void test_gbox_calculation(void)
 	}
 	lwfree(gbox);
 }
+*/
 
 static void test_gserialized_from_lwgeom(void)
 {
@@ -967,7 +968,6 @@ CU_TestInfo geodetic_tests[] =
 	PG_TEST(test_edge_distance_to_edge),
 	PG_TEST(test_lwgeom_distance_sphere),
 	PG_TEST(test_lwgeom_check_geodetic),
-	PG_TEST(test_gbox_calculation),
 	PG_TEST(test_gserialized_from_lwgeom),
 	PG_TEST(test_spheroid_distance),
 	PG_TEST(test_spheroid_area),

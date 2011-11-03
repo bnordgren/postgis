@@ -1,9 +1,9 @@
 /**********************************************************************
- * $Id$
  *
  * PostGIS - Spatial Types for PostgreSQL
  * http://postgis.refractions.net
- * Copyright 2001-2005 Refractions Research Inc.
+ *
+ * Copyright (C) 2001-2005 Refractions Research Inc.
  *
  * This is free software; you can redistribute and/or modify it under
  * the terms of the GNU General Public Licence. See the COPYING file.
@@ -43,9 +43,9 @@ int point_in_ring_rtree(RTREE_NODE *root, POINT2D *point);
 PG_FUNCTION_INFO_V1(LWGEOM_simplify2d);
 Datum LWGEOM_simplify2d(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_LWGEOM *result;
-	LWGEOM *in = pglwgeom_deserialize(geom);
+	GSERIALIZED *geom = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *result;
+	LWGEOM *in = lwgeom_from_gserialized(geom);
 	LWGEOM *out;
 	double dist = PG_GETARG_FLOAT8(1);
 
@@ -55,7 +55,7 @@ Datum LWGEOM_simplify2d(PG_FUNCTION_ARGS)
 	/* COMPUTE_BBOX TAINTING */
 	if ( in->bbox ) lwgeom_add_bbox(out);
 
-	result = pglwgeom_serialize(out);
+	result = geometry_serialize(out);
 	lwgeom_free(out);
 	PG_FREE_IF_COPY(geom, 0);
 	PG_RETURN_POINTER(result);
@@ -80,7 +80,7 @@ Datum LWGEOM_line_interpolate_point(PG_FUNCTION_ARGS);
 PG_FUNCTION_INFO_V1(LWGEOM_line_interpolate_point);
 Datum LWGEOM_line_interpolate_point(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *geom = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
 	double distance = PG_GETARG_FLOAT8(1);
 	LWLINE *line;
 	LWPOINT *point;
@@ -95,13 +95,13 @@ Datum LWGEOM_line_interpolate_point(PG_FUNCTION_ARGS)
 		PG_RETURN_NULL();
 	}
 
-	if ( pglwgeom_get_type(geom) != LINETYPE )
+	if ( gserialized_get_type(geom) != LINETYPE )
 	{
 		elog(ERROR,"line_interpolate_point: 1st arg isnt a line");
 		PG_RETURN_NULL();
 	}
 
-	line = lwgeom_as_lwline(pglwgeom_deserialize(geom));
+	line = lwgeom_as_lwline(lwgeom_from_gserialized(geom));
 	ipa = line->points;
 
 	/* If distance is one of the two extremes, return the point on that
@@ -117,7 +117,7 @@ Datum LWGEOM_line_interpolate_point(PG_FUNCTION_ARGS)
 		opa = ptarray_construct_reference_data(FLAGS_GET_Z(line->flags), FLAGS_GET_M(line->flags), 1, (uint8_t*)&pt);
 		
 		point = lwpoint_construct(line->srid, NULL, opa);
-		PG_RETURN_POINTER(pglwgeom_serialize(lwpoint_as_lwgeom(point)));
+		PG_RETURN_POINTER(geometry_serialize(lwpoint_as_lwgeom(point)));
 	}
 
 	/* Interpolate a point on the line */
@@ -147,7 +147,7 @@ Datum LWGEOM_line_interpolate_point(PG_FUNCTION_ARGS)
 			interpolate_point4d(&p1, &p2, &pt, dseg);
 			opa = ptarray_construct_reference_data(FLAGS_GET_Z(line->flags), FLAGS_GET_M(line->flags), 1, (uint8_t*)&pt);
 			point = lwpoint_construct(line->srid, NULL, opa);
-			PG_RETURN_POINTER(pglwgeom_serialize(lwpoint_as_lwgeom(point)));
+			PG_RETURN_POINTER(geometry_serialize(lwpoint_as_lwgeom(point)));
 		}
 		tlength += slength;
 	}
@@ -157,7 +157,7 @@ Datum LWGEOM_line_interpolate_point(PG_FUNCTION_ARGS)
 	getPoint4d_p(ipa, ipa->npoints-1, &pt);
 	opa = ptarray_construct_reference_data(FLAGS_GET_Z(line->flags), FLAGS_GET_M(line->flags), 1, (uint8_t*)&pt);
 	point = lwpoint_construct(line->srid, NULL, opa);
-	PG_RETURN_POINTER(pglwgeom_serialize(lwpoint_as_lwgeom(point)));
+	PG_RETURN_POINTER(geometry_serialize(lwpoint_as_lwgeom(point)));
 }
 /***********************************************************************
  * --jsunday@rochgrp.com;
@@ -285,7 +285,7 @@ ptarray_grid(POINTARRAY *pa, gridspec *grid)
 	int ipn, opn; /* point numbers (input/output) */
 	POINTARRAY *dpa;
 
-	LWDEBUGF(2, "ptarray_grid called on %p", pa);
+	POSTGIS_DEBUGF(2, "ptarray_grid called on %p", pa);
 
 	dpa = ptarray_construct_empty(FLAGS_GET_Z(pa->flags),FLAGS_GET_M(pa->flags), pa->npoints);
 
@@ -370,7 +370,7 @@ lwpoly_grid(LWPOLY *poly, gridspec *grid)
 
 	nrings = 0;
 
-	LWDEBUGF(3, "grid_polygon3d: applying grid to polygon with %d rings",
+	POSTGIS_DEBUGF(3, "grid_polygon3d: applying grid to polygon with %d rings",
 	         poly->nrings);
 
 	for (ri=0; ri<poly->nrings; ri++)
@@ -383,7 +383,7 @@ lwpoly_grid(LWPOLY *poly, gridspec *grid)
 		getPoint2d_p(ring, 0, &p1);
 		getPoint2d_p(ring, ring->npoints-1, &p2);
 		if ( ! SAMEPOINT(&p1, &p2) )
-			LWDEBUG(4, "Before gridding: first point != last point");
+			POSTGIS_DEBUG(4, "Before gridding: first point != last point");
 #endif
 
 		newring = ptarray_grid(ring, grid);
@@ -393,7 +393,7 @@ lwpoly_grid(LWPOLY *poly, gridspec *grid)
 		{
 			pfree(newring);
 
-			LWDEBUGF(3, "grid_polygon3d: ring%d skipped ( <4 pts )", ri);
+			POSTGIS_DEBUGF(3, "grid_polygon3d: ring%d skipped ( <4 pts )", ri);
 
 			if ( ri ) continue;
 			else break; /* this is the external ring, no need to work on holes */
@@ -403,10 +403,10 @@ lwpoly_grid(LWPOLY *poly, gridspec *grid)
 		getPoint2d_p(newring, 0, &p1);
 		getPoint2d_p(newring, newring->npoints-1, &p2);
 		if ( ! SAMEPOINT(&p1, &p2) )
-			LWDEBUG(4, "After gridding: first point != last point");
+			POSTGIS_DEBUG(4, "After gridding: first point != last point");
 #endif
 
-		LWDEBUGF(3, "grid_polygon3d: ring%d simplified from %d to %d points", ri,
+		POSTGIS_DEBUGF(3, "grid_polygon3d: ring%d simplified from %d to %d points", ri,
 		         ring->npoints, newring->npoints);
 
 		/*
@@ -429,7 +429,7 @@ lwpoly_grid(LWPOLY *poly, gridspec *grid)
 		newrings[nrings++] = newring;
 	}
 
-	LWDEBUGF(3, "grid_polygon3d: simplified polygon with %d rings", nrings);
+	POSTGIS_DEBUGF(3, "grid_polygon3d: simplified polygon with %d rings", nrings);
 
 	if ( ! nrings ) return NULL;
 
@@ -448,7 +448,7 @@ lwpoint_grid(LWPOINT *point, gridspec *grid)
 	/* TODO: grid bounding box ? */
 	opoint = lwpoint_construct(point->srid, NULL, opa);
 
-	LWDEBUG(2, "lwpoint_grid called");
+	POSTGIS_DEBUG(2, "lwpoint_grid called");
 
 	return opoint;
 }
@@ -504,16 +504,16 @@ PG_FUNCTION_INFO_V1(LWGEOM_snaptogrid);
 Datum LWGEOM_snaptogrid(PG_FUNCTION_ARGS)
 {
 	Datum datum;
-	PG_LWGEOM *in_geom;
+	GSERIALIZED *in_geom;
 	LWGEOM *in_lwgeom;
-	PG_LWGEOM *out_geom = NULL;
+	GSERIALIZED *out_geom = NULL;
 	LWGEOM *out_lwgeom;
 	gridspec grid;
 	/* BOX3D box3d; */
 
 	if ( PG_ARGISNULL(0) ) PG_RETURN_NULL();
 	datum = PG_GETARG_DATUM(0);
-	in_geom = (PG_LWGEOM *)PG_DETOAST_DATUM(datum);
+	in_geom = (GSERIALIZED *)PG_DETOAST_DATUM(datum);
 
 	if ( PG_ARGISNULL(1) ) PG_RETURN_NULL();
 	grid.ipx = PG_GETARG_FLOAT8(1);
@@ -536,7 +536,7 @@ Datum LWGEOM_snaptogrid(PG_FUNCTION_ARGS)
 		PG_RETURN_POINTER(in_geom);
 	}
 
-	in_lwgeom = pglwgeom_deserialize(in_geom);
+	in_lwgeom = lwgeom_from_gserialized(in_geom);
 
 	POSTGIS_DEBUGF(3, "SnapToGrid got a %s", lwtype_name(in_lwgeom->type));
 
@@ -546,37 +546,10 @@ Datum LWGEOM_snaptogrid(PG_FUNCTION_ARGS)
 	/* COMPUTE_BBOX TAINTING */
 	if ( in_lwgeom->bbox ) lwgeom_add_bbox(out_lwgeom);
 
-#if 0
-	/*
-	 * COMPUTE_BBOX WHEN SIMPLE
-	 *
-	 * WARNING: this is not SIMPLE, as snapping
-	 * an existing bbox to a grid does not
-	 * give the same result as computing a
-	 * new bounding box on the snapped coordinates.
-	 *
-	 * This bug has been fixed in postgis-1.1.2
-	 */
-	if ( in_lwgeom->bbox )
-	{
-		box2df_to_box3d_p(in_lwgeom->bbox, &box3d);
-
-		box3d.xmin = rint((box3d.xmin - grid.ipx)/grid.xsize)
-		             * grid.xsize + grid.ipx;
-		box3d.xmax = rint((box3d.xmax - grid.ipx)/grid.xsize)
-		             * grid.xsize + grid.ipx;
-		box3d.ymin = rint((box3d.ymin - grid.ipy)/grid.ysize)
-		             * grid.ysize + grid.ipy;
-		box3d.ymax = rint((box3d.ymax - grid.ipy)/grid.ysize)
-		             * grid.ysize + grid.ipy;
-
-		out_lwgeom->bbox = box3d_to_box2df(&box3d);
-	}
-#endif /* 0 */
 
 	POSTGIS_DEBUGF(3, "SnapToGrid made a %s", lwtype_name(out_lwgeom->type));
 
-	out_geom = pglwgeom_serialize(out_lwgeom);
+	out_geom = geometry_serialize(out_lwgeom);
 
 	PG_RETURN_POINTER(out_geom);
 }
@@ -585,10 +558,10 @@ PG_FUNCTION_INFO_V1(LWGEOM_snaptogrid_pointoff);
 Datum LWGEOM_snaptogrid_pointoff(PG_FUNCTION_ARGS)
 {
 	Datum datum;
-	PG_LWGEOM *in_geom, *in_point;
+	GSERIALIZED *in_geom, *in_point;
 	LWGEOM *in_lwgeom;
 	LWPOINT *in_lwpoint;
-	PG_LWGEOM *out_geom = NULL;
+	GSERIALIZED *out_geom = NULL;
 	LWGEOM *out_lwgeom;
 	gridspec grid;
 	/* BOX3D box3d; */
@@ -596,12 +569,12 @@ Datum LWGEOM_snaptogrid_pointoff(PG_FUNCTION_ARGS)
 
 	if ( PG_ARGISNULL(0) ) PG_RETURN_NULL();
 	datum = PG_GETARG_DATUM(0);
-	in_geom = (PG_LWGEOM *)PG_DETOAST_DATUM(datum);
+	in_geom = (GSERIALIZED *)PG_DETOAST_DATUM(datum);
 
 	if ( PG_ARGISNULL(1) ) PG_RETURN_NULL();
 	datum = PG_GETARG_DATUM(1);
-	in_point = (PG_LWGEOM *)PG_DETOAST_DATUM(datum);
-	in_lwpoint = lwgeom_as_lwpoint(pglwgeom_deserialize(in_point));
+	in_point = (GSERIALIZED *)PG_DETOAST_DATUM(datum);
+	in_lwpoint = lwgeom_as_lwpoint(lwgeom_from_gserialized(in_point));
 	if ( in_lwpoint == NULL )
 	{
 		lwerror("Offset geometry must be a point");
@@ -638,7 +611,7 @@ Datum LWGEOM_snaptogrid_pointoff(PG_FUNCTION_ARGS)
 		PG_RETURN_POINTER(in_geom);
 	}
 
-	in_lwgeom = pglwgeom_deserialize(in_geom);
+	in_lwgeom = lwgeom_from_gserialized(in_geom);
 
 	POSTGIS_DEBUGF(3, "SnapToGrid got a %s", lwtype_name(in_lwgeom->type));
 
@@ -648,37 +621,9 @@ Datum LWGEOM_snaptogrid_pointoff(PG_FUNCTION_ARGS)
 	/* COMPUTE_BBOX TAINTING */
 	if ( in_lwgeom->bbox ) lwgeom_add_bbox(out_lwgeom);
 
-#if 0
-	/*
-	 * COMPUTE_BBOX WHEN SIMPLE
-	 *
-	 * WARNING: this is not SIMPLE, as snapping
-	 * an existing bbox to a grid does not
-	 * give the same result as computing a
-	 * new bounding box on the snapped coordinates.
-	 *
-	 * This bug has been fixed in postgis-1.1.2
-	 */
-	if ( in_lwgeom->bbox )
-	{
-		box2df_to_box3d_p(in_lwgeom->bbox, &box3d);
-
-		box3d.xmin = rint((box3d.xmin - grid.ipx)/grid.xsize)
-		             * grid.xsize + grid.ipx;
-		box3d.xmax = rint((box3d.xmax - grid.ipx)/grid.xsize)
-		             * grid.xsize + grid.ipx;
-		box3d.ymin = rint((box3d.ymin - grid.ipy)/grid.ysize)
-		             * grid.ysize + grid.ipy;
-		box3d.ymax = rint((box3d.ymax - grid.ipy)/grid.ysize)
-		             * grid.ysize + grid.ipy;
-
-		out_lwgeom->bbox = box3d_to_box2df(&box3d);
-	}
-#endif /* 0 */
-
 	POSTGIS_DEBUGF(3, "SnapToGrid made a %s", lwtype_name(out_lwgeom->type));
 
-	out_geom = pglwgeom_serialize(out_lwgeom);
+	out_geom = geometry_serialize(out_lwgeom);
 
 	PG_RETURN_POINTER(out_geom);
 }
@@ -696,13 +641,13 @@ Datum ST_LineCrossingDirection(PG_FUNCTION_ARGS)
 	int type1, type2, rv;
 	LWLINE *l1 = NULL;
 	LWLINE *l2 = NULL;
-	PG_LWGEOM *geom1 = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_LWGEOM *geom2 = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
+	GSERIALIZED *geom1 = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *geom2 = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
 
-	error_if_srid_mismatch(pglwgeom_get_srid(geom1), pglwgeom_get_srid(geom2));
+	error_if_srid_mismatch(gserialized_get_srid(geom1), gserialized_get_srid(geom2));
 
-	type1 = pglwgeom_get_type(geom1);
-	type2 = pglwgeom_get_type(geom2);
+	type1 = gserialized_get_type(geom1);
+	type2 = gserialized_get_type(geom2);
 
 	if ( type1 != LINETYPE || type2 != LINETYPE )
 	{
@@ -710,8 +655,8 @@ Datum ST_LineCrossingDirection(PG_FUNCTION_ARGS)
 		PG_RETURN_NULL();
 	}
 
-	l1 = lwgeom_as_lwline(pglwgeom_deserialize(geom1));
-	l2 = lwgeom_as_lwline(pglwgeom_deserialize(geom2));
+	l1 = lwgeom_as_lwline(lwgeom_from_gserialized(geom1));
+	l2 = lwgeom_as_lwline(lwgeom_from_gserialized(geom2));
 
 	rv = lwline_crossing_direction(l1, l2);
 
@@ -725,12 +670,12 @@ Datum ST_LineCrossingDirection(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(ST_LocateBetweenElevations);
 Datum ST_LocateBetweenElevations(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom_in = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *geom_in = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
 	double from = PG_GETARG_FLOAT8(1);
 	double to = PG_GETARG_FLOAT8(2);
 	LWCOLLECTION *geom_out = NULL;
 	LWGEOM *line_in = NULL;
-	char geomtype = pglwgeom_get_type(geom_in);
+	char geomtype = gserialized_get_type(geom_in);
 	static int ordinate = 2; /* Z */
 
 	if ( ! ( geomtype == LINETYPE || geomtype == MULTILINETYPE ) )
@@ -739,7 +684,7 @@ Datum ST_LocateBetweenElevations(PG_FUNCTION_ARGS)
 		PG_RETURN_NULL();
 	}
 
-	line_in = pglwgeom_deserialize(geom_in);
+	line_in = lwgeom_from_gserialized(geom_in);
 
 	if ( ! FLAGS_GET_Z(line_in->flags) )
 	{
@@ -764,7 +709,7 @@ Datum ST_LocateBetweenElevations(PG_FUNCTION_ARGS)
 	}
 
 	PG_FREE_IF_COPY(geom_in, 0);
-	PG_RETURN_POINTER(pglwgeom_serialize((LWGEOM*)geom_out));
+	PG_RETURN_POINTER(geometry_serialize((LWGEOM*)geom_out));
 }
 
 /***********************************************************************
@@ -776,13 +721,13 @@ Datum LWGEOM_line_substring(PG_FUNCTION_ARGS);
 PG_FUNCTION_INFO_V1(LWGEOM_line_substring);
 Datum LWGEOM_line_substring(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *geom = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
 	double from = PG_GETARG_FLOAT8(1);
 	double to = PG_GETARG_FLOAT8(2);
 	LWGEOM *olwgeom;
 	POINTARRAY *ipa, *opa;
-	PG_LWGEOM *ret;
-	int type = pglwgeom_get_type(geom);
+	GSERIALIZED *ret;
+	int type = gserialized_get_type(geom);
 
 	if ( from < 0 || from > 1 )
 	{
@@ -804,7 +749,7 @@ Datum LWGEOM_line_substring(PG_FUNCTION_ARGS)
 
 	if ( type == LINETYPE )
 	{
-		LWLINE *iline = lwgeom_as_lwline(pglwgeom_deserialize(geom));
+		LWLINE *iline = lwgeom_as_lwline(lwgeom_from_gserialized(geom));
 
 		if ( lwgeom_is_empty((LWGEOM*)iline) )
 		{
@@ -832,7 +777,7 @@ Datum LWGEOM_line_substring(PG_FUNCTION_ARGS)
 		LWGEOM **geoms = NULL;
 		double length = 0.0, sublength = 0.0, minprop = 0.0, maxprop = 0.0;
 
-		iline = lwgeom_as_lwmline(pglwgeom_deserialize(geom));
+		iline = lwgeom_as_lwmline(lwgeom_from_gserialized(geom));
 
 		if ( lwgeom_is_empty((LWGEOM*)iline) )
 		{
@@ -912,7 +857,7 @@ Datum LWGEOM_line_substring(PG_FUNCTION_ARGS)
 		PG_RETURN_NULL();
 	}
 
-	ret = pglwgeom_serialize(olwgeom);
+	ret = geometry_serialize(olwgeom);
 	lwgeom_free(olwgeom);
 	PG_FREE_IF_COPY(geom, 0);
 	PG_RETURN_POINTER(ret);
@@ -924,32 +869,32 @@ Datum LWGEOM_line_locate_point(PG_FUNCTION_ARGS);
 PG_FUNCTION_INFO_V1(LWGEOM_line_locate_point);
 Datum LWGEOM_line_locate_point(PG_FUNCTION_ARGS)
 {
-	PG_LWGEOM *geom1 = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-	PG_LWGEOM *geom2 = (PG_LWGEOM *)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
+	GSERIALIZED *geom1 = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	GSERIALIZED *geom2 = (GSERIALIZED *)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
 	LWLINE *lwline;
 	LWPOINT *lwpoint;
 	POINTARRAY *pa;
 	POINT2D p;
 	double ret;
 
-	if ( pglwgeom_get_type(geom1) != LINETYPE )
+	if ( gserialized_get_type(geom1) != LINETYPE )
 	{
 		elog(ERROR,"line_locate_point: 1st arg isnt a line");
 		PG_RETURN_NULL();
 	}
-	if ( pglwgeom_get_type(geom2) != POINTTYPE )
+	if ( gserialized_get_type(geom2) != POINTTYPE )
 	{
 		elog(ERROR,"line_locate_point: 2st arg isnt a point");
 		PG_RETURN_NULL();
 	}
-	if ( pglwgeom_get_srid(geom1) != pglwgeom_get_srid(geom2) )
+	if ( gserialized_get_srid(geom1) != gserialized_get_srid(geom2) )
 	{
 		elog(ERROR, "Operation on two geometries with different SRIDs");
 		PG_RETURN_NULL();
 	}
 
-	lwline = lwgeom_as_lwline(pglwgeom_deserialize(geom1));
-	lwpoint = lwgeom_as_lwpoint(pglwgeom_deserialize(geom2));
+	lwline = lwgeom_as_lwline(lwgeom_from_gserialized(geom1));
+	lwpoint = lwgeom_as_lwpoint(lwgeom_from_gserialized(geom2));
 
 	pa = lwline->points;
 	lwpoint_getPoint2d_p(lwpoint, &p);
@@ -1012,17 +957,17 @@ int isOnSegment(POINT2D *seg1, POINT2D *seg2, POINT2D *point)
 		minY = seg1->y;
 	}
 
-	LWDEBUGF(3, "maxX minX/maxY minY: %.8f %.8f/%.8f %.8f", maxX, minX, maxY, minY);
+	POSTGIS_DEBUGF(3, "maxX minX/maxY minY: %.8f %.8f/%.8f %.8f", maxX, minX, maxY, minY);
 
 	if (maxX < point->x || minX > point->x)
 	{
-		LWDEBUGF(3, "X value %.8f falls outside the range %.8f-%.8f", point->x, minX, maxX);
+		POSTGIS_DEBUGF(3, "X value %.8f falls outside the range %.8f-%.8f", point->x, minX, maxX);
 
 		return 0;
 	}
 	else if (maxY < point->y || minY > point->y)
 	{
-		LWDEBUGF(3, "Y value %.8f falls outside the range %.8f-%.8f", point->y, minY, maxY);
+		POSTGIS_DEBUGF(3, "Y value %.8f falls outside the range %.8f-%.8f", point->y, minY, maxY);
 
 		return 0;
 	}
@@ -1043,7 +988,7 @@ int point_in_ring_rtree(RTREE_NODE *root, POINT2D *point)
 	POINT2D seg2;
 	LWMLINE *lines;
 
-	LWDEBUG(2, "point_in_ring called.");
+	POSTGIS_DEBUG(2, "point_in_ring called.");
 
 	lines = findLineSegments(root, point->y);
 	if (!lines)
@@ -1057,14 +1002,14 @@ int point_in_ring_rtree(RTREE_NODE *root, POINT2D *point)
 
 		side = determineSide(&seg1, &seg2, point);
 
-		LWDEBUGF(3, "segment: (%.8f, %.8f),(%.8f, %.8f)", seg1.x, seg1.y, seg2.x, seg2.y);
-		LWDEBUGF(3, "side result: %.8f", side);
-		LWDEBUGF(3, "counterclockwise wrap %d, clockwise wrap %d", FP_CONTAINS_BOTTOM(seg1.y,point->y,seg2.y), FP_CONTAINS_BOTTOM(seg2.y,point->y,seg1.y));
+		POSTGIS_DEBUGF(3, "segment: (%.8f, %.8f),(%.8f, %.8f)", seg1.x, seg1.y, seg2.x, seg2.y);
+		POSTGIS_DEBUGF(3, "side result: %.8f", side);
+		POSTGIS_DEBUGF(3, "counterclockwise wrap %d, clockwise wrap %d", FP_CONTAINS_BOTTOM(seg1.y,point->y,seg2.y), FP_CONTAINS_BOTTOM(seg2.y,point->y,seg1.y));
 
 		/* zero length segments are ignored. */
 		if (((seg2.x-seg1.x)*(seg2.x-seg1.x)+(seg2.y-seg1.y)*(seg2.y-seg1.y)) < 1e-12*1e-12)
 		{
-			LWDEBUG(3, "segment is zero length... ignoring.");
+			POSTGIS_DEBUG(3, "segment is zero length... ignoring.");
 
 			continue;
 		}
@@ -1074,7 +1019,7 @@ int point_in_ring_rtree(RTREE_NODE *root, POINT2D *point)
 		{
 			if (isOnSegment(&seg1, &seg2, point) == 1)
 			{
-				LWDEBUGF(3, "point on ring boundary between points %d, %d", i, i+1);
+				POSTGIS_DEBUGF(3, "point on ring boundary between points %d, %d", i, i+1);
 
 				return 0;
 			}
@@ -1087,7 +1032,7 @@ int point_in_ring_rtree(RTREE_NODE *root, POINT2D *point)
 		 */
 		if (FP_CONTAINS_BOTTOM(seg1.y,point->y,seg2.y) && side>0)
 		{
-			LWDEBUG(3, "incrementing winding number.");
+			POSTGIS_DEBUG(3, "incrementing winding number.");
 
 			++wn;
 		}
@@ -1098,13 +1043,13 @@ int point_in_ring_rtree(RTREE_NODE *root, POINT2D *point)
 		 */
 		else if (FP_CONTAINS_BOTTOM(seg2.y,point->y,seg1.y) && side<0)
 		{
-			LWDEBUG(3, "decrementing winding number.");
+			POSTGIS_DEBUG(3, "decrementing winding number.");
 
 			--wn;
 		}
 	}
 
-	LWDEBUGF(3, "winding number %d", wn);
+	POSTGIS_DEBUGF(3, "winding number %d", wn);
 
 	if (wn == 0)
 		return -1;
@@ -1125,7 +1070,7 @@ int point_in_ring(POINTARRAY *pts, POINT2D *point)
 	POINT2D seg1;
 	POINT2D seg2;
 
-	LWDEBUG(2, "point_in_ring called.");
+	POSTGIS_DEBUG(2, "point_in_ring called.");
 
 
 	for (i=0; i<pts->npoints-1; i++)
@@ -1136,14 +1081,14 @@ int point_in_ring(POINTARRAY *pts, POINT2D *point)
 
 		side = determineSide(&seg1, &seg2, point);
 
-		LWDEBUGF(3, "segment: (%.8f, %.8f),(%.8f, %.8f)", seg1.x, seg1.y, seg2.x, seg2.y);
-		LWDEBUGF(3, "side result: %.8f", side);
-		LWDEBUGF(3, "counterclockwise wrap %d, clockwise wrap %d", FP_CONTAINS_BOTTOM(seg1.y,point->y,seg2.y), FP_CONTAINS_BOTTOM(seg2.y,point->y,seg1.y));
+		POSTGIS_DEBUGF(3, "segment: (%.8f, %.8f),(%.8f, %.8f)", seg1.x, seg1.y, seg2.x, seg2.y);
+		POSTGIS_DEBUGF(3, "side result: %.8f", side);
+		POSTGIS_DEBUGF(3, "counterclockwise wrap %d, clockwise wrap %d", FP_CONTAINS_BOTTOM(seg1.y,point->y,seg2.y), FP_CONTAINS_BOTTOM(seg2.y,point->y,seg1.y));
 
 		/* zero length segments are ignored. */
 		if (((seg2.x-seg1.x)*(seg2.x-seg1.x)+(seg2.y-seg1.y)*(seg2.y-seg1.y)) < 1e-12*1e-12)
 		{
-			LWDEBUG(3, "segment is zero length... ignoring.");
+			POSTGIS_DEBUG(3, "segment is zero length... ignoring.");
 
 			continue;
 		}
@@ -1153,7 +1098,7 @@ int point_in_ring(POINTARRAY *pts, POINT2D *point)
 		{
 			if (isOnSegment(&seg1, &seg2, point) == 1)
 			{
-				LWDEBUGF(3, "point on ring boundary between points %d, %d", i, i+1);
+				POSTGIS_DEBUGF(3, "point on ring boundary between points %d, %d", i, i+1);
 
 				return 0;
 			}
@@ -1166,7 +1111,7 @@ int point_in_ring(POINTARRAY *pts, POINT2D *point)
 		 */
 		if (FP_CONTAINS_BOTTOM(seg1.y,point->y,seg2.y) && side>0)
 		{
-			LWDEBUG(3, "incrementing winding number.");
+			POSTGIS_DEBUG(3, "incrementing winding number.");
 
 			++wn;
 		}
@@ -1177,13 +1122,13 @@ int point_in_ring(POINTARRAY *pts, POINT2D *point)
 		 */
 		else if (FP_CONTAINS_BOTTOM(seg2.y,point->y,seg1.y) && side<0)
 		{
-			LWDEBUG(3, "decrementing winding number.");
+			POSTGIS_DEBUG(3, "decrementing winding number.");
 
 			--wn;
 		}
 	}
 
-	LWDEBUGF(3, "winding number %d", wn);
+	POSTGIS_DEBUGF(3, "winding number %d", wn);
 
 	if (wn == 0)
 		return -1;
@@ -1199,14 +1144,14 @@ int point_in_polygon_rtree(RTREE_NODE **root, int ringCount, LWPOINT *point)
 	int i;
 	POINT2D pt;
 
-	LWDEBUGF(2, "point_in_polygon called for %p %d %p.", root, ringCount, point);
+	POSTGIS_DEBUGF(2, "point_in_polygon called for %p %d %p.", root, ringCount, point);
 
 	getPoint2d_p(point->point, 0, &pt);
 	/* assume bbox short-circuit has already been attempted */
 
 	if (point_in_ring_rtree(root[0], &pt) != 1)
 	{
-		LWDEBUG(3, "point_in_polygon_rtree: outside exterior ring.");
+		POSTGIS_DEBUG(3, "point_in_polygon_rtree: outside exterior ring.");
 
 		return 0;
 	}
@@ -1215,7 +1160,7 @@ int point_in_polygon_rtree(RTREE_NODE **root, int ringCount, LWPOINT *point)
 	{
 		if (point_in_ring_rtree(root[i], &pt) != -1)
 		{
-			LWDEBUGF(3, "point_in_polygon_rtree: within hole %d.", i);
+			POSTGIS_DEBUGF(3, "point_in_polygon_rtree: within hole %d.", i);
 
 			return 0;
 		}
@@ -1236,7 +1181,7 @@ int point_in_multipolygon_rtree(RTREE_NODE **root, int polyCount, int *ringCount
 	POINT2D pt;
 	int result = -1;
 
-	LWDEBUGF(2, "point_in_multipolygon_rtree called for %p %d %p.", root, polyCount, point);
+	POSTGIS_DEBUGF(2, "point_in_multipolygon_rtree called for %p %d %p.", root, polyCount, point);
 
 	getPoint2d_p(point->point, 0, &pt);
 	/* assume bbox short-circuit has already been attempted */
@@ -1247,14 +1192,14 @@ int point_in_multipolygon_rtree(RTREE_NODE **root, int polyCount, int *ringCount
 	for ( p = 0; p < polyCount; p++ )
 	{
 		in_ring = point_in_ring_rtree(root[i], &pt);
-		LWDEBUGF(4, "point_in_multipolygon_rtree: exterior ring (%d), point_in_ring returned %d", p, in_ring);
+		POSTGIS_DEBUGF(4, "point_in_multipolygon_rtree: exterior ring (%d), point_in_ring returned %d", p, in_ring);
 		if ( in_ring == -1 ) /* outside the exterior ring */
 		{
-			LWDEBUG(3, "point_in_multipolygon_rtree: outside exterior ring.");
+			POSTGIS_DEBUG(3, "point_in_multipolygon_rtree: outside exterior ring.");
 		}
          	else if ( in_ring == 0 ) /* on the boundary */
 		{
-			LWDEBUGF(3, "point_in_multipolygon_rtree: on edge of exterior ring %d", p);
+			POSTGIS_DEBUGF(3, "point_in_multipolygon_rtree: on edge of exterior ring %d", p);
                         return 0;
 		} else {
                 	result = in_ring;
@@ -1262,16 +1207,16 @@ int point_in_multipolygon_rtree(RTREE_NODE **root, int polyCount, int *ringCount
 	                for(r=1; r<ringCounts[p]; r++)
      	                {
                         	in_ring = point_in_ring_rtree(root[i+r], &pt);
-		        	LWDEBUGF(4, "point_in_multipolygon_rtree: interior ring (%d), point_in_ring returned %d", r, in_ring);
+		        	POSTGIS_DEBUGF(4, "point_in_multipolygon_rtree: interior ring (%d), point_in_ring returned %d", r, in_ring);
                         	if (in_ring == 1) /* inside a hole => outside the polygon */
                         	{
-                                	LWDEBUGF(3, "point_in_multipolygon_rtree: within hole %d of exterior ring %d", r, p);
+                                	POSTGIS_DEBUGF(3, "point_in_multipolygon_rtree: within hole %d of exterior ring %d", r, p);
                                 	result = -1;
                                 	break;
                         	}
                         	if (in_ring == 0) /* on the edge of a hole */
                         	{
-			        	LWDEBUGF(3, "point_in_multipolygon_rtree: on edge of hole %d of exterior ring %d", r, p);
+			        	POSTGIS_DEBUGF(3, "point_in_multipolygon_rtree: on edge of hole %d of exterior ring %d", r, p);
                                 	return 0;
 		        	}
                 	}
@@ -1301,7 +1246,7 @@ int point_in_polygon(LWPOLY *polygon, LWPOINT *point)
 	POINTARRAY *ring;
 	POINT2D pt;
 
-	LWDEBUG(2, "point_in_polygon called.");
+	POSTGIS_DEBUG(2, "point_in_polygon called.");
 
 	getPoint2d_p(point->point, 0, &pt);
 	/* assume bbox short-circuit has already been attempted */
@@ -1310,7 +1255,7 @@ int point_in_polygon(LWPOLY *polygon, LWPOINT *point)
 	in_ring = point_in_ring(polygon->rings[0], &pt);
 	if ( in_ring == -1) /* outside the exterior ring */
 	{
-		LWDEBUG(3, "point_in_polygon: outside exterior ring.");
+		POSTGIS_DEBUG(3, "point_in_polygon: outside exterior ring.");
 		return -1;
 	}
 	result = in_ring;
@@ -1321,12 +1266,12 @@ int point_in_polygon(LWPOLY *polygon, LWPOINT *point)
 		in_ring = point_in_ring(polygon->rings[i], &pt);
 		if (in_ring == 1) /* inside a hole => outside the polygon */
 		{
-			LWDEBUGF(3, "point_in_polygon: within hole %d.", i);
+			POSTGIS_DEBUGF(3, "point_in_polygon: within hole %d.", i);
 			return -1;
 		}
 		if (in_ring == 0) /* on the edge of a hole */
 		{
-			LWDEBUGF(3, "point_in_polygon: on edge of hole %d.", i);
+			POSTGIS_DEBUGF(3, "point_in_polygon: on edge of hole %d.", i);
 			return 0;
 		}
 	}
@@ -1344,7 +1289,7 @@ int point_in_multipolygon(LWMPOLY *mpolygon, LWPOINT *point)
 	POINTARRAY *ring;
 	POINT2D pt;
 
-	LWDEBUG(2, "point_in_polygon called.");
+	POSTGIS_DEBUG(2, "point_in_polygon called.");
 
 	getPoint2d_p(point->point, 0, &pt);
 	/* assume bbox short-circuit has already been attempted */
@@ -1359,7 +1304,7 @@ int point_in_multipolygon(LWMPOLY *mpolygon, LWPOINT *point)
 		in_ring = point_in_ring(polygon->rings[0], &pt);
 		if ( in_ring == -1) /* outside the exterior ring */
 		{
-			LWDEBUG(3, "point_in_polygon: outside exterior ring.");
+			POSTGIS_DEBUG(3, "point_in_polygon: outside exterior ring.");
 			continue;
 		}
 		if ( in_ring == 0 )
@@ -1375,13 +1320,13 @@ int point_in_multipolygon(LWMPOLY *mpolygon, LWPOINT *point)
 			in_ring = point_in_ring(polygon->rings[i], &pt);
 			if (in_ring == 1) /* inside a hole => outside the polygon */
 			{
-				LWDEBUGF(3, "point_in_polygon: within hole %d.", i);
+				POSTGIS_DEBUGF(3, "point_in_polygon: within hole %d.", i);
 				result = -1;
 				break;
 			}
 			if (in_ring == 0) /* on the edge of a hole */
 			{
-				LWDEBUGF(3, "point_in_polygon: on edge of hole %d.", i);
+				POSTGIS_DEBUGF(3, "point_in_polygon: on edge of hole %d.", i);
 				return 0;
 			}
 		}
