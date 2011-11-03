@@ -28,7 +28,7 @@ sc_create_gserialized_wrapper(GSERIALIZED *pg_geom, double inside, double outsid
 	LWGEOM *geom ;
 
 	if (pg_geom == NULL) return NULL ;
-	geom = lwgeom_from_deserialized(pg_geom) ;
+	geom = lwgeom_from_gserialized(pg_geom) ;
 	return sc_create_geometry_wrapper(geom, 1, inside, outside) ;
 }
 
