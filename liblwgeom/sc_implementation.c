@@ -408,7 +408,7 @@ projection_evaluator(EVALUATOR *eval, LWPOINT *point)
 	point2d_g = lwpoint_as_lwgeom(point2d) ;
 
 	/* project the point */
-	lwgeom_transform(point2d_g, params->source, params->dest) ;
+	lwgeom_transform(point2d_g, params->dest, params->source) ;
 
 	/* now call the wrapped object with the projected coordinates */
 	result = params->wrapped->evaluate(params->wrapped, point2d) ;

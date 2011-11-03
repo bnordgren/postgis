@@ -731,6 +731,150 @@ void test_includes_projection_wrapper(void)
 
 }
 
+/*
+ * An "EVALUATOR" implementation which records the point which was requested.
+ * Used for testing the projection wrapper.
+ */
+struct testset_eval {
+	LWPOINT *point ;
+};
+
+/*
+ * An evaluator function which always returns the "result" as it is.
+ * Prior to returning the result, it saves the point which the user
+ * was evaluating.
+ */
+VALUE *testset_eval_fn(EVALUATOR *eval, LWPOINT *p)
+{
+	struct testset_eval *ret ;
+
+	CU_ASSERT_PTR_NOT_NULL_FATAL(eval) ;
+	CU_ASSERT_PTR_NOT_NULL_FATAL(p) ;
+	CU_ASSERT_PTR_NOT_NULL_FATAL(eval->params) ;
+
+	ret = (struct testset_eval *)(eval->params) ;
+	if (ret->point != NULL) {
+		lwpoint_free(ret->point) ;
+	}
+	ret->point = lwgeom_as_lwpoint(lwgeom_clone_deep(lwpoint_as_lwgeom(p))) ;
+	return eval->result ;
+}
+
+EVALUATOR *create_testset_eval(void)
+{
+	struct testset_eval *params ;
+	EVALUATOR *eval ;
+
+	params = (struct testset_eval *)(lwalloc(sizeof (struct testset_eval)));
+	CU_ASSERT_PTR_NOT_NULL_FATAL(params) ;
+
+	params->point = NULL ;
+
+	eval = eval_create(params, testset_eval_fn, NULL, 1) ;
+	CU_ASSERT_PTR_NOT_NULL_FATAL(eval) ;
+	return eval ;
+}
+
+void destroy_testset_eval(EVALUATOR *dead)
+{
+	if (!dead) {
+		if (!dead->params) {
+			struct testset_eval *p ;
+
+			p = (struct testset_eval *)(dead->params) ;
+			if (!p->point) {
+				lwpoint_free(p->point) ;
+			}
+
+			lwfree(dead->params) ;
+		}
+		lwfree(dead) ;
+	}
+}
+
+LWPOINT *testset_eval_getpoint(EVALUATOR *eval)
+{
+	struct testset_eval *params ;
+	CU_ASSERT_PTR_NOT_NULL_FATAL(eval) ;
+	CU_ASSERT_PTR_NOT_NULL_FATAL(eval->params) ;
+	params = (struct testset_eval *)(eval->params) ;
+
+	return params->point ;
+}
+
+
+void test_eval_projection_wrapper(void)
+{
+	projPJ src ;
+	projPJ dest ;
+	LWPOINT *src_pt ;
+	LWPOINT *dest_pt ;
+	LWPOINT *test_pt ;
+	POINT2D test2d, src2d ;
+	EVALUATOR *tester ;
+	EVALUATOR *wrapper ;
+	VALUE *val ;
+
+	/* construct the projection objects... */
+	src = lwproj_from_string(SOURCE_P4TXT) ;
+	CU_ASSERT_PTR_NOT_NULL_FATAL(src) ;
+	dest = lwproj_from_string(DEST_P4TXT) ;
+	CU_ASSERT_PTR_NOT_NULL_FATAL(dest) ;
+
+	/* Missoula, MT */
+	src_pt = lwpoint_make2d(SOURCE_SRID,
+			(-114.011593),
+			46.862633);
+	CU_ASSERT_PTR_NOT_NULL_FATAL(src_pt) ;
+
+	dest_pt = lwgeom_as_lwpoint(lwgeom_clone_deep(lwpoint_as_lwgeom(src_pt))) ;
+	CU_ASSERT_PTR_NOT_NULL_FATAL(dest_pt) ;
+	lwgeom_transform(lwpoint_as_lwgeom(dest_pt), src, dest) ;
+	dest_pt->srid = DEST_SRID ;
+
+	/* make a test includes object to wrap */
+	tester = create_testset_eval() ;
+	CU_ASSERT_PTR_NOT_NULL_FATAL(tester) ;
+
+	/* wrap it */
+	wrapper = sc_create_projection_eval(tester, src, dest) ;
+	CU_ASSERT_PTR_NOT_NULL_FATAL(wrapper) ;
+
+	/* do we reproject? */
+	/* since we wrapped a WGS84 collection and are presenting a
+	 * utm zone 11 collection, we need to query in zone 11.
+	 */
+	val = wrapper->evaluate(wrapper, dest_pt) ;
+	CU_ASSERT_EQUAL(val, tester->result) ; /* return the wrapped result */
+
+	/* however, the original collection has always been WGS84,
+	 * so we expect the point presented to the original to have
+	 * been projected.
+	 */
+	test_pt = testset_eval_getpoint(tester) ;
+	CU_ASSERT_PTR_NOT_NULL_FATAL(test_pt) ;
+	/* srid fields don't get changed when the points are projected,
+	 * because Proj4 doesn't know anything about srids.
+	 */
+	CU_ASSERT_NOT_EQUAL(test_pt->srid, SOURCE_SRID) ;
+	CU_ASSERT_EQUAL(test_pt->srid, DEST_SRID) ;
+
+	/* so fix the srid before the compare... */
+	test_pt->srid = SOURCE_SRID ;
+	lwpoint_getPoint2d_p(test_pt, &test2d) ;
+	lwpoint_getPoint2d_p(src_pt, &src2d) ;
+	CU_ASSERT_DOUBLE_EQUAL(test2d.x, src2d.x, 0.0001) ;
+	CU_ASSERT_DOUBLE_EQUAL(test2d.y, src2d.y, 0.0001) ;
+
+
+	/* clean up */
+	lwpoint_free(src_pt) ;
+	lwpoint_free(dest_pt) ;
+	pj_free(src) ;
+	pj_free(dest) ;
+
+}
+
 
 /*
 ** The suite initialization function.
@@ -767,6 +911,7 @@ CU_TestInfo sc_tests[] =
 	PG_TEST(test_difference_relation_fn),
 	PG_TEST(test_symdifference_relation_fn),
 	PG_TEST(test_includes_projection_wrapper),
+	PG_TEST(test_eval_projection_wrapper),
 	CU_TEST_INFO_NULL
 };
 CU_SuiteInfo sc_suite = {"Spatial Collection Test Suite",  init_sc_suite,  clean_sc_suite, sc_tests};
