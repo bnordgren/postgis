@@ -15,8 +15,11 @@ LIBLWGEOM_CFLAGS=@LIBLWGEOM_CFLAGS@
 LIBGDAL_CFLAGS=@LIBGDAL_CFLAGS@
 LIBGDAL_LDFLAGS=@LIBGDAL_LDFLAGS@
 PROJ_CFLAGS=@PROJ_CPPFLAGS@
+PROJ_LDFLAGS=@PROJ_LDFLAGS@ -lproj
 GEOS_CFLAGS=@GEOS_CPPFLAGS@
 GEOS_LDFLAGS=@GEOS_LDFLAGS@ -lgeos_c
+CUNIT_CPPFLAGS=@CUNIT_CPPFLAGS@
+CUNIT_LDFLAGS=@CUNIT_LDFLAGS@
 
 RTCORE_CFLAGS=-I$(RT_CORE)
 RTCORE_LDFLAGS=$(RT_CORE)/librtcore.a
@@ -39,11 +42,25 @@ LDFLAGS = \
 
 TESTS = testapi testwkb
 
-all: $(TESTS)
+CU_OBJS = \
+	cu_testsc.o \
+	cu_tester.o
 
-check: $(RT_CORE)/librtcore.a $(TESTS)
+# If we couldn't find the cunit library then display a helpful message
+ifeq ($(CUNIT_LDFLAGS),)
+all: requirements_not_met_cunit $(TESTS)
+check: requirements_not_met_cunit $(RT_CORE)/librtcore.a $(TESTS) cu_tester
 	./testapi
 	./testwkb
+else
+all: $(TESTS) cu_tester
+
+check: $(RT_CORE)/librtcore.a $(TESTS) cu_tester
+	./testapi
+	./testwkb
+	./cu_tester
+endif
+
 
 testapi: $(RT_CORE)/librtcore.a testapi.c
 	$(CC) $(CFLAGS) -o testapi testapi.c $(LDFLAGS) 
@@ -54,8 +71,29 @@ testwkb: $(RT_CORE)/librtcore.a testwkb.c
 $(RT_CORE)/librtcore.a:
 	$(MAKE) -C ../../rt_core
 
+
+# Build the main unit test executable
+cu_tester: $(CU_OBJS)
+	$(LIBTOOL) --mode=link $(CC) $(CFLAGS) -o $@ $(CU_OBJS) $(LDFLAGS) $(PROJ_LDFLAGS) $(CUNIT_LDFLAGS)
+	#$(CC) -o $@ $(CU_OBJS) ../.libs/liblwgeom.a -lm $(CUNIT_LDFLAGS) $(LDFLAGS)
+
+# Command to build each of the .o files
+$(CU_OBJS): %.o: %.c
+	$(CC) $(CFLAGS) $(CUNIT_CPPFLAGS) -c -o $@ $<
+
+
 clean:
 	$(RM) $(TESTS)
 
 distclean: clean
 	$(RM) Makefile
+
+# Requirements message
+requirements_not_met_cunit:
+	@echo
+	@echo "WARNING:"
+	@echo
+	@echo "configure was unable to find CUnit which is required for unit testing."
+	@echo "In order to enable unit testing, you must install CUnit and then re-run configure."
+	@echo
+	

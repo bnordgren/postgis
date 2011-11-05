@@ -2229,7 +2229,13 @@ BEGIN
 	SELECT postgis_proj_version() INTO projver;
 	SELECT postgis_geos_version() INTO geosver;
 #ifdef POSTGIS_GDAL_VERSION
-	SELECT postgis_gdal_version() INTO gdalver;
+	BEGIN
+		SELECT postgis_gdal_version() INTO gdalver;
+	EXCEPTION
+		WHEN undefined_function THEN
+			gdalver := NULL;
+			RAISE NOTICE 'Function postgis_gdal_version() not found.  Is rtpostgis.sql installed?';
+	END;
 #endif
 	SELECT postgis_libxml_version() INTO libxmlver;
 	SELECT postgis_uses_stats() INTO usestats;
@@ -2762,6 +2768,25 @@ CREATE OR REPLACE FUNCTION ST_Snap(geometry, geometry, float8)
 CREATE OR REPLACE FUNCTION ST_RelateMatch(text, text)
        RETURNS bool
        AS 'MODULE_PATHNAME', 'ST_RelateMatch'
+       LANGUAGE 'C' IMMUTABLE STRICT
+       COST 100;
+
+--------------------------------------------------------------------------------
+-- ST_Node
+--------------------------------------------------------------------------------
+
+-- ST_Node(in geometry)
+--
+-- Fully node lines in input using the least set of nodes while
+-- preserving each of the input ones.
+-- Returns a linestring or a multilinestring containing all parts.
+--
+-- Availability: 2.0.0
+-- Requires GEOS >= 3.3.0
+--
+CREATE OR REPLACE FUNCTION ST_Node(g geometry)
+       RETURNS geometry
+       AS 'MODULE_PATHNAME', 'ST_Node'
        LANGUAGE 'C' IMMUTABLE STRICT
        COST 100;
 

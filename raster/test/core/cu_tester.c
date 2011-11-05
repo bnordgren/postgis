@@ -17,28 +17,7 @@
 #include "cu_tester.h"
 
 /* ADD YOUR SUITE HERE (1 of 2) */
-extern CU_SuiteInfo print_suite;
-extern CU_SuiteInfo algorithms_suite;
-extern CU_SuiteInfo misc_suite;
-extern CU_SuiteInfo ptarray_suite;
-extern CU_SuiteInfo measures_suite;
-extern CU_SuiteInfo node_suite;
-extern CU_SuiteInfo wkt_out_suite;
-extern CU_SuiteInfo wkt_in_suite;
-extern CU_SuiteInfo wkb_out_suite;
-extern CU_SuiteInfo wkb_in_suite;
-extern CU_SuiteInfo libgeom_suite;
-extern CU_SuiteInfo surface_suite;
-extern CU_SuiteInfo split_suite;
-extern CU_SuiteInfo geodetic_suite;
-extern CU_SuiteInfo geos_suite;
-extern CU_SuiteInfo homogenize_suite;
-extern CU_SuiteInfo out_gml_suite;
-extern CU_SuiteInfo out_kml_suite;
-extern CU_SuiteInfo out_geojson_suite;
-extern CU_SuiteInfo out_svg_suite;
-extern CU_SuiteInfo out_x3d_suite;
-extern CU_SuiteInfo sc_suite;
+extern CU_SuiteInfo raster_sc_suite;
 
 /*
 ** The main() function for setting up and running the tests.
@@ -50,28 +29,7 @@ int main(int argc, char *argv[])
 	/* ADD YOUR SUITE HERE (2 of 2) */
 	CU_SuiteInfo suites[] =
 	{
-		print_suite,
-		misc_suite,
-		ptarray_suite,
-		algorithms_suite,
-		measures_suite,
-		node_suite,
-		wkt_out_suite,
-		wkt_in_suite,
-		wkb_out_suite,
-		wkb_in_suite,
-		libgeom_suite,
-		surface_suite,
-		split_suite,
-		geodetic_suite,
-		geos_suite,
-		homogenize_suite,
-		out_gml_suite,
-		out_kml_suite,
-		out_geojson_suite,
-		out_svg_suite,
-		out_x3d_suite,
-		sc_suite,
+		raster_sc_suite,
 		CU_SUITE_INFO_NULL
 	};
 
@@ -231,10 +189,12 @@ cu_error_msg_reset()
 */
 void lwgeom_init_allocators(void)
 {
-	lwalloc_var = default_allocator;
-	lwrealloc_var = default_reallocator;
-	lwfree_var = default_freeor;
-	lwnotice_var = default_noticereporter;
-	lwerror_var = cu_errorreporter;
+    lwgeom_install_default_allocators();
 }
+
+void rt_init_allocators(void)
+{
+    rt_install_default_allocators();
+}
+
 
