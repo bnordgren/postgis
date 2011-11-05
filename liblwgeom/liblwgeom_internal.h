@@ -305,4 +305,19 @@ LWGEOM* lwcollection_remove_repeated_points(LWCOLLECTION *in);
 LWGEOM* lwpoly_remove_repeated_points(LWPOLY *in);
 
 
+/*
+ * Split a line by a point and push components to the provided multiline.
+ * If the point doesn't split the line, push nothing to the container.
+ * Returns 0 if the point is off the line.
+ * Returns 1 if the point is on the line boundary (endpoints).
+ * Return 2 if the point is on the interior of the line (only case in which
+ * a split happens).
+ *
+ * NOTE: the components pushed to the output vector have their SRID stripped 
+ */
+int lwline_split_by_point_to(const LWLINE* ln, const LWPOINT* pt, LWMLINE* to);
+
+/** Ensure the collection can hold at least up to ngeoms geometries */
+void lwcollection_reserve(LWCOLLECTION *col, int ngeoms);
+
 #endif /* _LIBLWGEOM_INTERNAL_H */
