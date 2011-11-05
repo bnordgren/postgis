@@ -22,12 +22,14 @@ extern CU_SuiteInfo algorithms_suite;
 extern CU_SuiteInfo misc_suite;
 extern CU_SuiteInfo ptarray_suite;
 extern CU_SuiteInfo measures_suite;
+extern CU_SuiteInfo node_suite;
 extern CU_SuiteInfo wkt_out_suite;
 extern CU_SuiteInfo wkt_in_suite;
 extern CU_SuiteInfo wkb_out_suite;
 extern CU_SuiteInfo wkb_in_suite;
 extern CU_SuiteInfo libgeom_suite;
 extern CU_SuiteInfo surface_suite;
+extern CU_SuiteInfo split_suite;
 extern CU_SuiteInfo geodetic_suite;
 extern CU_SuiteInfo geos_suite;
 extern CU_SuiteInfo homogenize_suite;
@@ -52,12 +54,14 @@ int main(int argc, char *argv[])
 		ptarray_suite,
 		algorithms_suite,
 		measures_suite,
+		node_suite,
 		wkt_out_suite,
 		wkt_in_suite,
 		wkb_out_suite,
 		wkb_in_suite,
 		libgeom_suite,
 		surface_suite,
+		split_suite,
 		geodetic_suite,
 		geos_suite,
 		homogenize_suite,

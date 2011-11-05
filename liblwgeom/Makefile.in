@@ -80,6 +80,7 @@ SA_OBJS = \
 	lwout_x3d.o \
 	lwgeom_geos.o \
 	lwgeom_geos_clean.o \
+	lwgeom_geos_node.o \
 	lwgeom_geos_split.o \
 	lwgeom_transform.o
 
@@ -123,7 +124,7 @@ maintainer-clean: clean
 
 clean: 
 	$(MAKE) -C cunit clean
-	rm -f $(LT_OBJS) 
+	rm -f $(LT_OBJS) $(SA_OBJS) $(NM_OBJS)
 	rm -f liblwgeom.la
 	rm -rf .libs
 
