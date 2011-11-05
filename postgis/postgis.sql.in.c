@@ -2210,6 +2210,13 @@ CREATE OR REPLACE FUNCTION postgis_lib_build_date() RETURNS text
 	AS 'MODULE_PATHNAME'
 	LANGUAGE 'C' IMMUTABLE;
 
+#ifdef POSTGIS_GDAL_VERSION
+CREATE OR REPLACE FUNCTION postgis_gdal_version()
+	RETURNS text
+	AS 'RASTER_MODULE_PATHNAME', 'RASTER_gdal_version'
+	LANGUAGE 'C' IMMUTABLE;
+#endif
+
 CREATE OR REPLACE FUNCTION postgis_full_version() RETURNS text
 AS $$
 DECLARE
@@ -2762,6 +2769,25 @@ CREATE OR REPLACE FUNCTION ST_Snap(geometry, geometry, float8)
 CREATE OR REPLACE FUNCTION ST_RelateMatch(text, text)
        RETURNS bool
        AS 'MODULE_PATHNAME', 'ST_RelateMatch'
+       LANGUAGE 'C' IMMUTABLE STRICT
+       COST 100;
+
+--------------------------------------------------------------------------------
+-- ST_Node
+--------------------------------------------------------------------------------
+
+-- ST_Node(in geometry)
+--
+-- Fully node lines in input using the least set of nodes while
+-- preserving each of the input ones.
+-- Returns a linestring or a multilinestring containing all parts.
+--
+-- Availability: 2.0.0
+-- Requires GEOS >= 3.3.0
+--
+CREATE OR REPLACE FUNCTION ST_Node(g geometry)
+       RETURNS geometry
+       AS 'MODULE_PATHNAME', 'ST_Node'
        LANGUAGE 'C' IMMUTABLE STRICT
        COST 100;
 
