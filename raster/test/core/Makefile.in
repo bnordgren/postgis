@@ -43,7 +43,7 @@ LDFLAGS = \
 TESTS = testapi testwkb
 
 CU_OBJS = \
-	testsc.o \
+	cu_testsc.o \
 	cu_tester.o
 
 # If we couldn't find the cunit library then display a helpful message
