@@ -7,7 +7,7 @@
  * Copyright (C) 2011 Regents of the University of California
  *   <bkpark@ucdavis.edu>
  * Copyright (C) 2010-2011 Jorge Arevalo <jorge.arevalo@deimos-space.com>
- * Copyright (C) 2010-2011 David Zwarg <dzwarg@avencia.com>
+ * Copyright (C) 2010-2011 David Zwarg <dzwarg@azavea.com>
  * Copyright (C) 2009-2011 Pierre Racine <pierre.racine@sbf.ulaval.ca>
  * Copyright (C) 2009-2011 Mateusz Loskot <mateusz@loskot.net>
  * Copyright (C) 2008-2009 Sandro Santilli <strk@keybit.net>
@@ -144,6 +144,32 @@ struct quantile_llist ;
 
 
 /**
+ * Enum definitions
+ */
+/* Pixel types */
+typedef enum {
+    PT_1BB=0,     /* 1-bit boolean            */
+    PT_2BUI=1,    /* 2-bit unsigned integer   */
+    PT_4BUI=2,    /* 4-bit unsigned integer   */
+    PT_8BSI=3,    /* 8-bit signed integer     */
+    PT_8BUI=4,    /* 8-bit unsigned integer   */
+    PT_16BSI=5,   /* 16-bit signed integer    */
+    PT_16BUI=6,   /* 16-bit unsigned integer  */
+    PT_32BSI=7,   /* 32-bit signed integer    */
+    PT_32BUI=8,   /* 32-bit unsigned integer  */
+    PT_32BF=10,   /* 32-bit float             */
+    PT_64BF=11,   /* 64-bit float             */
+    PT_END=13
+} rt_pixtype;
+
+typedef enum {
+	ET_INTERSECTION = 0,
+	ET_UNION,
+	ET_FIRST,
+	ET_SECOND
+} rt_extenttype;
+
+/**
 * Global functions for memory/logging handlers.
 */
 typedef void* (*rt_allocator)(size_t size);
@@ -244,22 +270,6 @@ void rt_set_handlers(rt_allocator allocator, rt_reallocator reallocator,
 
 
 /*- rt_pixtype --------------------------------------------------------*/
-
-/* Pixel types */
-typedef enum {
-    PT_1BB=0,     /* 1-bit boolean            */
-    PT_2BUI=1,    /* 2-bit unsigned integer   */
-    PT_4BUI=2,    /* 4-bit unsigned integer   */
-    PT_8BSI=3,    /* 8-bit signed integer     */
-    PT_8BUI=4,    /* 8-bit unsigned integer   */
-    PT_16BSI=5,   /* 16-bit signed integer    */
-    PT_16BUI=6,   /* 16-bit unsigned integer  */
-    PT_32BSI=7,   /* 32-bit signed integer    */
-    PT_32BUI=8,   /* 32-bit unsigned integer  */
-    PT_32BF=10,   /* 32-bit float             */
-    PT_64BF=11,   /* 64-bit float             */
-    PT_END=13
-} rt_pixtype;
 
 /**
  * Return size in bytes of a value in the given pixtype
@@ -393,6 +403,7 @@ void rt_band_set_hasnodata_flag(rt_band band, int flag);
 
 /**
  * Set isnodata flag value
+ *
  * @param band : the band on which to set the isnodata flag
  * @param flag : the new isnodata flag value. Must be 1 or 0
  */
@@ -407,20 +418,20 @@ int rt_band_get_isnodata_flag(rt_band band);
 
 /**
  * Set nodata value
+ *
  * @param band : the band to set nodata value to
- * @param val : the nodata value, must be in the range
- *              of values supported by this band's pixeltype
- *              or a warning will be printed and non-zero
- *              returned.
+ * @param val : the nodata value
  *
- * @return 0 on success, -1 on error (value out of valid range).
- *
+ * @return 0 on success, -1 on error (invalid pixel type),
+ *   1 on truncation/clamping/converting.
  */
 int rt_band_set_nodata(rt_band band, double val);
 
 /**
  * Get nodata value
+ *
  * @param band : the band to set nodata value to
+ *
  * @return nodata value
  */
 double rt_band_get_nodata(rt_band band);
@@ -428,15 +439,13 @@ double rt_band_get_nodata(rt_band band);
 /**
  * Set pixel value
  *
- * @param band : the band to set nodata value to
+ * @param band : the band to set value to
  * @param x : x ordinate (0-based)
- * @param y : x ordinate (0-based)
- * @param val : the pixel value, must be in the range
- *              of values supported by this band's pixeltype
- *              or a warning will be printed and non-zero
- *              returned.
+ * @param y : y ordinate (0-based)
+ * @param val : the pixel value
  *
- * @return 0 on success, -1 on error (value out of valid range).
+ * @return 0 on success, -1 on error (value out of valid range),
+ *   1 on truncation/clamping/converting.
  */
 int rt_band_set_pixel(rt_band band,
                       uint16_t x, uint16_t y, double val);
@@ -1035,15 +1044,25 @@ rt_raster rt_raster_from_gdal_dataset(GDALDatasetH ds);
  *
  * @param raster : raster to transform
  * @param src_srs : the raster's coordinate system in OGC WKT
- * @param dst_srs : the warped raster's coordinate system
- * @param scale_x : the pixel width of the warped raster
- * @param scale_y : the pixel height of the warped raster
- * @param ul_xw : the X value of upper-left corner of the warped raster
- * @param ul_yw : the Y value of upper-left corner of the warped raster
- * @param grid_xw : the X value of point on a grid to align warped raster to
- * @param grid_yw : the Y value of point on a grid to align warped raster to
- * @param skew_x : the X skew of the warped raster
- * @param skew_y : the Y skew of the warped raster
+ * @param dst_srs : the warped raster's coordinate system in OGC WKT
+ * @param scale_x : the x size of pixels of the warped raster's pixels in
+ *   units of dst_srs
+ * @param scale_y : the y size of pixels of the warped raster's pixels in
+ *   units of dst_srs
+ * @param width : the number of columns of the warped raster.  note that
+ *   width/height CANNOT be used with scale_x/scale_y
+ * @param height : the number of rows of the warped raster.  note that
+ *   width/height CANNOT be used with scale_x/scale_y
+ * @param ul_xw : the X value of upper-left corner of the warped raster in
+ *   units of dst_srs
+ * @param ul_yw : the Y value of upper-left corner of the warped raster in
+ *   units of dst_srs
+ * @param grid_xw : the X value of point on a grid to align warped raster
+ *   to in units of dst_srs
+ * @param grid_yw : the Y value of point on a grid to align warped raster
+ *   to in units of dst_srs
+ * @param skew_x : the X skew of the warped raster in units of dst_srs
+ * @param skew_y : the Y skew of the warped raster in units of dst_srs
  * @param resample_alg : the resampling algorithm
  * @param max_err : maximum error measured in input pixels permitted
  *   (0.0 for exact calculations)
@@ -1053,6 +1072,7 @@ rt_raster rt_raster_from_gdal_dataset(GDALDatasetH ds);
 rt_raster rt_raster_gdal_warp(rt_raster raster, const char *src_srs,
 	const char *dst_srs,
 	double *scale_x, double *scale_y,
+	int *width, int *height,
 	double *ul_xw, double *ul_yw,
 	double *grid_xw, double *grid_yw,
 	double *skew_x, double *skew_y,
@@ -1135,6 +1155,27 @@ int rt_raster_same_alignment(
 	int *aligned
 );
 
+/*
+ * Return raster of computed extent specified extenttype applied
+ * on two input rasters.  The raster returned should be freed by
+ * the caller
+ *
+ * @param rast1 : the first raster
+ * @param rast2 : the second raster
+ * @param extenttype : type of extent for the output raster
+ * @param err : if 0, error occurred
+ * @param offset : 4-element array indicating the X,Y offsets
+ * for each raster. 0,1 for rast1 X,Y. 2,3 for rast2 X,Y.
+ *
+ * @return raster object if success, NULL otherwise
+ */
+rt_raster
+rt_raster_from_two_rasters(
+	rt_raster rast1, rt_raster rast2,
+	rt_extenttype extenttype,
+	int *err, double *offset
+);
+
 /*- utilities -------------------------------------------------------*/
 
 /*
@@ -1149,7 +1190,9 @@ extern void rtdealloc(void *mem);
 /* Set of functions to clamp double to int of different size
  */
 
-#define POSTGIS_RASTER_WARN_ON_TRUNCATION
+#if !defined(POSTGIS_RASTER_WARN_ON_TRUNCATION)
+#define POSTGIS_RASTER_WARN_ON_TRUNCATION 0
+#endif
 
 #define POSTGIS_RT_1BBMAX 1
 #define POSTGIS_RT_2BUIMAX 3
@@ -1186,24 +1229,42 @@ float
 rt_util_clamp_to_32F(double value);
 
 int
-rt_util_display_dbl_trunc_warning(double initialvalue,
-                                  int32_t checkvalint,
-                                  uint32_t checkvaluint,
-                                  float checkvalfloat,
-                                  double checkvaldouble,
-                                  rt_pixtype pixtype);
+rt_util_dbl_trunc_warning(
+	double initialvalue,
+	int32_t checkvalint, uint32_t checkvaluint,
+	float checkvalfloat, double checkvaldouble,
+	rt_pixtype pixtype
+);
 
-/*
-	convert name to GDAL Resample Algorithm
-*/
+/**
+ * Convert cstring name to GDAL Resample Algorithm
+ *
+ * @param algname: cstring name to convert
+ *
+ * @return valid GDAL resampling algorithm
+ */
 GDALResampleAlg
 rt_util_gdal_resample_alg(const char *algname);
 
-/*
-	convert rt_pixtype to GDALDataType
-*/
+/**
+ * Convert rt_pixtype to GDALDataType
+ *
+ * @param pt: pixeltype to convert
+ *
+ * @return valid GDALDataType
+ */
 GDALDataType
 rt_util_pixtype_to_gdal_datatype(rt_pixtype pt);
+
+/**
+ * Convert GDALDataType to rt_pixtype
+ *
+ * @param gdt: GDAL datatype to convert
+ *
+ * @return valid rt_pixtype
+ */
+rt_pixtype
+rt_util_gdal_datatype_to_pixtype(GDALDataType gdt);
 
 /*
 	get GDAL runtime version information
@@ -1212,15 +1273,8 @@ const char*
 rt_util_gdal_version(const char *request);
 
 /*
-	computed extent type
+	computed extent type from c string
 */
-typedef enum {
-	ET_INTERSECTION = 0,
-	ET_UNION,
-	ET_FIRST,
-	ET_SECOND
-} rt_extenttype;
-
 rt_extenttype
 rt_util_extent_type(const char *name);
 
@@ -1235,7 +1289,7 @@ rt_util_extent_type(const char *name);
 /*
 	helper macro for symmetrical rounding
 */
-#define ROUND(x, y) (((x > 0.0) ? floor((x * pow(10, y) + 0.5)) : ceil((x * pow(10, y) - 0.5))) / pow(10, y));
+#define ROUND(x, y) (((x > 0.0) ? floor((x * pow(10, y) + 0.5)) : ceil((x * pow(10, y) - 0.5))) / pow(10, y))
 
 
 /**
