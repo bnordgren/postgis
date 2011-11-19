@@ -179,12 +179,12 @@ CREATE OR REPLACE FUNCTION st_makeemptyraster(width int, height int, upperleftx 
 
 CREATE OR REPLACE FUNCTION st_makeemptyraster(width int, height int, upperleftx float8, upperlefty float8, pixelsize float8)
     RETURNS raster
-    AS 'select st_makeemptyraster($1, $2, $3, $4, $5, $5, 0, 0, 0)'
+    AS $$ SELECT st_makeemptyraster($1, $2, $3, $4, $5, $5, 0, 0, ST_Srid('POINT(0 0)'::geometry)) $$
     LANGUAGE 'SQL' IMMUTABLE STRICT;
 
 CREATE OR REPLACE FUNCTION st_makeemptyraster(width int, height int, upperleftx float8, upperlefty float8, scalex float8, scaley float8, skewx float8, skewy float8)
     RETURNS raster
-    AS 'select st_makeemptyraster($1, $2, $3, $4, $5, $6, $7, $8, 0)'
+    AS $$ SELECT st_makeemptyraster($1, $2, $3, $4, $5, $6, $7, $8, ST_Srid('POINT(0 0)'::geometry)) $$
     LANGUAGE 'SQL' IMMUTABLE STRICT;
 
 CREATE OR REPLACE FUNCTION st_makeemptyraster(rast raster)
@@ -1031,8 +1031,8 @@ CREATE OR REPLACE FUNCTION st_astiff(rast raster, options text[] DEFAULT NULL, s
 	DECLARE
 		i int;
 		num_bands int;
-		nodata int;
-		last_nodata int;
+		nodata double precision;
+		last_nodata double precision;
 	BEGIN
 		num_bands := st_numbands($1);
 
@@ -1484,7 +1484,8 @@ CREATE OR REPLACE FUNCTION _st_resample(
 	srid integer DEFAULT NULL,
 	scalex double precision DEFAULT 0, scaley double precision DEFAULT 0,
 	gridx double precision DEFAULT NULL, gridy double precision DEFAULT NULL,
-	skewx double precision DEFAULT 0, skewy double precision DEFAULT 0
+	skewx double precision DEFAULT 0, skewy double precision DEFAULT 0,
+	width integer DEFAULT NULL, height integer DEFAULT NULL
 )
 	RETURNS raster
 	AS 'MODULE_PATHNAME', 'RASTER_resample'
@@ -1504,14 +1505,29 @@ CREATE OR REPLACE FUNCTION st_resample(
 
 CREATE OR REPLACE FUNCTION st_resample(
 	rast raster,
+	width integer, height integer,
+	srid integer DEFAULT NULL,
+	gridx double precision DEFAULT NULL, gridy double precision DEFAULT NULL,
+	skewx double precision DEFAULT 0, skewy double precision DEFAULT 0,
+	algorithm text DEFAULT 'NearestNeighbour', maxerr double precision DEFAULT 0.125
+)
+	RETURNS raster
+	AS $$ SELECT _st_resample($1, $9,	$10, $4, NULL, NULL, $5, $6, $7, $8, $2, $3) $$
+	LANGUAGE 'sql' STABLE;
+
+CREATE OR REPLACE FUNCTION st_resample(
+	rast raster,
 	ref raster,
 	algorithm text DEFAULT 'NearestNeighbour',
-	maxerr double precision DEFAULT 0.125
+	maxerr double precision DEFAULT 0.125,
+	usescale boolean DEFAULT TRUE
 )
 	RETURNS raster
 	AS $$
 	DECLARE
 		sr_id int;
+		dim_x int;
+		dim_y int;
 		scale_x double precision;
 		scale_y double precision;
 		grid_x double precision;
@@ -1519,10 +1535,30 @@ CREATE OR REPLACE FUNCTION st_resample(
 		skew_x double precision;
 		skew_y double precision;
 	BEGIN
-		SELECT srid, scalex, scaley, upperleftx, upperlefty, skewx, skewy INTO sr_id, scale_x, scale_y, grid_x, grid_y, skew_x, skew_y FROM st_metadata($2);
-		RETURN _st_resample($1, $3, $4, sr_id, scale_x, scale_y, grid_x, grid_y, skew_x, skew_y);
+		SELECT srid, width, height, scalex, scaley, upperleftx, upperlefty, skewx, skewy INTO sr_id, dim_x, dim_y, scale_x, scale_y, grid_x, grid_y, skew_x, skew_y FROM st_metadata($2);
+
+		IF usescale IS TRUE THEN
+			dim_x := NULL;
+			dim_y := NULL;
+		ELSE
+			scale_x := NULL;
+			scale_y := NULL;
+		END IF;
+
+		RETURN _st_resample($1, $3, $4, sr_id, scale_x, scale_y, grid_x, grid_y, skew_x, skew_y, dim_x, dim_y);
 	END;
 	$$ LANGUAGE 'plpgsql' STABLE STRICT;
+
+CREATE OR REPLACE FUNCTION st_resample(
+	rast raster,
+	ref raster,
+	usescale boolean,
+	algorithm text DEFAULT 'NearestNeighbour',
+	maxerr double precision DEFAULT 0.125
+)
+	RETURNS raster
+	AS $$ SELECT st_resample($1, $2, $4, $5, $3) $$
+	LANGUAGE 'sql' STABLE STRICT;
 
 -----------------------------------------------------------------------
 -- ST_Transform
@@ -1589,76 +1625,142 @@ CREATE OR REPLACE FUNCTION st_snaptogrid(rast raster, gridx double precision, gr
 -----------------------------------------------------------------------
 -- One Raster ST_MapAlgebra
 -----------------------------------------------------------------------
--- This function can not be STRICT, because nodatavaluerepl can be NULL (could be just '' though)
+-- This function can not be STRICT, because nodataval can be NULL
 -- or pixeltype can not be determined (could be st_bandpixeltype(raster, band) though)
 CREATE OR REPLACE FUNCTION st_mapalgebraexpr(rast raster, band integer, pixeltype text,
-        expression text, nodatavaluerepl text DEFAULT NULL)
+        expression text, nodataval double precision DEFAULT NULL)
     RETURNS raster
     AS 'MODULE_PATHNAME', 'RASTER_mapAlgebraExpr'
     LANGUAGE 'C' IMMUTABLE;
 
--- This function can not be STRICT, because nodatavaluerepl can be NULL (could be just '' though)
+-- This function can not be STRICT, because nodataval can be NULL
 -- or pixeltype can not be determined (could be st_bandpixeltype(raster, band) though)
 CREATE OR REPLACE FUNCTION st_mapalgebraexpr(rast raster, pixeltype text, expression text,
-        nodatavaluerepl text DEFAULT NULL)
+        nodataval double precision DEFAULT NULL)
     RETURNS raster
     AS $$ SELECT st_mapalgebraexpr($1, 1, $2, $3, $4) $$
     LANGUAGE SQL;
 
 -- All arguments supplied, use the C implementation.
 CREATE OR REPLACE FUNCTION st_mapalgebrafct(rast raster, band integer, 
-        pixeltype text, userfunction regprocedure, variadic args text[]) 
+        pixeltype text, onerastuserfunc regprocedure, variadic args text[]) 
     RETURNS raster
     AS 'MODULE_PATHNAME', 'RASTER_mapAlgebraFct'
     LANGUAGE 'C' IMMUTABLE;
 
 -- Variant 1: missing user args
 CREATE OR REPLACE FUNCTION st_mapalgebrafct(rast raster, band integer,
-        pixeltype text, userfunction regprocedure)
+        pixeltype text, onerastuserfunc regprocedure)
     RETURNS raster
     AS $$ SELECT st_mapalgebrafct($1, $2, $3, $4, NULL) $$
     LANGUAGE SQL;
 
 -- Variant 2: missing pixeltype; default to pixeltype of rast
 CREATE OR REPLACE FUNCTION st_mapalgebrafct(rast raster, band integer,
-        userfunction regprocedure, variadic args text[])
+        onerastuserfunc regprocedure, variadic args text[])
     RETURNS raster
     AS $$ SELECT st_mapalgebrafct($1, $2, NULL, $3, VARIADIC $4) $$
     LANGUAGE SQL;
  
 -- Variant 3: missing pixeltype and user args; default to pixeltype of rast
 CREATE OR REPLACE FUNCTION st_mapalgebrafct(rast raster, band integer,
-        userfunction regprocedure)
+        onerastuserfunc regprocedure)
     RETURNS raster
     AS $$ SELECT st_mapalgebrafct($1, $2, NULL, $3, NULL) $$
     LANGUAGE SQL;
 
 -- Variant 4: missing band; default to band 1
 CREATE OR REPLACE FUNCTION st_mapalgebrafct(rast raster, pixeltype text,
-        userfunction regprocedure, variadic args text[])
+        onerastuserfunc regprocedure, variadic args text[])
     RETURNS raster
     AS $$ SELECT st_mapalgebrafct($1, 1, $2, $3, VARIADIC $4) $$
     LANGUAGE SQL;
 
 -- Variant 5: missing band and user args; default to band 1
 CREATE OR REPLACE FUNCTION st_mapalgebrafct(rast raster, pixeltype text,
-        userfunction regprocedure)
+        onerastuserfunc regprocedure)
     RETURNS raster
     AS $$ SELECT st_mapalgebrafct($1, 1, $2, $3, NULL) $$
     LANGUAGE SQL;
 
 -- Variant 6: missing band, and pixeltype; default to band 1, pixeltype of rast.
-CREATE OR REPLACE FUNCTION st_mapalgebrafct(rast raster, userfunction regprocedure,
+CREATE OR REPLACE FUNCTION st_mapalgebrafct(rast raster, onerastuserfunc regprocedure,
         variadic args text[])
     RETURNS raster
     AS $$ SELECT st_mapalgebrafct($1, 1, NULL, $2, VARIADIC $3) $$
     LANGUAGE SQL;
 
 -- Variant 7: missing band, pixeltype, and user args; default to band 1, pixeltype of rast.
-CREATE OR REPLACE FUNCTION st_mapalgebrafct(rast raster, userfunction regprocedure)
+CREATE OR REPLACE FUNCTION st_mapalgebrafct(rast raster, onerastuserfunc regprocedure)
     RETURNS raster
     AS $$ SELECT st_mapalgebrafct($1, 1, NULL, $2, NULL) $$
     LANGUAGE SQL;
+
+-----------------------------------------------------------------------
+-- Two Raster ST_MapAlgebra
+-----------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION st_mapalgebraexpr(
+	rast1 raster, band1 integer,
+	rast2 raster, band2 integer,
+	expression text,
+	pixeltype text DEFAULT NULL, extenttype text DEFAULT 'INTERSECTION',
+	nodata1expr text DEFAULT NULL, nodata2expr text DEFAULT NULL,
+	nodatanodataval double precision DEFAULT NULL
+)
+	RETURNS raster
+	AS 'MODULE_PATHNAME', 'RASTER_mapAlgebra2'
+	LANGUAGE 'C' STABLE;
+
+CREATE OR REPLACE FUNCTION st_mapalgebraexpr(
+	rast1 raster,
+	rast2 raster,
+	expression text,
+	pixeltype text DEFAULT NULL, extenttype text DEFAULT 'INTERSECTION',
+	nodata1expr text DEFAULT NULL, nodata2expr text DEFAULT NULL,
+	nodatanodataval double precision DEFAULT NULL
+)
+	RETURNS raster
+	AS $$ SELECT st_mapalgebraexpr($1, 1, $2, 1, $3, $4, $5, $6, $7, $8) $$
+	LANGUAGE 'SQL' STABLE;
+
+CREATE OR REPLACE FUNCTION st_mapalgebrafct(
+	rast1 raster, band1 integer,
+	rast2 raster, band2 integer,
+	tworastuserfunc regprocedure,
+	pixeltype text DEFAULT NULL, extenttype text DEFAULT 'INTERSECTION',
+	VARIADIC userargs text[] DEFAULT NULL
+)
+	RETURNS raster
+	AS 'MODULE_PATHNAME', 'RASTER_mapAlgebra2'
+	LANGUAGE 'C' STABLE;
+
+CREATE OR REPLACE FUNCTION st_mapalgebrafct(
+	rast1 raster,
+	rast2 raster,
+	tworastuserfunc regprocedure,
+	pixeltype text DEFAULT NULL, extenttype text DEFAULT 'INTERSECTION',
+	VARIADIC userargs text[] DEFAULT NULL
+)
+	RETURNS raster
+	AS $$ SELECT st_mapalgebrafct($1, 1, $2, 1, $3, $4, $5, VARIADIC $6) $$
+	LANGUAGE 'SQL' STABLE;
+
+-----------------------------------------------------------------------
+-- Neighborhood single raster map algebra
+-----------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION st_mapalgebrafctngb(
+    rast raster,
+    band integer,
+    pixeltype text,
+    ngbwidth integer,
+    ngbheight integer,
+    onerastngbuserfunc regprocedure,
+    nodatamode text,
+    variadic args text[]
+)
+    RETURNS raster
+    AS 'MODULE_PATHNAME', 'RASTER_mapAlgebraFctNgb'
+    LANGUAGE 'C' IMMUTABLE;
 
 -----------------------------------------------------------------------
 -- Get information about the raster
@@ -1677,15 +1779,10 @@ CREATE OR REPLACE FUNCTION st_hasnoband(rast raster, nband int DEFAULT 1)
 -- Raster Band Accessors
 -----------------------------------------------------------------------
 
-CREATE OR REPLACE FUNCTION st_bandnodatavalue(rast raster, band integer)
-    RETURNS float4
+CREATE OR REPLACE FUNCTION st_bandnodatavalue(rast raster, band integer DEFAULT 1)
+    RETURNS double precision
     AS 'MODULE_PATHNAME','RASTER_getBandNoDataValue'
     LANGUAGE 'C' IMMUTABLE STRICT;
-
-CREATE OR REPLACE FUNCTION st_bandnodatavalue(raster)
-    RETURNS float4
-    AS $$ SELECT st_bandnodatavalue($1, 1) $$
-    LANGUAGE SQL IMMUTABLE STRICT;
 
 CREATE OR REPLACE FUNCTION st_bandisnodata(rast raster, band integer,
         forceChecking boolean)
@@ -1732,8 +1829,8 @@ CREATE OR REPLACE FUNCTION st_bandmetadata(
 	rast raster,
 	band int DEFAULT 1,
 	OUT pixeltype text,
-	OUT hasnodatavalue boolean,
-	OUT nodatavalue float4,
+	OUT hasnodata boolean,
+	OUT nodatavalue double precision,
 	OUT isoutdb boolean,
 	OUT path text
 )
@@ -2676,7 +2773,7 @@ CREATE OR REPLACE FUNCTION _st_intersects(geom geometry, rast raster, nband inte
 	BEGIN
 		convexhull := ST_ConvexHull(rast);
 		IF nband IS NOT NULL THEN
-			SELECT hasnodatavalue INTO hasnodata FROM ST_BandMetaData(rast, nband);
+			SELECT bmd.hasnodata INTO hasnodata FROM ST_BandMetaData(rast, nband) AS bmd;
 		END IF;
 
 		IF ST_Intersects(geom, convexhull) IS NOT TRUE THEN
