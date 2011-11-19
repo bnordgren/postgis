@@ -575,7 +575,7 @@ AC_ARG_WITH([projdir],
 if test ! "x$PROJDIR" = "x"; then
 	dnl Make sure that the directory exists 
 	if test "x$PROJDIR" = "xyes"; then
-		AC_MSG_ERROR([you must specifiy a parameter to --with-projdir, e.g. --with-projdir=/path/to])
+		AC_MSG_ERROR([you must specify a parameter to --with-projdir, e.g. --with-projdir=/path/to])
 	else
 		if test -d "$PROJDIR"; then
 			AC_MSG_RESULT([Using user-specified proj directory: $PROJDIR])
@@ -617,6 +617,53 @@ AC_CHECK_LIB([proj], [pj_get_release],
 	[AC_MSG_ERROR([could not find libproj - you may need to specify the directory of a PROJ.4 installation using --with-projdir])],
 	[])
 LIBS="$LIBS_SAVE"
+
+dnl ===========================================================================
+dnl Detect if json-c installed
+dnl ===========================================================================
+
+HAVE_JSON=No
+
+AC_ARG_WITH([jsondir],
+	[AS_HELP_STRING([--with-jsondir=PATH], [specify the json-c installation directory])],
+	[JSONDIR="$withval"], [JSONDIR=])
+
+if test ! "x$JSONDIR" = "x"; then
+	dnl Make sure that the directory exists
+	if test "x$JSONDIR" = "xyes"; then
+		AC_MSG_ERROR([you must specify a parameter to --with-jsondir, e.g. --with-jsondir=/path/to])
+	else
+		if test -d "$JSONDIR"; then
+			AC_MSG_RESULT([Using user-specified json-c directory: $JSONDIR])
+
+			dnl Add the include directory to JSON_CPPFLAGS
+			JSON_CPPFLAGS="-I$JSONDIR/include"
+			JSON_LDFLAGS="-L$JSONDIR/lib -ljson"
+
+			dnl Check that we can find the json/json.h header file
+			CPPFLAGS_SAVE="$CPPFLAGS"
+			CPPFLAGS="$JSON_CPPFLAGS"
+			AC_CHECK_HEADER([json/json.h], [], [AC_MSG_ERROR([could not find json/json.h - you may need to specify the directory of a json-c installation using --with-jsondir])])	
+			CPPFLAGS="$CPPFLAGS_SAVE"
+
+			dnl Ensure we can link against libjson
+			LIBS_SAVE="$LIBS"
+			LIBS="$JSON_LDFLAGS"
+			AC_CHECK_LIB([json], [json_object_get],
+				[],
+				[AC_MSG_ERROR([could not find libjson - you may need to specify the directory of a json-c installation using --with-jsondir])],
+				[])
+			LIBS="$LIBS_SAVE"
+			HAVE_JSON=Yes
+		else
+			AC_MSG_ERROR([the --with-jsondir directory "$JSONDIR" cannot be found])
+		fi
+	fi
+fi
+
+AC_SUBST([JSON_CPPFLAGS])
+AC_SUBST([JSON_LDFLAGS])
+AC_SUBST([HAVE_JSON])
 
 dnl ===========================================================================
 dnl Detect GTK+2.0 for GUI
@@ -709,10 +756,10 @@ dnl Always enable use of ANALYZE statistics by default
 AC_DEFINE_UNQUOTED([POSTGIS_USE_STATS], [1], [Enable use of ANALYZE statistics])
 
 
-CPPFLAGS="$PGSQL_CPPFLAGS $GEOS_CPPFLAGS $PROJ_CPPFLAGS $XML2_CPPFLAGS"
+CPPFLAGS="$PGSQL_CPPFLAGS $GEOS_CPPFLAGS $PROJ_CPPFLAGS $JSON_CPPFLAGS $XML2_CPPFLAGS"
 dnl AC_MSG_RESULT([CPPFLAGS: $CPPFLAGS])
 
-SHLIB_LINK="$PGSQL_LDFLAGS $GEOS_LDFLAGS $PROJ_LDFLAGS -lgeos_c -lproj $XML2_LDFLAGS"
+SHLIB_LINK="$PGSQL_LDFLAGS $GEOS_LDFLAGS $PROJ_LDFLAGS -lgeos_c -lproj $JSON_LDFLAGS $XML2_LDFLAGS"
 AC_SUBST([SHLIB_LINK])
 dnl AC_MSG_RESULT([SHLIB_LINK: $SHLIB_LINK])
 
@@ -777,10 +824,10 @@ if test "x$RASTER" = "xraster"; then dnl # {
     POSTGIS_RASTER_BUILD_DATE=`date -u "+%Y-%m-%d %H:%M:%S"`
     POSTGIS_RASTER_SCRIPTS_VERSION="$POSTGIS_RASTER_LIB_VERSION"
 
-    AC_DEFINE_UNQUOTED([POSTGIS_RASTER_VERSION], ["$POSTGIS_RASTER_VERSION"], [WKTRaster version])
-    AC_DEFINE_UNQUOTED([POSTGIS_RASTER_LIB_VERSION], ["$POSTGIS_RASTER_LIB_VERSION"], [WKTRaster library version])
-    AC_DEFINE_UNQUOTED([POSTGIS_RASTER_BUILD_DATE], ["$POSTGIS_RASTER_BUILD_DATE"], [WKTRaster build date])
-    AC_DEFINE_UNQUOTED([POSTGIS_RASTER_SCRIPTS_VERSION], ["$POSTGIS_RASTER_SCRIPTS_VERSION"], [WKTRaster scripts version])
+    AC_DEFINE_UNQUOTED([POSTGIS_RASTER_VERSION], ["$POSTGIS_RASTER_VERSION"], [PostGIS Raster version])
+    AC_DEFINE_UNQUOTED([POSTGIS_RASTER_LIB_VERSION], ["$POSTGIS_RASTER_LIB_VERSION"], [PostGIS Raster library version])
+    AC_DEFINE_UNQUOTED([POSTGIS_RASTER_BUILD_DATE], ["$POSTGIS_RASTER_BUILD_DATE"], [PostGIS Raster build date])
+    AC_DEFINE_UNQUOTED([POSTGIS_RASTER_SCRIPTS_VERSION], ["$POSTGIS_RASTER_SCRIPTS_VERSION"], [PostGIS Raster scripts version])
 
     AC_SUBST([POSTGIS_RASTER_VERSION])
     AC_SUBST([POSTGIS_RASTER_LIB_VERSION])
@@ -801,6 +848,15 @@ if test "x$RASTER" = "xraster"; then dnl # {
     AC_SUBST([LIBLWGEOM_LDFLAGS])
     AC_SUBST([LIBPGCOMMON_CFLAGS])
     AC_SUBST([LIBPGCOMMON_LDFLAGS])
+
+    dnl ===========================================================================
+    dnl Allow output of double truncation warnings with --with-raster-dblwarning
+    dnl ===========================================================================
+
+    AC_ARG_WITH([raster-dblwarning], AC_HELP_STRING([--with-raster-dblwarning], [output double truncation warnings.  Only used with --with-raster]), 
+        [POSTGIS_RASTER_WARN_ON_TRUNCATION=1], [POSTGIS_RASTER_WARN_ON_TRUNCATION=0]) 
+
+    AC_DEFINE_UNQUOTED([POSTGIS_RASTER_WARN_ON_TRUNCATION], [$POSTGIS_RASTER_WARN_ON_TRUNCATION], [Define to 1 if a warning is outputted every time a double is truncated])
 
     dnl ========================================================================
     dnl Determine GDAL Support
@@ -823,7 +879,7 @@ if test "x$RASTER" = "xraster"; then dnl # {
 	GDAL_MIN_VERSION_NUMBER=160 dnl TODO: Use GDAL version calculation MAJOR*1000+MINOR*100+REV*10+BUILD
 
     AC_ARG_WITH([gdalconfig],
-		AC_HELP_STRING([--with-gdalconfig=@<:@ARG@:>@],[specify location of gdal-config (ARG=path)]),
+		AC_HELP_STRING([--with-gdalconfig=@<:@ARG@:>@],[specify location of gdal-config (ARG=path).  Only used with --with-raster]),
         	[GDAL_CONFIG="$withval"], [GDAL_CONFIG=""])
 
     AC_MSG_CHECKING([for GDAL >= $GDAL_MIN_VERSION])
@@ -959,6 +1015,7 @@ AC_MSG_RESULT([  PostgreSQL version:   ${PGSQL_FULL_VERSION}])
 AC_MSG_RESULT([  PROJ4 version:        ${POSTGIS_PROJ_VERSION}])
 AC_MSG_RESULT([  Libxml2 config:       ${XML2CONFIG}])
 AC_MSG_RESULT([  Libxml2 version:      ${POSTGIS_LIBXML2_VERSION}])
+AC_MSG_RESULT([  JSON-C support:       ${HAVE_JSON}])
 AC_MSG_RESULT([  PostGIS debug level:  ${POSTGIS_DEBUG_LEVEL}])
 if test "x$RASTER" = "xraster" -o "x$TOPOLOGY" = "xtopology"; then
     AC_MSG_RESULT([ -------------- Extensions -------------- ])
