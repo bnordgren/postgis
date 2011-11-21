@@ -163,6 +163,7 @@ lwline_split_by_point_to(const LWLINE* lwline_in, const LWPOINT* blade_in,
 	POINT2D pt;
 	POINTARRAY* pa1;
 	POINTARRAY* pa2;
+	double vstol; /* vertex snap tolerance */
 
 	/* Possible outcomes:
 	 *
@@ -193,9 +194,9 @@ lwline_split_by_point_to(const LWLINE* lwline_in, const LWPOINT* blade_in,
 	}
 
 	/* There is a real intersection, let's get two substrings */
-
-	pa1 = ptarray_substring(lwline_in->points, 0, loc);
-	pa2 = ptarray_substring(lwline_in->points, loc, 1);
+	vstol = 1e-14; /* TODO: take this as parameter ? */
+	pa1 = ptarray_substring(lwline_in->points, 0, loc, vstol);
+	pa2 = ptarray_substring(lwline_in->points, loc, 1, vstol);
 
 	/* NOTE: I've seen empty pointarrays with loc != 0 and loc != 1 */
 	if ( pa1->npoints == 0 || pa2->npoints == 0 ) {
@@ -428,6 +429,8 @@ lwcollection_split(const LWCOLLECTION* lwcoll_in, const LWGEOM* blade_in)
 			col->geoms[j]->srid = SRID_UNKNOWN; /* strip srid */
 			split_vector[split_vector_size++] = col->geoms[j];
 		}
+		lwfree(col->geoms);
+		lwfree(col);
 	}
 
 	/* Now split_vector has split_vector_size geometries */

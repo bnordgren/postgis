@@ -126,7 +126,8 @@ char* gserialized_to_string(const GSERIALIZED *g)
 	return lwgeom_to_wkt(lwgeom_from_gserialized(g), WKT_ISO, 12, 0);
 }
 
-void gbox_float_round(GBOX *gbox)
+/* TODO: expose to internal API ? */
+static void gbox_float_round(GBOX *gbox)
 {
 	gbox->xmin = next_float_down(gbox->xmin);
 	gbox->xmax = next_float_up(gbox->xmax);
@@ -266,6 +267,7 @@ int gserialized_get_gbox_p(const GSERIALIZED *geom, GBOX *box)
 		/* See http://trac.osgeo.org/postgis/ticket/1023 */
 		lwgeom = lwgeom_from_gserialized(geom);
 		ret = lwgeom_calculate_gbox(lwgeom, box);
+		gbox_float_round(box);
 		lwgeom_free(lwgeom);
 	}
 	return ret;
