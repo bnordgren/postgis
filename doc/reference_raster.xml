@@ -3685,7 +3685,8 @@ WHERE rid = 2;
 				
 			<refsection>
 					<title>Examples</title>
-				
+					<para>Examples utilize the katrina raster loaded as a single tile described in 
+			<ulink url="http://trac.osgeo.org/gdal/wiki/frmts_wtkraster.html">http://trac.osgeo.org/gdal/wiki/frmts_wtkraster.html</ulink></para>
 					<programlisting>-- My original raster that is in WGS 84 lon lat 1 pixel in x/y represents 0.029.. in long lat -
 SELECT ST_ScaleX(rast) As orig_scalex, ST_ScaleY(rast) As origi_scaley 
  FROM katrina;
@@ -5730,12 +5731,12 @@ WITH mygeoms
 					<funcprototype>
 						<funcdef>raster <function>ST_MapAlgebraFct</function></funcdef>
 						<paramdef><type>raster</type> <parameter>rast</parameter></paramdef>
-						<paramdef><type>regprocedure</type> <parameter>userfunction</parameter></paramdef>
+						<paramdef><type>regprocedure</type> <parameter>onerasteruserfunc</parameter></paramdef>
 					</funcprototype>				
 					<funcprototype>
 						<funcdef>raster <function>ST_MapAlgebraFct</function></funcdef>
 						<paramdef><type>raster</type> <parameter>rast</parameter></paramdef>
-						<paramdef><type>regprocedure</type> <parameter>userfunction</parameter></paramdef>
+						<paramdef><type>regprocedure</type> <parameter>onerasteruserfunc</parameter></paramdef>
                         <paramdef><type>text[]</type> <parameter>VARIADIC args</parameter></paramdef>
 					</funcprototype>
 
@@ -5743,13 +5744,13 @@ WITH mygeoms
 						<funcdef>raster <function>ST_MapAlgebraFct</function></funcdef>
 						<paramdef><type>raster</type> <parameter>rast</parameter></paramdef>
 						<paramdef><type>text</type> <parameter>pixeltype</parameter></paramdef>
-						<paramdef><type>regprocedure</type> <parameter>userfunction</parameter></paramdef>
+						<paramdef><type>regprocedure</type> <parameter>onerasteruserfunc</parameter></paramdef>
 					</funcprototype>
 					<funcprototype>
 						<funcdef>raster <function>ST_MapAlgebraFct</function></funcdef>
 						<paramdef><type>raster</type> <parameter>rast</parameter></paramdef>
 						<paramdef><type>text</type> <parameter>pixeltype</parameter></paramdef>
-						<paramdef><type>regprocedure</type> <parameter>userfunction</parameter></paramdef>
+						<paramdef><type>regprocedure</type> <parameter>onerasteruserfunc</parameter></paramdef>
 						<paramdef><type>text[]</type> <parameter>VARIADIC args</parameter></paramdef>
 					</funcprototype>
 					
@@ -5757,13 +5758,13 @@ WITH mygeoms
 						<funcdef>raster <function>ST_MapAlgebraFct</function></funcdef>
 						<paramdef><type>raster</type> <parameter>rast</parameter></paramdef>
 						<paramdef><type>integer</type> <parameter>band</parameter></paramdef>
-						<paramdef><type>regprocedure</type> <parameter>userfunction</parameter></paramdef>
+						<paramdef><type>regprocedure</type> <parameter>onerasteruserfunc</parameter></paramdef>
 					</funcprototype>
 					<funcprototype>
 						<funcdef>raster <function>ST_MapAlgebraFct</function></funcdef>
 						<paramdef><type>raster</type> <parameter>rast</parameter></paramdef>
 						<paramdef><type>integer</type> <parameter>band</parameter></paramdef>
-						<paramdef><type>regprocedure</type> <parameter>userfunction</parameter></paramdef>
+						<paramdef><type>regprocedure</type> <parameter>onerasteruserfunc</parameter></paramdef>
 						<paramdef><type>text[]</type> <parameter>VARIADIC args</parameter></paramdef>
 					</funcprototype>
 
@@ -5772,14 +5773,14 @@ WITH mygeoms
 						<paramdef><type>raster</type> <parameter>rast</parameter></paramdef>
 						<paramdef><type>integer</type> <parameter>band</parameter></paramdef>
 						<paramdef><type>text</type> <parameter>pixeltype</parameter></paramdef>
-						<paramdef><type>regprocedure</type> <parameter>userfunction</parameter></paramdef>
+						<paramdef><type>regprocedure</type> <parameter>onerasteruserfunc</parameter></paramdef>
 					</funcprototype>
 					<funcprototype>
 						<funcdef>raster <function>ST_MapAlgebraFct</function></funcdef>
 						<paramdef><type>raster</type> <parameter>rast</parameter></paramdef>
 						<paramdef><type>integer</type> <parameter>band</parameter></paramdef>
 						<paramdef><type>text</type> <parameter>pixeltype</parameter></paramdef>
-						<paramdef><type>regprocedure</type> <parameter>userfunction</parameter></paramdef>
+						<paramdef><type>regprocedure</type> <parameter>onerasteruserfunc</parameter></paramdef>
 						<paramdef><type>text[]</type> <parameter>VARIADIC args</parameter></paramdef>
 					</funcprototype>
 
@@ -5789,11 +5790,11 @@ WITH mygeoms
 			<refsection>
 				<title>Description</title>
 				
-				<para>Creates a new one band raster formed by applying a valid PostgreSQL function specified by the <varname>userfunction</varname> on the input raster (<varname>rast</varname>). If no <varname>band</varname> is specified, band 1 is assumed. The new raster will have the same georeference, width, and height as the original raster but will only have one band.</para>
+				<para>Creates a new one band raster formed by applying a valid PostgreSQL function specified by the <varname>onerasteruserfunc</varname> on the input raster (<varname>rast</varname>). If no <varname>band</varname> is specified, band 1 is assumed. The new raster will have the same georeference, width, and height as the original raster but will only have one band.</para>
 
 				<para>If <varname>pixeltype</varname> is passed in, then the new raster will have a band of that pixeltype. If pixeltype is passed NULL, then the new raster band will have the same pixeltype as the input <varname>rast</varname> band.</para>
 
-                <para>The <varname>userfunction</varname> parameter must be the name and signature of a SQL or PL/pgSQL function, cast to a regprocedure. A very simple and quite useless PL/pgSQL function example is:
+                <para>The <varname>onerasteruserfunc</varname> parameter must be the name and signature of a SQL or PL/pgSQL function, cast to a regprocedure. A very simple and quite useless PL/pgSQL function example is:
                 <programlisting>CREATE OR REPLACE FUNCTION simple_function(pixel FLOAT, VARIADIC args TEXT[])
     RETURNS FLOAT
     AS $$ BEGIN
@@ -5959,7 +5960,7 @@ WHERE rid=167;
 						<funcdef>raster <function>ST_MapAlgebraFct</function></funcdef>
 						<paramdef><type>raster</type> <parameter>rast1</parameter></paramdef>
 						<paramdef><type>raster</type> <parameter>rast2</parameter></paramdef>
-						<paramdef><type>regprocedure</type> <parameter>userfunction</parameter></paramdef>
+						<paramdef><type>regprocedure</type> <parameter>tworastuserfunc</parameter></paramdef>
 						<paramdef choice='opt'><type>text</type> <parameter>pixeltype=same_as_rast1</parameter></paramdef>
 						<paramdef choice='opt'><type>text</type> <parameter>extenttype=INTERSECTION</parameter></paramdef>
 						<paramdef><type>text[]</type> <parameter>VARIADIC userargs</parameter></paramdef>
@@ -5971,7 +5972,7 @@ WHERE rid=167;
 						<paramdef><type>integer</type> <parameter>band1</parameter></paramdef>
 						<paramdef><type>raster</type> <parameter>rast2</parameter></paramdef>
 						<paramdef><type>integer</type> <parameter>band2</parameter></paramdef>
-						<paramdef><type>regprocedure</type> <parameter>userfunction</parameter></paramdef>
+						<paramdef><type>regprocedure</type> <parameter>tworastuserfunc</parameter></paramdef>
 						<paramdef choice='opt'><type>text</type> <parameter>pixeltype=same_as_rast1</parameter></paramdef>
 						<paramdef choice='opt'><type>text</type> <parameter>extenttype=INTERSECTION</parameter></paramdef>
 						<paramdef><type>text[]</type> <parameter>VARIADIC userargs</parameter></paramdef>
@@ -5982,20 +5983,20 @@ WHERE rid=167;
 			<refsection>
 				<title>Description</title>
 				
-				<para>Creates a new one band raster formed by applying a valid PostgreSQL function specified by the <varname>userfunction</varname> on the input raster <varname>rast1</varname>,<varname>rast2</varname> . If no <varname>band1</varname> or <varname>band2</varname> is specified, band 1 is assumed. The new raster will have the same georeference, width, and height as the original rasters but will only have one band.</para>
+				<para>Creates a new one band raster formed by applying a valid PostgreSQL function specified by the <varname>tworastuserfunc</varname> on the input raster <varname>rast1</varname>,<varname>rast2</varname> . If no <varname>band1</varname> or <varname>band2</varname> is specified, band 1 is assumed. The new raster will have the same georeference, width, and height as the original rasters but will only have one band.</para>
 
 				<para>If <varname>pixeltype</varname> is passed in, then the new raster will have a band of that pixeltype. If pixeltype is passed NULL or left out, then the new raster band will have the same pixeltype as the input <varname>rast1</varname> band.</para>
 
-                <para>The <varname>userfunction</varname> parameter must be the name and signature of an SQL or PL/pgSQL function, cast to a regprocedure. An example PL/pgSQL function example is:
-                The <varname>userfunction</varname> is required to accept three arguments: a double precision value, a double precision value  and a variadic text array. The first argument is the value of an individual raster cell in <varname>rast1</varname> (regardless of the raster datatype), the second argument is an individual raster cell value in <varname>rast2</varname>, and the third argument indicates that all remaining parameters to <xref linkend="RT_ST_MapAlgebraFct2" /> shall be passed through to the <varname>userfunction</varname>.</para>
+                <para>The <varname>tworastuserfunc</varname> parameter must be the name and signature of an SQL or PL/pgSQL function, cast to a regprocedure. An example PL/pgSQL function example is:
+                The <varname>tworastuserfunc</varname> is required to accept three arguments: a double precision value, a double precision value  and a variadic text array. The first argument is the value of an individual raster cell in <varname>rast1</varname> (regardless of the raster datatype), the second argument is an individual raster cell value in <varname>rast2</varname>, and the third argument indicates that all remaining parameters to <xref linkend="RT_ST_MapAlgebraFct2" /> shall be passed through to the <varname>tworastuserfunc</varname>.</para>
 
                 <para>Passing a <type>regprodedure</type> argument to a SQL function requires the full function signature to be passed, then cast to a <type>regprocedure</type> type. To pass the above example PL/pgSQL function as an argument, the SQL for the argument is:<programlisting>'simple_function(double precision,double precision, text[])'::regprocedure</programlisting>Note that the argument contains the name of the function, the types of the function arguments, quotes around the name and argument types, and a cast to a <type>regprocedure</type>.</para>
 
-                <para>The third argument to the <varname>userfunction</varname> is a <type>variadic text</type> array. All trailing text arguments to any <xref linkend="RT_ST_MapAlgebraFct2" /> call are passed through to the specified <varname>userfunction</varname>, and are contained in the <varname>userargs</varname> argument.</para>
+                <para>The third argument to the <varname>tworastuserfunc</varname> is a <type>variadic text</type> array. All trailing text arguments to any <xref linkend="RT_ST_MapAlgebraFct2" /> call are passed through to the specified <varname>tworastuserfunc</varname>, and are contained in the <varname>userargs</varname> argument.</para>
 
                 <note><para>For more information about the VARIADIC keyword, please refer to the PostgreSQL documentation and the "SQL Functions with Variable Numbers of Arguments" section of <ulink url="http://www.postgresql.org/docs/current/interactive/xfunc-sql.html">Query Language (SQL) Functions</ulink>.</para></note>
 
-                <note><para>The <type>text[]</type> argument to the <varname>userfunction</varname> is required, regardless of whether you choose to pass any arguments to your user function for processing or not.</para></note>
+                <note><para>The <type>text[]</type> argument to the <varname>tworastuserfunc</varname> is required, regardless of whether you choose to pass any arguments to your user function for processing or not.</para></note>
 
 				<para>Availability: 2.0.0</para>
 			</refsection>
@@ -6153,7 +6154,7 @@ SELECT ST_MapAlgebraFct(m1.rast, 1, m1.rast,3 ,
 				<paramdef><type>text </type> <parameter>pixeltype</parameter></paramdef>
 				<paramdef><type>integer </type> <parameter>ngbwidth</parameter></paramdef>
 				<paramdef><type>integer </type> <parameter>ngbheight</parameter></paramdef>
-				<paramdef><type>regprocedure </type> <parameter>userfunction</parameter></paramdef>
+				<paramdef><type>regprocedure </type> <parameter>onerastngbuserfunc</parameter></paramdef>
 				<paramdef><type>text </type> <parameter>nodatamode</parameter></paramdef>
 				<paramdef><type>text[] </type> <parameter>VARIADIC args</parameter></paramdef>
 			  </funcprototype>
@@ -6167,8 +6168,8 @@ SELECT ST_MapAlgebraFct(m1.rast, 1, m1.rast,3 ,
 			<para>(one raster version) Return a raster which values
                  are the result of a PLPGSQL user function involving a
                neighborhood of values from the input raster band. The user function takes the neighborhood of pixel values
-               as an array of numbers, returns one number per neighborhood,
-               replaces existing pixel values of a neighborhood with that number. </para>
+               as an array of numbers, for each pixel, returns the result from the user function,
+               replacing pixel value of currently inspected pixel with the function result. </para>
 		
 			<variablelist>
 					<varlistentry>
@@ -6192,9 +6193,17 @@ SELECT ST_MapAlgebraFct(m1.rast, 1, m1.rast,3 ,
 						<listitem><para>The height of the neighborhood, in cells.</para></listitem>
 					</varlistentry>
 					<varlistentry>
-						<term>userfunction</term>
-						<listitem><para>PLPGSQL/psql user function to apply to neighborhood pixels. The first element is a 2-dimensional
+						<term>onerastngbuserfunc</term>
+						<listitem><para>PLPGSQL/psql user function to apply to neighborhood pixels of a single band of a raster. The first element is a 2-dimensional
 							array of numbers representing the rectangular pixel neighborhood</para></listitem>
+					</varlistentry>
+					<varlistentry>
+						<term>nodatamode</term>
+						<listitem><para>Defines what value to pass to the function for a neighborhood pixel that is nodata or NULL</para>
+							<para>'ignore' or 'NULL': if the result of the function is NULL or <varname>nodatavalue</varname> then return no data or the minimum value (if there is no nodata value) in the raster for the neighborhood value</para>,
+							<para>'value': Use the currently inspected pixel as the replacement value for any neighbor pixels that are NULL or nodata</para>
+							<para>a numerical value: This should be passed in as text like '255'.  Use this value as replace value in function for any neighbor pixel that is NULL or nodata value.</para>
+						</listitem>
 					</varlistentry>
 					<varlistentry>
 						<term>args</term>
@@ -6209,6 +6218,9 @@ SELECT ST_MapAlgebraFct(m1.rast, 1, m1.rast,3 ,
 		
 		  <refsection>
 			<title>Examples</title>
+			<para>Examples utilize the katrina raster loaded as a single tile described in 
+			<ulink url="http://trac.osgeo.org/gdal/wiki/frmts_wtkraster.html">http://trac.osgeo.org/gdal/wiki/frmts_wtkraster.html</ulink>
+			and then prepared in the <xref linkend="RT_ST_Rescale" /> examples </para>
 <programlisting>
 --
 -- A simple 'callback' user function that averages up all the values in a neighborhood.
@@ -6228,13 +6240,6 @@ CREATE OR REPLACE FUNCTION rast_avg(matrix float[][], nodatamode text, variadic 
         sum := 0;
         FOR x in array_lower(matrix, 1)..array_upper(matrix, 1) LOOP
             FOR y in array_lower(matrix, 2)..array_upper(matrix, 2) LOOP
-                IF _matrix[x][y] IS NULL THEN
-                    IF nodatamode = 'ignore' THEN
-                        _matrix[x][y] := 0;
-                    ELSE
-                        _matrix[x][y] := nodatamode::float;
-                    END IF;
-                END IF;
                 sum := sum + _matrix[x][y];
             END LOOP;
         END LOOP;
@@ -6244,7 +6249,8 @@ CREATE OR REPLACE FUNCTION rast_avg(matrix float[][], nodatamode text, variadic 
 LANGUAGE 'plpgsql' IMMUTABLE COST 1000;
     
 -- now we apply to our raster averaging pixels within 2 pixels of each other in x and y direction --
-SELECT ST_MapAlgebraFctNgb(rast, 1,  '8BUI', 2, 2, 'rast_avg(float[][], text, text[])'::regprocedure, 'NULL', NULL) As neared
+SELECT ST_MapAlgebraFctNgb(rast, 1,  '8BUI', 4,4,
+		'rast_avg(float[][], text, text[])'::regprocedure, 'NULL', NULL) As nn_with_border
 	FROM katrinas_rescaled 
 	limit 1;
 </programlisting>
@@ -6266,7 +6272,7 @@ SELECT ST_MapAlgebraFctNgb(rast, 1,  '8BUI', 2, 2, 'rast_avg(float[][], text, te
 							<imageobject>
 								<imagedata fileref="images/st_mapalgebrafctngb02.png" />
 							</imageobject>
-							<caption><para>new raster after averaging pixels withing 2x2 pixels of each other</para></caption>
+							<caption><para>new raster after averaging pixels withing 4x4 pixels of each other</para></caption>
 						</mediaobject>
 					</informalfigure></entry>
 				</row>
@@ -6279,7 +6285,7 @@ SELECT ST_MapAlgebraFctNgb(rast, 1,  '8BUI', 2, 2, 'rast_avg(float[][], text, te
 		  <refsection>
 			<title>See Also</title>
 		
-			<para><xref linkend="RT_ST_MapAlgebraFct" />, <xref linkend="RT_ST_Rescale" /></para>
+			<para><xref linkend="RT_ST_MapAlgebraFct" />, <xref linkend="RT_ST_MapAlgebraExpr" />, <xref linkend="RT_ST_Rescale" /></para>
 		  </refsection>
 		</refentry>
 		
