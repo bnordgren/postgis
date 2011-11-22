@@ -249,7 +249,7 @@ Datum RASTER_mapAlgebra2(PG_FUNCTION_ARGS);
 /* one-raster neighborhood MapAlgebra */
 Datum RASTER_mapAlgebraFctNgb(PG_FUNCTION_ARGS);
 
-/* Replace function taken from
+/* string replacement function taken from
  * http://ubuntuforums.org/showthread.php?s=aa6f015109fd7e4c7e30d2fd8b717497&t=141670&page=3
  */
 /* ---------------------------------------------------------------------------
@@ -2860,6 +2860,7 @@ Datum RASTER_mapAlgebraExpr(PG_FUNCTION_ARGS)
                     sprintf(strnewval, "%f", r);
 
                     if (initexpr != NULL) {
+												count = 0;
                         newexpr = replace(initexpr, "RAST", strnewval, &count);
 
                         POSTGIS_RT_DEBUGF(3, "RASTER_mapAlgebraExpr: (%dx%d), "
@@ -8468,11 +8469,13 @@ Datum RASTER_mapAlgebra2(PG_FUNCTION_ARGS)
 				if (!PG_ARGISNULL(exprpos[i])) {
 					expr = strtoupper(text_to_cstring(PG_GETARG_TEXT_P(exprpos[i])));
 					POSTGIS_RT_DEBUGF(3, "raw expr #%d: %s", i, expr);
+					len = 0;
 					expr = replace(expr, "RAST1", "$1", &len);
 					if (len) {
 						argcount[i]++;
 						argexists[i][0] = 1;
 					}
+					len = 0;
 					expr = replace(expr, "RAST2", (argexists[i][0] ? "$2" : "$1"), &len);
 					if (len) {
 						argcount[i]++;
@@ -8592,7 +8595,8 @@ Datum RASTER_mapAlgebra2(PG_FUNCTION_ARGS)
 			}
 			else
 				hasnodatanodataval = 0;
-		}	break;
+			break;
+		}
 		case REGPROCEDUREOID: {
 			POSTGIS_RT_DEBUG(3, "arg 4 is \"userfunction\"!");
 			if (!PG_ARGISNULL(4)) {
@@ -8642,7 +8646,8 @@ Datum RASTER_mapAlgebra2(PG_FUNCTION_ARGS)
 				 ufcnullcount++;
 				}
 			}
-		}	break;
+			break;
+		}
 		default:
 			elog(ERROR, "RASTER_mapAlgebra2: Invalid data type for expression or userfunction");
 			for (k = 0; k < set_count; k++) rt_raster_destroy(_rast[k]);
@@ -8673,7 +8678,13 @@ Datum RASTER_mapAlgebra2(PG_FUNCTION_ARGS)
 					_y = y - (int) _rastoffset[i][1];
 
 					/* get pixel value */
-					if (
+					if (_band[i] == NULL) {
+						if (!_hasnodata[i]) {
+							_haspixel[i] = 1;
+							_pixel[i] = _nodataval[i];
+						}
+					}
+					else if (
 						!_isempty[i] &&
 						(_x >= 0 && _x < _dim[i][0]) &&
 						(_y >= 0 && _y < _dim[i][1])
@@ -8692,6 +8703,7 @@ Datum RASTER_mapAlgebra2(PG_FUNCTION_ARGS)
 
 							PG_RETURN_NULL();
 						}
+
 						if (!_hasnodata[i] || FLT_NEQ(_nodataval[i], _pixel[i]))
 							_haspixel[i] = 1;
 					}
@@ -9517,7 +9529,7 @@ rt_pg_alloc(size_t size)
 {
     void * result;
 
-    POSTGIS_RT_DEBUGF(5, "rt_pgalloc(%ld) called", size);
+    POSTGIS_RT_DEBUGF(5, "rt_pgalloc(%ld) called", (long int) size);
 
     result = palloc(size);
 
@@ -9529,7 +9541,7 @@ rt_pg_realloc(void *mem, size_t size)
 {
     void * result;
 
-    POSTGIS_RT_DEBUGF(5, "rt_pg_realloc(%ld) called", size);
+    POSTGIS_RT_DEBUGF(5, "rt_pg_realloc(%ld) called", (long int) size);
 
     if (mem)
         result = repalloc(mem, size);
