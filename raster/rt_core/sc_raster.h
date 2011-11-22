@@ -33,8 +33,18 @@ sc_create_raster_nodata_wrapper(rt_raster raster, int owned,
 void
 sc_destroy_raster_nodata_wrapper(SPATIAL_COLLECTION *dead) ;
 
+SPATIAL_COLLECTION *
+sc_create_raster_aligned_collection(SPATIAL_COLLECTION *wrapped, rt_raster alignTo);
+
+void
+sc_destroy_raster_aligned_collection(SPATIAL_COLLECTION *dead);
+
+
 void
 fit_raster_to_extent(GBOX *extent, rt_raster raster) ;
+
+void
+sync_raster_bands_to_value(VALUE *val, rt_raster empty_raster);
 
 void
 sc_sampling_engine(SPATIAL_COLLECTION *source,
