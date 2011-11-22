@@ -775,7 +775,7 @@ struct raster_wrap_s {
  *               will free it when the wrapper is destroyed
  * @param bands  a list of the bands, in order, which should be returned
  *               from the evaluate method.
- * @param num_bands the length of bands
+ * @param num_bands the length of bands list
  */
 SPATIAL_COLLECTION *
 sc_create_raster_wrapper(rt_raster raster, int owned, int *bands, int num_bands)
@@ -1057,8 +1057,10 @@ sc_sampling_engine(SPATIAL_COLLECTION *source,
 		int nd_band ;
 
 		nodata_val = val_create(coll_bands) ;
-		rterror("sc_sampling_engine: cannot create NODATA vector and none specified") ;
-		if (nodata_val == NULL) return ;
+		if (nodata_val == NULL) {
+			rterror("sc_sampling_engine: cannot create NODATA vector and none specified") ;
+			return ;
+		}
 
 		/* initialize nodata vector to all zeros */
 		for (nd_band=0; nd_band < coll_bands; nd_band++) {

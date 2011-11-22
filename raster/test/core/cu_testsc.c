@@ -528,6 +528,69 @@ test_nodata_includes(void)
 }
 
 /*
+ * Tests to ensure that the sampling engine visits all the
+ * pixels (where there is no nodata function), and produces the
+ * correct result.
+ */
+void
+test_sampling_engine_alldata(void)
+{
+	rt_raster source ;
+	rt_raster result ;
+	SPATIAL_COLLECTION *source_collection ;
+	int i,j, band_k ; /* to loop over data */
+
+	/* 5x5 grid, 1x1 cell scale, 0,0 offset */
+	source = make_test_raster(5,5, 1,1, 0,0) ;
+	CU_ASSERT_PTR_NOT_NULL_FATAL(source) ;
+	add_test_raster_data(source, 2) ; /* add 2 bands of data */
+	source_collection = sc_create_raster_wrapper(source, 0, NULL, 0) ;
+
+	/* make the result raster same dimensions and size as the above. */
+	result = make_test_raster(5,5, 1,1, 0,0) ;
+	CU_ASSERT_PTR_NOT_NULL_FATAL(result) ;
+	CU_ASSERT_NOT_EQUAL(rt_raster_get_num_bands(source),
+			            rt_raster_get_num_bands(result)) ;
+
+	/* run the sampling engine.
+	 * this should copy all the bands and all the values to the result.
+	 */
+	sc_sampling_engine(source, result, NULL) ;
+
+	CU_ASSERT_EQUAL(rt_raster_get_num_bands(source),
+			        rt_raster_get_num_bands(result)) ;
+
+	for (band_k=0; band_k<rt_raster_get_num_bands(source);band_k++) {
+		rt_band source_band ;
+		rt_band result_band ;
+
+		/* get the band from the source */
+		source_band = rt_raster_get_band(source, band_k) ;
+		CU_ASSERT_PTR_NOT_NULL_FATAL(source_band) ;
+
+		/* get the (hopefully copied) band from the result*/
+		result_band = rt_raster_get_band(result, band_k) ;
+		CU_ASSERT_PTR_NOT_NULL_FATAL(result_band) ;
+		CU_ASSERT_NOT_EQUAL(source_band, result_band);
+
+
+		for (j=0; j<rt_raster_get_height(source); j++) {
+			for (i=0; i<rt_raster_get_width(source); i++) {
+				double source_val ;
+				double result_val ;
+
+				rt_band_get_pixel(source_band,i,j,&source_val) ;
+				rt_band_get_pixel(result_band,i,j,&result_val) ;
+				CU_ASSERT_EQUAL(source_val, result_val) ;
+			}
+		}
+	}
+
+	rt_raster_destroy(source) ;
+	rt_raster_destroy(result) ;
+}
+
+/*
 ** The suite initialization function.
 ** Create any re-used objects.
 */
@@ -555,6 +618,7 @@ CU_TestInfo raster_sc_tests[] =
 	PG_TEST(test_envelope_inclusion),
 	PG_TEST(test_nodata_includes),
 	PG_TEST(test_raster_bands_evaluator),
+	PG_TEST(test_sampling_engine_alldata),
 	CU_TEST_INFO_NULL
 };
 CU_SuiteInfo raster_sc_suite = {"Spatial Collection Test Suite (raster providers)",  init_raster_sc_suite,  clean_raster_sc_suite, raster_sc_tests};
