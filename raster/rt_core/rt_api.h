@@ -810,6 +810,60 @@ double rt_raster_get_x_skew(rt_raster raster);
  */
 double rt_raster_get_y_skew(rt_raster raster);
 
+
+/**
+ * Calculates the physically significant descriptors embodied in an
+ * arbitrary geotransform. Always succeeds unless one or more of the
+ * output pointers is set to NULL.
+ *
+ * @param xscale geotransform coefficient o_11
+ * @param xskew  geotransform coefficient o_12
+ * @param yskew  geotransform coefficient o_21
+ * @param yscale geotransform coefficient o_22
+ * @param i_mag size of a pixel along the transformed i axis
+ * @param j_mag size of a pixel along the transformed j axis
+ * @param theta_i angle by which the raster is rotated (radians positive clockwise)
+ * @param theta_ij angle from transformed i axis to transformed j axis
+ *                 (radians positive counterclockwise)
+ */
+void
+rt_raster_calc_phys_params(double xscale,
+		                   double xskew,
+		                   double yskew,
+		                   double yscale,
+		                   double *i_mag,
+		                   double *j_mag,
+		                   double *theta_i,
+		                   double *theta_ij) ;
+
+
+/**
+ * Calculates the coefficients of a geotransform given the physically
+ * significant parameters describing the transform. Will fail if any of the
+ * result pointers is NULL, or if theta_ij has an illegal value (0 or PI).
+ *
+ * @param i_mag size of a pixel along the transformed i axis
+ * @param j_mag size of a pixel along the transformed j axis
+ * @param theta_i angle by which the raster is rotated (radians positive clockwise)
+ * @param theta_ij angle from transformed i axis to transformed j axis
+ *                 (radians positive counterclockwise)
+ * @param xscale geotransform coefficient o_11
+ * @param xskew  geotransform coefficient o_12
+ * @param yskew  geotransform coefficient o_21
+ * @param yscale geotransform coefficient o_22
+ */
+void
+rt_raster_calc_gt_coeff(double i_mag,
+						double j_mag,
+						double theta_i,
+						double theta_ij,
+						double *xscale,
+						double *xskew,
+						double *yskew,
+						double *yscale) ;
+
+
+
 /**
  * Set raster's SRID
  *

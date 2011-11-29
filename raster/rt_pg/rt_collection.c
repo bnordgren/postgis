@@ -165,8 +165,8 @@ getarg_bandlist(FunctionCallInfo fcinfo, int argnum,
  * Creates a new, empty raster with the same rotation and scale
  * present in the grid_defn.
  *
- * @param extent the area which should be covered by the new raster
- *               (e.g., a box which should be inscribed in the raster)
+ * @param extent the area which should contain the new raster
+ *                (e.g., raster is inscribed in the box)
  * @param grid_defn a grid from which we take alignment information.
  * @returns a raster of the correct size, or null if an error.
  */
@@ -198,4 +198,63 @@ rt_raster_new_inbox(GBOX *extent, rt_pgraster *grid_defn)
 	return result ;
 }
 
+/**
+ * Creates a new, empty raster with the same rotation and scale
+ * present in the grid_defn. The extent is circumscribed inside the
+ * raster.
+ *
+ * @param extent the area which should be contained within the new raster
+ *                (e.g., extent is inscribed in the raster)
+ * @param grid_defn a grid from which we take alignment information.
+ * @returns a raster of the correct size, or null if an error.
+ */
+rt_raster
+rt_raster_new_aroundbox(GBOX *extent, rt_pgraster *grid_defn)
+{
+	uint16_t res_width, res_height ;
+	double extent_width, extent_height ;
+	double imag, jmag, theta_i, theta_ij ;
+	double cos_theta ; /* cosine of the rotation */
+	double cos_pi2_minus_theta ; /* cosine of the "other" triangle angle */
+	double raster_width, raster_height ;
+	rt_raster result ;
+
+	if (extent == NULL || grid_defn == NULL) return NULL ;
+
+	/* width and height of the extent */
+	extent_width = extent->xmax - extent->xmin ;
+	extent_height = extent->ymax - extent->ymin ;
+
+	/* determine rotation of the "grid_defn" */
+	rt_raster_calc_phys_params(grid_defn->scaleX, grid_defn->skewX,
+			grid_defn->skewY, grid_defn->scaleY,
+			&imag, &jmag, &theta_i, &theta_ij) ;
+	cos_theta = cos(theta_i) ;
+	cos_pi2_minus_theta = cos(M_PI_2 - theta_i) ; /* cos(pi/2 - theta_i) */
+
+	/* width and height of the rotated raster */
+	raster_width = extent_width * cos_theta +
+			       extent_height * cos_pi2_minus_theta ;
+	raster_height = extent_height * cos_theta +
+			        extent_width * cos_pi2_minus_theta ;
+
+	/* calculate the number of pixels */
+	res_width = (int)(raster_width / imag) ;
+	res_height = (int)(raster_height / jmag) ;
+
+	/* make an empty raster to store the result */
+	result = rt_raster_new(res_width, res_height) ;
+
+	/* copy srid and geo transform (except for offsets) */
+	rt_raster_set_srid(result, grid_defn->srid) ;
+	rt_raster_set_scale(result, grid_defn->scaleX, grid_defn->scaleY) ;
+	rt_raster_set_skews(result, grid_defn->skewX, grid_defn->skewY) ;
+
+	/* compute new offsets because raster may be rotated
+	 * w.r.t. the extent.
+	 */
+	//fit_raster_to_extent(extent, result) ;
+
+	return result ;
+}
 

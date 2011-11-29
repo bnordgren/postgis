@@ -44,6 +44,7 @@ TESTS = testapi testwkb
 
 CU_OBJS = \
 	cu_testsc.o \
+	cu_geotransform.o \
 	cu_tester.o
 
 # If we couldn't find the cunit library then display a helpful message
