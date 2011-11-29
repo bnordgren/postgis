@@ -173,6 +173,7 @@ Datum RASTER_getYUpperLeft(PG_FUNCTION_ARGS);
 Datum RASTER_getPixelWidth(PG_FUNCTION_ARGS);
 Datum RASTER_getPixelHeight(PG_FUNCTION_ARGS);
 Datum RASTER_getRotation(PG_FUNCTION_ARGS);
+Datum RASTER_getGeotransform(PG_FUNCTION_ARGS) ;
 
 /* Set all the properties of a raster */
 Datum RASTER_setSRID(PG_FUNCTION_ARGS);
@@ -182,6 +183,7 @@ Datum RASTER_setSkew(PG_FUNCTION_ARGS);
 Datum RASTER_setSkewXY(PG_FUNCTION_ARGS);
 Datum RASTER_setUpperLeftXY(PG_FUNCTION_ARGS);
 Datum RASTER_setRotation(PG_FUNCTION_ARGS);
+Datum RASTER_setGeotransform(PG_FUNCTION_ARGS) ;
 
 /* Get all the properties of a raster band */
 Datum RASTER_getBandPixelType(PG_FUNCTION_ARGS);
@@ -1486,6 +1488,74 @@ Datum RASTER_getPixelHeight(PG_FUNCTION_ARGS)
     rt_raster_destroy(raster);
 
     PG_RETURN_FLOAT8(pheight);
+}
+
+/**
+ * Set the geotransform of the supplied raster. Returns the raster.
+ */
+PG_FUNCTION_INFO_V1(RASTER_setTransform);
+Datum RASTER_setGeotransform(PG_FUNCTION_ARGS)
+{
+	rt_pgraster *rast ;
+	double imag, jmag, theta_i, theta_ij ;
+	double o11, o12, o21, o22 ;
+	int success ;
+
+    if (PG_ARGISNULL(0) || PG_ARGISNULL(1) || PG_ARGISNULL(2) ||
+    		PG_ARGISNULL(3) || PG_ARGISNULL(4))
+    	PG_RETURN_NULL();
+
+    /* get the inputs */
+    rast = (rt_pgraster *)PG_DETOAST_DATUM_SLICE(PG_GETARG_DATUM(0),
+    		                     0, sizeof(struct rt_raster_serialized_t));
+    imag = PG_GETARG_FLOAT8(1) ;
+    jmag = PG_GETARG_FLOAT8(2) ;
+    theta_i = PG_GETARG_FLOAT8(3) * M_PI / 180.0;  /* deg->radians */
+    theta_ij = PG_GETARG_FLOAT8(4) * M_PI / 180.0; /* deg->radians */
+
+    /* calculate the coefficients */
+    success = rt_raster_calc_gt_coeff(imag,jmag,theta_i,theta_ij,
+    		     &o11, &o12, &o21, &o22) ;
+
+    /* store the result */
+    if (success) {
+    	rast->scaleX = o11 ;
+    	rast->skewX  = o12 ;
+    	rast->skewY  = o21 ;
+    	rast->scaleY = o22 ;
+    }
+
+    /* return (to make sure it's saved) */
+    SET_VARSIZE(rast, rast->size);
+    PG_RETURN_POINTER(rast) ;
+}
+
+/**
+ * Calculates the physically relevant parameters of the supplied raster's
+ * geotransform. Returns them as a set.
+ */
+PG_FUNCTION_INFO_V1(RASTER_getGeotransform);
+Datum RASTER_getGeotransform(PG_FUNCTION_ARGS)
+{
+	rt_pgraster *rast ;
+	double imag, jmag, theta_i, theta_ij ;
+
+	/* get argument */
+    if (PG_ARGISNULL(0)) PG_RETURN_NULL();
+    rast = (rt_pgraster *)PG_DETOAST_DATUM_SLICE(PG_GETARG_DATUM(0),
+    		0, sizeof(struct rt_raster_serialized_t));
+
+    /* do the calculation */
+    rt_raster_calc_phys_params(rast->scaleX, rast->skewX,
+    		rast->skewY, rast->scaleY,
+    		&imag, &jmag, &theta_i, &theta_ij) ;
+
+    /* convert to degrees */
+    theta_i = theta_i * 180. / M_PI ;
+    theta_ij = theta_ij * 180. / M_PI ;
+
+    /* TODO: figure out how to return a tuple */
+    PG_RETURN_NULL() ;
 }
 
 /**

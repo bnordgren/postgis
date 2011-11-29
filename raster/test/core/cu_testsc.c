@@ -229,8 +229,16 @@ void test_raster_aligned_collection(void)
 
 	tester = create_testset_sc() ;
 	CU_ASSERT_PTR_NOT_NULL_FATAL(tester) ;
+	CU_ASSERT_PTR_NOT_NULL_FATAL(tester->evaluator) ;
+	CU_ASSERT_PTR_NOT_NULL_FATAL(tester->evaluator->result) ;
+
 	aligned = sc_create_raster_aligned_collection(tester, grid_definition) ;
 	CU_ASSERT_PTR_NOT_NULL_FATAL(aligned) ;
+	CU_ASSERT_PTR_NOT_NULL_FATAL(aligned->evaluator) ;
+	CU_ASSERT_PTR_NOT_NULL_FATAL(aligned->evaluator->result) ;
+
+	CU_ASSERT_EQUAL(aligned->evaluator->result->length,
+			        tester->evaluator->result->length) ;
 
 	/* test point should initially be null */
 	test_point = testset_includes_getpoint(tester->inclusion) ;
@@ -528,6 +536,147 @@ test_nodata_includes(void)
 }
 
 /*
+ * Tests that the evaluator of a raster aligned collection contains
+ * the correct number of bands...
+ */
+void
+test_raster_aligned_collection_bands(void)
+{
+	rt_raster source ;
+	rt_raster result ;
+	SPATIAL_COLLECTION *source_collection ;
+	SPATIAL_COLLECTION *aligned ;
+
+	/* 5x5 grid, 1x1 cell scale, 0,0 offset */
+	source = make_test_raster(5,5, 1,1, 0,0) ;
+	CU_ASSERT_PTR_NOT_NULL_FATAL(source) ;
+	add_test_raster_data(source, 2) ; /* add 2 bands of data */
+	source_collection = sc_create_raster_wrapper(source, 0, NULL, 0) ;
+
+	/* verify that collection has same number of bands as raster */
+	CU_ASSERT_PTR_NOT_NULL_FATAL(source_collection);
+	CU_ASSERT_PTR_NOT_NULL_FATAL(source_collection->evaluator);
+	CU_ASSERT_PTR_NOT_NULL_FATAL(source_collection->evaluator->result);
+	CU_ASSERT_EQUAL(source_collection->evaluator->result->length,
+			        rt_raster_get_num_bands(source)) ;
+
+	/* make the result raster same dimensions and size as the above. */
+	result = make_test_raster(5,5, 1,1, 0,0) ;
+	CU_ASSERT_PTR_NOT_NULL_FATAL(result) ;
+	CU_ASSERT_NOT_EQUAL(rt_raster_get_num_bands(source),
+			            rt_raster_get_num_bands(result)) ;
+
+
+	/* align the source collection to "result" (which is the same) */
+	aligned = sc_create_raster_aligned_collection(source_collection, result) ;
+	CU_ASSERT_PTR_NOT_NULL_FATAL(aligned) ;
+	CU_ASSERT_PTR_NOT_NULL_FATAL(aligned->evaluator) ;
+	CU_ASSERT_PTR_NOT_NULL_FATAL(aligned->evaluator->result) ;
+	CU_ASSERT_EQUAL(aligned->evaluator->result->length,
+			        rt_raster_get_num_bands(source)) ;
+
+	sc_destroy_raster_aligned_collection(aligned) ;
+	rt_raster_destroy(result) ;
+	rt_raster_destroy(source) ;
+}
+
+/*
+ * tests that an empty raster is synchronized correctly to contain the
+ * number of bands in a "value" data type.
+ */
+void
+test_sync_raster_to_value(void)
+{
+	rt_raster source ;
+	VALUE *sync_to_me;
+
+	/* 5x5 grid, 1x1 cell scale, 0,0 offset */
+	source = make_test_raster(5,5, 1,1, 0,0) ;
+	CU_ASSERT_PTR_NOT_NULL_FATAL(source) ;
+
+	sync_to_me = val_create(3) ;
+	CU_ASSERT_PTR_NOT_NULL_FATAL(source) ;
+
+	CU_ASSERT_EQUAL(sync_to_me->length, 3) ;
+	CU_ASSERT_EQUAL(rt_raster_get_num_bands(source), 0) ;
+
+	sync_raster_bands_to_value(sync_to_me, source) ;
+	CU_ASSERT_EQUAL(sync_to_me->length,
+			rt_raster_get_num_bands(source)) ;
+
+	val_destroy(sync_to_me) ;
+	rt_raster_destroy(source) ;
+}
+
+/*
+ * Tests to ensure that the sampling engine visits all the
+ * pixels (where there is no nodata function), and produces the
+ * correct result.
+ */
+void
+test_sampling_engine_alldata(void)
+{
+	rt_raster source ;
+	rt_raster result ;
+	SPATIAL_COLLECTION *source_collection ;
+	int bands_before ;
+	int i,j, band_k ; /* to loop over data */
+
+	/* 5x5 grid, 1x1 cell scale, 0,0 offset */
+	source = make_test_raster(5,5, 1,1, 0,0) ;
+	CU_ASSERT_PTR_NOT_NULL_FATAL(source) ;
+	add_test_raster_data(source, 2) ; /* add 2 bands of data */
+	source_collection = sc_create_raster_wrapper(source, 0, NULL, 0) ;
+
+	/* make the result raster same dimensions and size as the above. */
+	result = make_test_raster(5,5, 1,1, 0,0) ;
+	CU_ASSERT_PTR_NOT_NULL_FATAL(result) ;
+	CU_ASSERT_NOT_EQUAL(rt_raster_get_num_bands(source),
+			            rt_raster_get_num_bands(result)) ;
+
+	bands_before = rt_raster_get_num_bands(result) ;
+
+	/* run the sampling engine.
+	 * this should copy all the bands and all the values to the result.
+	 */
+	sc_sampling_engine(source_collection, result, NULL) ;
+
+	CU_ASSERT_NOT_EQUAL(rt_raster_get_num_bands(result), bands_before) ;
+	CU_ASSERT_EQUAL(rt_raster_get_num_bands(source),
+			        rt_raster_get_num_bands(result)) ;
+
+
+	for (band_k=0; band_k<rt_raster_get_num_bands(source);band_k++) {
+		rt_band source_band ;
+		rt_band result_band ;
+
+		/* get the band from the source */
+		source_band = rt_raster_get_band(source, band_k) ;
+		CU_ASSERT_PTR_NOT_NULL_FATAL(source_band) ;
+
+		/* get the (hopefully copied) band from the result*/
+		result_band = rt_raster_get_band(result, band_k) ;
+		CU_ASSERT_PTR_NOT_NULL_FATAL(result_band) ;
+		CU_ASSERT_NOT_EQUAL(source_band, result_band);
+
+
+		for (j=0; j<rt_raster_get_height(source); j++) {
+			for (i=0; i<rt_raster_get_width(source); i++) {
+				double source_val ;
+				double result_val ;
+
+				rt_band_get_pixel(source_band,i,j,&source_val) ;
+				rt_band_get_pixel(result_band,i,j,&result_val) ;
+				CU_ASSERT_EQUAL(source_val, result_val) ;
+			}
+		}
+	}
+
+	rt_raster_destroy(source) ;
+	rt_raster_destroy(result) ;
+}
+
+/*
 ** The suite initialization function.
 ** Create any re-used objects.
 */
@@ -552,9 +701,12 @@ static int clean_raster_sc_suite(void)
 CU_TestInfo raster_sc_tests[] =
 {
 	PG_TEST(test_raster_aligned_collection),
+	PG_TEST(test_raster_aligned_collection_bands),
 	PG_TEST(test_envelope_inclusion),
 	PG_TEST(test_nodata_includes),
 	PG_TEST(test_raster_bands_evaluator),
+	PG_TEST(test_sync_raster_to_value),
+	PG_TEST(test_sampling_engine_alldata),
 	CU_TEST_INFO_NULL
 };
 CU_SuiteInfo raster_sc_suite = {"Spatial Collection Test Suite (raster providers)",  init_raster_sc_suite,  clean_raster_sc_suite, raster_sc_tests};

@@ -775,7 +775,7 @@ struct raster_wrap_s {
  *               will free it when the wrapper is destroyed
  * @param bands  a list of the bands, in order, which should be returned
  *               from the evaluate method.
- * @param num_bands the length of bands
+ * @param num_bands the length of bands list
  */
 SPATIAL_COLLECTION *
 sc_create_raster_wrapper(rt_raster raster, int owned, int *bands, int num_bands)
@@ -991,6 +991,64 @@ sc_destroy_raster_aligned_collection(SPATIAL_COLLECTION *dead)
 
 /** @} */ /* end of documentation group spatial_collection_i */
 
+
+/**
+ * Initializes an empty raster such that it holds the same number of bands
+ * as the length of the provided value vector. (e.g., if the value is a
+ * vector of length 3, the raster will have three bands when this function
+ * terminates.) The provided raster must be empty (have no bands), or else
+ * this function will return without modifying the raster at all.
+ *
+ * For now, all of the added bands are 64 bit floating point. This is
+ * due to the fact that the VALUE data type does not keep track of what the
+ * data is "supposed" to represent. If the VALUE type is modified in the future,
+ * this function should respect the intended band types.
+ */
+void
+sync_raster_bands_to_value(VALUE *val, rt_raster empty_raster)
+{
+	int band ;
+	int width ;
+	int height ;
+	int coll_bands ;
+
+	if (val==NULL || empty_raster==NULL) return ;
+	if (rt_raster_get_num_bands(empty_raster) != 0) return ;
+
+	width = rt_raster_get_width(empty_raster) ;
+	height = rt_raster_get_height(empty_raster) ;
+	coll_bands = val->length ;
+
+	for (band=0; band < coll_bands; band++) {
+		uint8_t *band_data ;
+		rt_band empty ;
+		int     pix_size ;
+		rt_pixtype band_type ;
+
+		/* note: need to make VALUE keep track of datatype */
+		band_type = PT_64BF ;
+		pix_size = rt_pixtype_size(band_type) ;
+		band_data = rtalloc(pix_size * width * height) ;
+		if (band_data == NULL) {
+			rterror("sc_sampling_engine: cannot allocate memory for band") ;
+
+			/* free up successfully allocated bands */
+			band -- ;
+			while (band >= 0) {
+				empty = rt_raster_get_band(empty_raster, band) ;
+				band_data = (uint8_t *)rt_band_get_data(empty);
+				rt_band_destroy(empty) ;
+				band -- ;
+			}
+			return ;
+		}
+
+		/* make the new band and add it to the raster. */
+		empty = rt_band_new_inline(width, height, band_type, 0, 0.0, band_data);
+		rt_raster_add_band(empty_raster, empty, band) ;
+	}
+}
+
 /**
  * Samples a #SPATIAL_COLLECTION at each grid cell in the provided
  * raster. The raster must have a grid definition but if it lacks bands,
@@ -1057,8 +1115,10 @@ sc_sampling_engine(SPATIAL_COLLECTION *source,
 		int nd_band ;
 
 		nodata_val = val_create(coll_bands) ;
-		rterror("sc_sampling_engine: cannot create NODATA vector and none specified") ;
-		if (nodata_val == NULL) return ;
+		if (nodata_val == NULL) {
+			rterror("sc_sampling_engine: cannot create NODATA vector and none specified") ;
+			return ;
+		}
 
 		/* initialize nodata vector to all zeros */
 		for (nd_band=0; nd_band < coll_bands; nd_band++) {
@@ -1068,35 +1128,7 @@ sc_sampling_engine(SPATIAL_COLLECTION *source,
 
 	/* maybe we have to add the bands ourselves */
 	if (raster_bands == 0) {
-		int band ;
-		for (band=0; band < coll_bands; band++) {
-			uint8_t *band_data ;
-			rt_band empty ;
-			int     pix_size ;
-			rt_pixtype band_type ;
-
-			/* note: need to make VALUE keep track of datatype */
-			band_type = PT_64BF ;
-			pix_size = rt_pixtype_size(band_type) ;
-			band_data = rtalloc(pix_size * width * height) ;
-			if (band_data == NULL) {
-				rterror("sc_sampling_engine: cannot allocate memory for band") ;
-
-				/* free up successfully allocated bands */
-				band -- ;
-				while (band >= 0) {
-					empty = rt_raster_get_band(result, band) ;
-					band_data = (uint8_t *)rt_band_get_data(empty);
-					rt_band_destroy(empty) ;
-					band -- ;
-				}
-				return ;
-			}
-
-			/* make the new band and add it to the raster. */
-			empty = rt_band_new_inline(width, height, band_type, 0, 0.0, band_data);
-			rt_raster_add_band(result, empty, band) ;
-		}
+		sync_raster_bands_to_value(collection_val, result) ;
 	}
 
 	/* now sample the raster */
