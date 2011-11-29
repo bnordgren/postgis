@@ -175,6 +175,65 @@ test_skew(void)
 
 }
 
+void
+test_raster_scale(void)
+{
+	rt_raster rast ;
+	double imag, jmag, theta_i, theta_ij ;
+
+	/* make the raster */
+	rast = rt_raster_new(20,20) ;
+	CU_ASSERT_PTR_NOT_NULL_FATAL(rast) ;
+
+	/* first calculate the coefficients */
+	rt_raster_set_phys_params(rast, 10, 20, 0, M_PI_2) ;
+	CU_ASSERT_DOUBLE_EQUAL(rt_raster_get_x_scale(rast), 10.0, 1e-6) ;
+	CU_ASSERT_DOUBLE_EQUAL(rt_raster_get_x_skew(rast), 0.0, 1e-6) ;
+	CU_ASSERT_DOUBLE_EQUAL(rt_raster_get_y_skew(rast), 0.0, 1e-6) ;
+	CU_ASSERT_DOUBLE_EQUAL(rt_raster_get_y_scale(rast), 20.0, 1e-6) ;
+
+	/* then calculate the physically significant parameters. */
+	rt_raster_get_phys_params(rast, &imag, &jmag, &theta_i, &theta_ij) ;
+	CU_ASSERT_DOUBLE_EQUAL(imag, 10, 1e-6) ;
+	CU_ASSERT_DOUBLE_EQUAL(jmag, 20, 1e-6) ;
+	CU_ASSERT_DOUBLE_EQUAL(theta_i, 0.0, 1e-6) ;
+	CU_ASSERT_DOUBLE_EQUAL(theta_ij, M_PI_2, 1e-6) ;
+
+	rt_raster_destroy(rast) ;
+}
+
+void
+test_raster_skew(void)
+{
+	rt_raster rast ;
+	double imag, jmag, theta_i, theta_ij ;
+	double k_i, s_j ;
+
+	/* precalculate terms */
+	k_i = tan(M_PI_4) ;
+	s_j = 1./sqrt(k_i*k_i + 1) ;
+
+	/* make the raster */
+	rast = rt_raster_new(10,10) ;
+	CU_ASSERT_PTR_NOT_NULL_FATAL(rast) ;
+
+	/* first calculate the coefficients */
+	rt_raster_set_phys_params(rast, 1,1,0,M_PI_4) ;
+	CU_ASSERT_DOUBLE_EQUAL(rt_raster_get_x_scale(rast), 1, 1e-6) ;
+	CU_ASSERT_DOUBLE_EQUAL(rt_raster_get_x_skew(rast), k_i*s_j, 1e-6) ;
+	CU_ASSERT_DOUBLE_EQUAL(rt_raster_get_y_skew(rast), 0.0, 1e-6) ;
+	CU_ASSERT_DOUBLE_EQUAL(rt_raster_get_y_scale(rast), s_j, 1e-6) ;
+
+	/* then calculate the physically significant parameters. */
+	rt_raster_get_phys_params(rast, &imag, &jmag, &theta_i, &theta_ij) ;
+	CU_ASSERT_DOUBLE_EQUAL(imag, 1, 1e-6) ;
+	CU_ASSERT_DOUBLE_EQUAL(jmag, 1, 1e-6) ;
+	CU_ASSERT_DOUBLE_EQUAL(theta_i, 0.0, 1e-6) ;
+	CU_ASSERT_DOUBLE_EQUAL(theta_ij, M_PI_4, 1e-6) ;
+
+	rt_raster_destroy(rast);
+}
+
 /*
 ** The suite initialization function.
 ** Create any re-used objects.
@@ -206,6 +265,8 @@ CU_TestInfo raster_gt_tests[] =
 	PG_TEST(test_scaled),
 	PG_TEST(test_scaled_flipped),
 	PG_TEST(test_skew),
+	PG_TEST(test_raster_scale),
+	PG_TEST(test_raster_skew),
 	CU_TEST_INFO_NULL
 };
 CU_SuiteInfo raster_gt_suite = {"Raster Test Suite (geotransform calculations)",

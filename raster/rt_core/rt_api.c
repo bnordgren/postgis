@@ -3834,6 +3834,24 @@ rt_raster_get_y_offset(rt_raster raster) {
     return raster->ipY;
 }
 
+void
+rt_raster_get_phys_params(rt_raster rast,
+		double *i_mag, double *j_mag, double *theta_i, double *theta_ij)
+{
+	double o11, o12, o21, o22 ; /* geotransform coefficients */
+
+	if (rast == NULL) return ;
+	if ( (i_mag==NULL) || (j_mag==NULL) || (theta_i==NULL) || (theta_ij==NULL))
+		return ;
+
+	/* retrieve coefficients from raster */
+	o11 = rt_raster_get_x_scale(rast) ;
+	o12 = rt_raster_get_x_skew(rast) ;
+	o21 = rt_raster_get_y_skew(rast) ;
+	o22 = rt_raster_get_y_scale(rast) ;
+
+	rt_raster_calc_phys_params(o11, o12, o21, o22, i_mag, j_mag, theta_i, theta_ij);
+}
 
 void
 rt_raster_calc_phys_params(double xscale, double xskew, double yskew, double yscale,
@@ -3883,6 +3901,23 @@ rt_raster_calc_phys_params(double xscale, double xskew, double yskew, double ysc
 }
 
 void
+rt_raster_set_phys_params(rt_raster rast,double i_mag, double j_mag, double theta_i, double theta_ij)
+{
+	double o11, o12, o21, o22 ; /* calculated geotransform coefficients */
+	int success ;
+
+	if (rast == NULL) return ;
+
+	success = rt_raster_calc_gt_coeff(i_mag, j_mag, theta_i, theta_ij,
+			                &o11, &o12, &o21, &o22) ;
+
+	if (success) {
+		rt_raster_set_scale(rast, o11, o22) ;
+		rt_raster_set_skews(rast, o12, o21) ;
+	}
+}
+
+int
 rt_raster_calc_gt_coeff(double i_mag, double j_mag, double theta_i, double theta_ij,
 						double *xscale, double *xskew, double *yskew, double *yscale)
 {
@@ -3892,11 +3927,11 @@ rt_raster_calc_gt_coeff(double i_mag, double j_mag, double theta_i, double theta
 	double cos_theta_i, sin_theta_i ;
 
 	if ( (xscale==NULL) || (xskew==NULL) || (yskew==NULL) || (yscale==NULL)) {
-		return ;
+		return 0;
 	}
 
 	if ( (theta_ij == 0.0) || (theta_ij == M_PI)) {
-		return ;
+		return 0;
 	}
 
 	/* Reflection across the i axis */
@@ -3921,6 +3956,7 @@ rt_raster_calc_gt_coeff(double i_mag, double j_mag, double theta_i, double theta
 	*xskew  = k_i * s_j * f * cos_theta_i + s_j * f * sin_theta_i ;
 	*yskew  = -s_i * sin_theta_i ;
 	*yscale = -k_i * s_j * f * sin_theta_i + s_j * f * cos_theta_i ;
+	return 1;
 }
 
 
