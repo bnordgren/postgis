@@ -248,6 +248,12 @@ tar -xvzf postgis-&last_release_version;.tar.gz</programlisting>
 		In many cases compilation is only necessary if you want the most
 		bleeding edge versions or you are a package maintainer.
 	  </para>
+	  <para>This section includes general compilation instructions, if you are compiling for Windows etc
+	  	or another OS, you may find additional more detailed help at <ulink url="http://trac.osgeo.org/postgis/wiki/DevWikiMain">PostGIS Dev Wiki</ulink>
+	  	in the Compilation and Installation Guides section</para>
+	  <para>If you are a windows user, you can get stable builds via Stackbuilder or <ulink url="http://www.postgis.org/download/windows/">PostGIS Windows download site</ulink>
+	  We also have <ulink url="http://www.postgis.org/download/windows/experimental.php">very bleeding-edge windows experimental builds</ulink> that are built usually once or twice a week or whenever anything exciting happens.  You can
+	  use these to experiment with the in progress releases of PostGIS</para>
 	</note>
 
 	<para>
@@ -382,6 +388,23 @@ tar -xvzf postgis-&last_release_version;.tar.gz</programlisting>
 		  </listitem>
 		</varlistentry>
 		
+		<varlistentry>
+		  <term><command>--with-xml2config=FILE</command></term>
+		  <listitem>
+			<para>
+			  LibXML is the library required for doing GeomFromKML/GML processes.
+			  It normally is found if you have libxml installed, but if not or you want
+			  a specific version used, you'll need to point PostGIS at a specific 
+			  <filename>xml2-config</filename> confi file to enable software installations to
+			  locate the LibXML installation directory. Use this parameter
+			  (<command>>--with-xml2config=/path/to/xml2-config</command>) to
+			  manually specify a particular LibXML installation that PostGIS will
+			  build against.
+			</para>
+		  </listitem>
+		</varlistentry>
+		 
+		
 
 		<varlistentry>
 		  <term><command>--with-projdir=DIR</command></term>
@@ -394,6 +417,19 @@ tar -xvzf postgis-&last_release_version;.tar.gz</programlisting>
 			</para>
 		  </listitem>
 		</varlistentry>
+		
+		<varlistentry>
+		  <term><command>--with-jsondir=DIR</command></term>
+		  <listitem>
+			<para>
+			  <ulink url="http://oss.metaparadigm.com/json-c/">JSON-C</ulink> is an MIT-licensed JSON library required by PostGIS ST_GeomFromJSON support. Use this
+			  parameter (<command>--with-jsondir=/path/to/jsondir</command>) to
+			  manually specify a particular JSON-C installation directory that
+			  PostGIS will build against.
+			</para>
+		  </listitem>
+		</varlistentry>
+
 		<varlistentry>
 		  <term><command>--with-gui</command></term>
 		  <listitem>

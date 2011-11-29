@@ -1,6 +1,21 @@
 PostGIS 2.0.0
-2011/MM/DD
-
+2012/02/DD
+ * Testers our unsung heroes *
+ 	We are most indebted to the numerous members in the PostGIS community 
+ 	who were brave enough to test out the new features in this release.  
+ 	No major release can be successful without these folk. 
+ 	Below are those who have been most valiant, provided very detailed
+ 	and thorough bug reports,
+ 	and detailed analysis.
+    Andrea Peri - Lots of testing on topology and checking for correctness
+   Brian Hamlin - Benchmarking 
+   	(also experimental experimental branches 
+   		before they are folded into core)
+   	, general testing of various pieces 
+   including Tiger and Topology. Testing on various server VMs
+   Andreas Forø Tollefsen, Tom van Tilburg - raster testing
+   Mike Pease -  Tiger geocoder testing - very detailed reports of issues
+   
   * Important / Breaking Changes *
 
   - #722, #302 Most deprecated functions removed (over 250 functions) 
@@ -61,6 +76,7 @@ PostGIS 2.0.0
   - ST_Relate with boundary node rule (Sandro Santilli / Faunalia for RT-SIGTA)
   - ST_AsX3D (Regina Obe / Arrival 3D)
   - ST_OffsetCurve (Sandro Santilli, Rafal Magda)
+  - ST_GeomFromGeoJSON (Kashif Rasul, Paul Ramsey / Vizzuality)
 
  * Enhancements *
 
@@ -84,7 +100,7 @@ PostGIS 2.0.0
     (Regina Obe, Leo Hsu / Paragon Corporation / 
     funding provided by Hunter Systems Group)
   - Overall Documentation proofreading and corrections. (Kasif Rasul)
-
+  
 PostGIS 1.5.3
 2011/06/25
 
