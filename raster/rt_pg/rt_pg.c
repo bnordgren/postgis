@@ -1499,38 +1499,41 @@ Datum RASTER_getPixelHeight(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(RASTER_setTransform);
 Datum RASTER_setGeotransform(PG_FUNCTION_ARGS)
 {
-	rt_pgraster *rast ;
-	double imag, jmag, theta_i, theta_ij ;
-	double o11, o12, o21, o22 ;
-	int success ;
+	rt_pgraster *pgraster ;
+	rt_raster raster ;
+	float8 imag, jmag, theta_i, theta_ij ;
 
     if (PG_ARGISNULL(0) || PG_ARGISNULL(1) || PG_ARGISNULL(2) ||
     		PG_ARGISNULL(3) || PG_ARGISNULL(4))
     	PG_RETURN_NULL();
 
     /* get the inputs */
-    rast = (rt_pgraster *)PG_DETOAST_DATUM_SLICE(PG_GETARG_DATUM(0),
+    pgraster = (rt_pgraster *)PG_DETOAST_DATUM_SLICE(PG_GETARG_DATUM(0),
     		                     0, sizeof(struct rt_raster_serialized_t));
     imag = PG_GETARG_FLOAT8(1) ;
     jmag = PG_GETARG_FLOAT8(2) ;
     theta_i = PG_GETARG_FLOAT8(3) * M_PI / 180.0;  /* deg->radians */
     theta_ij = PG_GETARG_FLOAT8(4) * M_PI / 180.0; /* deg->radians */
 
-    /* calculate the coefficients */
-    success = rt_raster_calc_gt_coeff(imag,jmag,theta_i,theta_ij,
-    		     &o11, &o12, &o21, &o22) ;
-
-    /* store the result */
-    if (success) {
-    	rast->scaleX = o11 ;
-    	rast->skewX  = o12 ;
-    	rast->skewY  = o21 ;
-    	rast->scaleY = o22 ;
+    raster = rt_raster_deserialize(pgraster, TRUE);
+    if (!raster) {
+        elog(ERROR, "RASTER_getRotation: Could not deserialize raster");
+        PG_RETURN_NULL();
     }
 
-    /* return (to make sure it's saved) */
-    SET_VARSIZE(rast, rast->size);
-    PG_RETURN_POINTER(rast) ;
+
+    /* store the new geotransform */
+    rt_raster_set_phys_params(raster, imag,jmag,theta_i,theta_ij) ;
+
+    /* prep the return value */
+    pgraster = rt_raster_serialize(raster);
+    if ( ! pgraster ) PG_RETURN_NULL();
+
+    SET_VARSIZE(pgraster, pgraster->size);
+
+    rt_raster_destroy(raster);
+
+    PG_RETURN_POINTER(pgraster);
 }
 
 /**
@@ -1541,7 +1544,21 @@ PG_FUNCTION_INFO_V1(RASTER_getGeotransform);
 Datum RASTER_getGeotransform(PG_FUNCTION_ARGS)
 {
 	rt_pgraster *rast ;
-	double imag, jmag, theta_i, theta_ij ;
+	float8 imag, jmag, theta_i, theta_ij ;
+	TupleDesc result_tuple ; /* for returning a composite */
+	HeapTuple heap_tuple ;   /* instance of the tuple to return */
+	Oid result_oid ;   /* internal code for the specific return type */
+	TypeFuncClass return_type ; /* is the return type a composite? */
+	Datum return_values[4] ;
+
+	/* setup the return value infrastructure */
+	return_type = get_call_result_type(fcinfo, &result_oid, &result_tuple) ;
+	if (return_type != TYPEFUNC_COMPOSITE) {
+		rterror("RASTER_getGeotransform(): function returning record called in context that cannot accept type record") ;
+		PG_RETURN_NULL() ;
+	}
+	result_tuple = BlessTupleDesc(result_tuple) ;
+
 
 	/* get argument */
     if (PG_ARGISNULL(0)) PG_RETURN_NULL();
@@ -1557,8 +1574,16 @@ Datum RASTER_getGeotransform(PG_FUNCTION_ARGS)
     theta_i = theta_i * 180. / M_PI ;
     theta_ij = theta_ij * 180. / M_PI ;
 
-    /* TODO: figure out how to return a tuple */
-    PG_RETURN_NULL() ;
+    /* prep the composite return value */
+    /* construct datum array */
+    return_values[0] = Float8GetDatum(imag) ;
+    return_values[1] = Float8GetDatum(jmag) ;
+    return_values[2] = Float8GetDatum(theta_i) ;
+    return_values[3] = Float8GetDatum(theta_ij) ;
+    /* stick em on the heap */
+    heap_tuple = heap_form_tuple(result_tuple, return_values, FALSE) ;
+    /* return */
+    PG_RETURN_DATUM(HeapTupleGetDatum(heap_tuple)) ;
 }
 
 /**

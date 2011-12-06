@@ -5213,6 +5213,36 @@ CREATE OR REPLACE FUNCTION DropRasterTable(table_name varchar)
 -------------------------------------------------------------------
 --  END
 -------------------------------------------------------------------
+-----------------------------------------------------------------------
+-- Raster Geotransform
+-----------------------------------------------------------------------
+
+DROP TYPE IF EXISTS geotransform ;
+CREATE TYPE geotransform AS
+    (imag float8, jmag float8, theta_i float8, theta_ij float8) ;
+
+CREATE OR REPLACE FUNCTION ST_GetGeotransform(rast raster)
+	RETURNS geotransform
+	AS 'MODULE_PATHNAME','RASTER_getGeotransform'
+	LANGUAGE 'C' IMMUTABLE ;
+
+CREATE OR REPLACE FUNCTION ST_SetGeotransform(rast raster, imag float8, jmag float8,
+		theta_i float8, theta_ij float8)
+	RETURNS raster
+	AS 'MODULE_PATHNAME','RASTER_setGeotransform'
+	LANGUAGE 'C' IMMUTABLE ;
+
+CREATE OR REPLACE FUNCTION ST_SetGeotransform(rast raster, gt geotransform)
+	RETURNS raster AS
+    $$
+    DECLARE
+        ret raster;
+    BEGIN
+        SELECT ST_SetGeotransform(rast, gt.imag, gt.jmag, gt.theta_i, gt.theta_ij) INTO ret;
+        RETURN ret;
+    END;
+    $$
+    LANGUAGE 'plpgsql' VOLATILE ;
 
 -----------------------------------------------------------------------
 -- Raster Operations
