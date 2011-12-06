@@ -214,6 +214,7 @@ SELECT name, abbrev, false
 \i geocode/geocode.sql
 
 -- Reverse Geocode API, called by user
+\i geocode/geocode_intersection.sql
 \i geocode/reverse_geocode.sql
 COMMIT;
 -- Tiger to PostGIS Topology
