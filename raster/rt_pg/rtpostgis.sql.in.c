@@ -5218,16 +5218,20 @@ CREATE OR REPLACE FUNCTION DropRasterTable(table_name varchar)
 -----------------------------------------------------------------------
 
 DROP TYPE IF EXISTS geotransform ;
-CREATE TYPE geotransform AS
-    (imag float8, jmag float8, theta_i float8, theta_ij float8) ;
+CREATE TYPE geotransform AS (
+		imag     double precision,
+    	jmag     double precision,
+    	theta_i  double precision,
+    	theta_ij double precision) ;
 
 CREATE OR REPLACE FUNCTION ST_GetGeotransform(rast raster)
 	RETURNS geotransform
 	AS 'MODULE_PATHNAME','RASTER_getGeotransform'
 	LANGUAGE 'C' IMMUTABLE ;
 
-CREATE OR REPLACE FUNCTION ST_SetGeotransform(rast raster, imag float8, jmag float8,
-		theta_i float8, theta_ij float8)
+CREATE OR REPLACE FUNCTION ST_SetGeotransform(rast raster,
+		imag double precision, jmag double precision,
+		theta_i double precision, theta_ij double precision)
 	RETURNS raster
 	AS 'MODULE_PATHNAME','RASTER_setGeotransform'
 	LANGUAGE 'C' IMMUTABLE ;
