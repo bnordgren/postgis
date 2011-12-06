@@ -491,13 +491,13 @@ rtpg_getSRTextSPI(int srid)
 	len = sizeof(char) * (strlen("SELECT srtext FROM spatial_ref_sys WHERE srid =  LIMIT 1") + MAX_INT_CHARLEN + 1);
 	sql = (char *) palloc(len);
 	if (NULL == sql) {
-		elog(ERROR, "getSrtextSPI: Unable to allocate memory for sql\n");
+		elog(ERROR, "rtpg_getSRTextSPI: Unable to allocate memory for sql\n");
 		return NULL;
 	}
 
 	spi_result = SPI_connect();
 	if (spi_result != SPI_OK_CONNECT) {
-		elog(ERROR, "getSrtextSPI: Could not connect to database using SPI\n");
+		elog(ERROR, "rtpg_getSRTextSPI: Could not connect to database using SPI\n");
 		pfree(sql);
 		return NULL;
 	}
@@ -505,9 +505,9 @@ rtpg_getSRTextSPI(int srid)
 	/* execute query */
 	snprintf(sql, len, "SELECT srtext FROM spatial_ref_sys WHERE srid = %d LIMIT 1", srid);
 	spi_result = SPI_execute(sql, TRUE, 0);
-	pfree(sql);
+	SPI_pfree(sql);
 	if (spi_result != SPI_OK_SELECT || SPI_tuptable == NULL || SPI_processed != 1) {
-		elog(ERROR, "getSrtextSPI: Cannot find SRID (%d) in spatial_ref_sys", srid);
+		elog(ERROR, "rtpg_getSRTextSPI: Cannot find SRID (%d) in spatial_ref_sys", srid);
 		if (SPI_tuptable) SPI_freetuptable(tuptable);
 		SPI_finish();
 		return NULL;
@@ -519,23 +519,26 @@ rtpg_getSRTextSPI(int srid)
 
 	tmp = SPI_getvalue(tuple, tupdesc, 1);
 	if (NULL == tmp || !strlen(tmp)) {
-		elog(ERROR, "getSrtextSPI: Cannot find SRID (%d) in spatial_ref_sys", srid);
+		elog(ERROR, "rtpg_getSRTextSPI: Cannot find SRID (%d) in spatial_ref_sys", srid);
 		if (SPI_tuptable) SPI_freetuptable(tuptable);
 		SPI_finish();
 		return NULL;
 	}
 
-	SPI_freetuptable(tuptable);
-	SPI_finish();
-
-	len = strlen(tmp);
-	srs = (char *) palloc(sizeof(char) * (len + 1));
+	len = strlen(tmp) + 1;
+	srs = SPI_palloc(sizeof(char) * len);
 	if (NULL == srs) {
-		elog(ERROR, "getSrtextSPI: Unable to allocate memory for srtext\n");
+		elog(ERROR, "rtpg_getSRTextSPI: Unable to allocate memory for srtext\n");
+		pfree(tmp);
+		if (SPI_tuptable) SPI_freetuptable(tuptable);
+		SPI_finish();
 		return NULL;
 	}
-	srs = strncpy(srs, tmp, len + 1);
+	strncpy(srs, tmp, len);
 	pfree(tmp);
+
+	if (SPI_tuptable) SPI_freetuptable(tuptable);
+	SPI_finish();
 
 	return srs;
 }
@@ -1496,38 +1499,41 @@ Datum RASTER_getPixelHeight(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(RASTER_setTransform);
 Datum RASTER_setGeotransform(PG_FUNCTION_ARGS)
 {
-	rt_pgraster *rast ;
-	double imag, jmag, theta_i, theta_ij ;
-	double o11, o12, o21, o22 ;
-	int success ;
+	rt_pgraster *pgraster ;
+	rt_raster raster ;
+	float8 imag, jmag, theta_i, theta_ij ;
 
     if (PG_ARGISNULL(0) || PG_ARGISNULL(1) || PG_ARGISNULL(2) ||
     		PG_ARGISNULL(3) || PG_ARGISNULL(4))
     	PG_RETURN_NULL();
 
     /* get the inputs */
-    rast = (rt_pgraster *)PG_DETOAST_DATUM_SLICE(PG_GETARG_DATUM(0),
+    pgraster = (rt_pgraster *)PG_DETOAST_DATUM_SLICE(PG_GETARG_DATUM(0),
     		                     0, sizeof(struct rt_raster_serialized_t));
     imag = PG_GETARG_FLOAT8(1) ;
     jmag = PG_GETARG_FLOAT8(2) ;
     theta_i = PG_GETARG_FLOAT8(3) * M_PI / 180.0;  /* deg->radians */
     theta_ij = PG_GETARG_FLOAT8(4) * M_PI / 180.0; /* deg->radians */
 
-    /* calculate the coefficients */
-    success = rt_raster_calc_gt_coeff(imag,jmag,theta_i,theta_ij,
-    		     &o11, &o12, &o21, &o22) ;
-
-    /* store the result */
-    if (success) {
-    	rast->scaleX = o11 ;
-    	rast->skewX  = o12 ;
-    	rast->skewY  = o21 ;
-    	rast->scaleY = o22 ;
+    raster = rt_raster_deserialize(pgraster, TRUE);
+    if (!raster) {
+        elog(ERROR, "RASTER_getRotation: Could not deserialize raster");
+        PG_RETURN_NULL();
     }
 
-    /* return (to make sure it's saved) */
-    SET_VARSIZE(rast, rast->size);
-    PG_RETURN_POINTER(rast) ;
+
+    /* store the new geotransform */
+    rt_raster_set_phys_params(raster, imag,jmag,theta_i,theta_ij) ;
+
+    /* prep the return value */
+    pgraster = rt_raster_serialize(raster);
+    if ( ! pgraster ) PG_RETURN_NULL();
+
+    SET_VARSIZE(pgraster, pgraster->size);
+
+    rt_raster_destroy(raster);
+
+    PG_RETURN_POINTER(pgraster);
 }
 
 /**
@@ -1538,7 +1544,21 @@ PG_FUNCTION_INFO_V1(RASTER_getGeotransform);
 Datum RASTER_getGeotransform(PG_FUNCTION_ARGS)
 {
 	rt_pgraster *rast ;
-	double imag, jmag, theta_i, theta_ij ;
+	float8 imag, jmag, theta_i, theta_ij ;
+	TupleDesc result_tuple ; /* for returning a composite */
+	HeapTuple heap_tuple ;   /* instance of the tuple to return */
+	Oid result_oid ;   /* internal code for the specific return type */
+	TypeFuncClass return_type ; /* is the return type a composite? */
+	Datum return_values[4] ;
+
+	/* setup the return value infrastructure */
+	return_type = get_call_result_type(fcinfo, &result_oid, &result_tuple) ;
+	if (return_type != TYPEFUNC_COMPOSITE) {
+		rterror("RASTER_getGeotransform(): function returning record called in context that cannot accept type record") ;
+		PG_RETURN_NULL() ;
+	}
+	result_tuple = BlessTupleDesc(result_tuple) ;
+
 
 	/* get argument */
     if (PG_ARGISNULL(0)) PG_RETURN_NULL();
@@ -1554,8 +1574,16 @@ Datum RASTER_getGeotransform(PG_FUNCTION_ARGS)
     theta_i = theta_i * 180. / M_PI ;
     theta_ij = theta_ij * 180. / M_PI ;
 
-    /* TODO: figure out how to return a tuple */
-    PG_RETURN_NULL() ;
+    /* prep the composite return value */
+    /* construct datum array */
+    return_values[0] = Float8GetDatum(imag) ;
+    return_values[1] = Float8GetDatum(jmag) ;
+    return_values[2] = Float8GetDatum(theta_i) ;
+    return_values[3] = Float8GetDatum(theta_ij) ;
+    /* stick em on the heap */
+    heap_tuple = heap_form_tuple(result_tuple, return_values, FALSE) ;
+    /* return */
+    PG_RETURN_DATUM(HeapTupleGetDatum(heap_tuple)) ;
 }
 
 /**
@@ -2368,70 +2396,71 @@ Datum RASTER_addband(PG_FUNCTION_ARGS)
 PG_FUNCTION_INFO_V1(RASTER_copyband);
 Datum RASTER_copyband(PG_FUNCTION_ARGS)
 {
-    rt_pgraster *pgraster = NULL;
-    rt_raster torast = NULL;
-    rt_raster fromrast = NULL;
-    int toindex = 0;
-    int fromband = 0;
-    int oldtorastnumbands = 0;
-    int newtorastnumbands = 0;
-    int newbandindex = 0;
+	rt_pgraster *pgraster = NULL;
+	rt_raster torast = NULL;
+	rt_raster fromrast = NULL;
+	int toindex = 0;
+	int fromband = 0;
+	int oldtorastnumbands = 0;
+	int newtorastnumbands = 0;
+	int newbandindex = 0;
 
-    /* Deserialize torast */
-		if (PG_ARGISNULL(0)) PG_RETURN_NULL();
-    pgraster = (rt_pgraster *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
+	/* Deserialize torast */
+	if (PG_ARGISNULL(0)) PG_RETURN_NULL();
+	pgraster = (rt_pgraster *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
 
-    torast = rt_raster_deserialize(pgraster, FALSE);
-    if ( ! torast ) {
-        elog(ERROR, "RASTER_copyband: Could not deserialize first raster");
-        PG_RETURN_NULL();
-    }
+	torast = rt_raster_deserialize(pgraster, FALSE);
+	if (!torast) {
+		elog(ERROR, "RASTER_copyband: Could not deserialize first raster");
+		PG_RETURN_NULL();
+	}
 
-    /* Deserialize fromrast */
-    if (!PG_ARGISNULL(1)) {
-        pgraster = (rt_pgraster *)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
+	/* Deserialize fromrast */
+	if (!PG_ARGISNULL(1)) {
+		pgraster = (rt_pgraster *)PG_DETOAST_DATUM(PG_GETARG_DATUM(1));
 
-        fromrast = rt_raster_deserialize(pgraster, FALSE);
-        if ( ! fromrast ) {
-            elog(ERROR, "RASTER_copyband: Could not deserialize second raster");
-            PG_RETURN_NULL();
-        }
+		fromrast = rt_raster_deserialize(pgraster, FALSE);
+		if (!fromrast) {
+			elog(ERROR, "RASTER_copyband: Could not deserialize second raster");
+			PG_RETURN_NULL();
+		}
 
-        oldtorastnumbands = rt_raster_get_num_bands(torast);
+		oldtorastnumbands = rt_raster_get_num_bands(torast);
 
-        if (PG_ARGISNULL(2))
-            fromband = 1;
-        else
-            fromband = PG_GETARG_INT32(2);
+		if (PG_ARGISNULL(2))
+			fromband = 1;
+		else
+			fromband = PG_GETARG_INT32(2);
 
-        if (PG_ARGISNULL(3))
-            toindex = oldtorastnumbands + 1;
-        else
-            toindex = PG_GETARG_INT32(3);
+		if (PG_ARGISNULL(3))
+			toindex = oldtorastnumbands + 1;
+		else
+			toindex = PG_GETARG_INT32(3);
 
-        /* Copy band fromrast torast */
-        newbandindex = rt_raster_copy_band(torast, fromrast, fromband - 1,
-            toindex - 1);
+		/* Copy band fromrast torast */
+		newbandindex = rt_raster_copy_band(
+			torast, fromrast,
+			fromband - 1, toindex - 1
+		);
 
-        newtorastnumbands = rt_raster_get_num_bands(torast);
-        if (newtorastnumbands == oldtorastnumbands || newbandindex == -1) {
-            elog(NOTICE, "RASTER_copyband: Could not add band to raster. "
-                    "Returning original raster.");
-        }
-    }
+		newtorastnumbands = rt_raster_get_num_bands(torast);
+		if (newtorastnumbands == oldtorastnumbands || newbandindex == -1) {
+			elog(NOTICE, "RASTER_copyband: Could not add band to raster. "
+				"Returning original raster."
+			);
+		}
 
-    /* Serialize and return torast */
-    pgraster = rt_raster_serialize(torast);
-    if (!pgraster) PG_RETURN_NULL();
+		rt_raster_destroy(fromrast);
+	}
 
-    SET_VARSIZE(pgraster, pgraster->size);
+	/* Serialize and return torast */
+	pgraster = rt_raster_serialize(torast);
+	rt_raster_destroy(torast);
+	if (!pgraster) PG_RETURN_NULL();
 
-    rt_raster_destroy(fromrast);
-    rt_raster_destroy(torast);
-
-    PG_RETURN_POINTER(pgraster);
+	SET_VARSIZE(pgraster, pgraster->size);
+	PG_RETURN_POINTER(pgraster);
 }
-
 
 /**
  * Check if raster is empty or not
@@ -3785,7 +3814,7 @@ Datum RASTER_summaryStatsCoverage(PG_FUNCTION_ARGS)
 		NULL, NULL,
 		TRUE, 0
 	);
-	pfree(sql);
+	SPI_pfree(sql);
 
 	/* process resultset */
 	SPI_cursor_fetch(portal, TRUE, 1);
@@ -3877,7 +3906,7 @@ Datum RASTER_summaryStatsCoverage(PG_FUNCTION_ARGS)
 		/* initialize rtn */
 		if (stats->count > 0) {
 			if (NULL == rtn) {
-				rtn = (rt_bandstats) palloc(sizeof(struct rt_bandstats_t));
+				rtn = (rt_bandstats) SPI_palloc(sizeof(struct rt_bandstats_t));
 				if (NULL == rtn) {
 					elog(ERROR, "RASTER_summaryStatsCoverage: Unable to allocate memory for summary stats of coverage\n");
 
@@ -4085,7 +4114,7 @@ Datum RASTER_histogram(PG_FUNCTION_ARGS)
 				default:
 					elog(ERROR, "RASTER_histogram: Invalid data type for width");
 					rt_raster_destroy(raster);
-					PG_RETURN_NULL();
+					SRF_RETURN_DONE(funcctx);
 					break;
 			}
 
@@ -4330,7 +4359,7 @@ Datum RASTER_histogramCoverage(PG_FUNCTION_ARGS)
 		/* column name is null, return null */
 		if (PG_ARGISNULL(1)) {
 			elog(NOTICE, "Column name must be provided");
-			PG_RETURN_NULL();
+			SRF_RETURN_DONE(funcctx);
 		}
 		colnametext = PG_GETARG_TEXT_P(1);
 		colname = text_to_cstring(colnametext);
@@ -4449,7 +4478,7 @@ Datum RASTER_histogramCoverage(PG_FUNCTION_ARGS)
 		snprintf(sql, len, "SELECT min, max FROM _st_summarystats('%s','%s',%d,%d::boolean,%f)", tablename, colname, bandindex, (exclude_nodata_value ? 1 : 0), sample);
 		POSTGIS_RT_DEBUGF(3, "RASTER_histogramCoverage: %s", sql);
 		spi_result = SPI_execute(sql, TRUE, 0);
-		pfree(sql);
+		SPI_pfree(sql);
 		if (spi_result != SPI_OK_SELECT || SPI_tuptable == NULL || SPI_processed != 1) {
 			elog(ERROR, "RASTER_histogramCoverage: Could not get summary stats of coverage");
 
@@ -4536,7 +4565,7 @@ Datum RASTER_histogramCoverage(PG_FUNCTION_ARGS)
 				SPI_cursor_close(portal);
 				SPI_finish();
 
-				if (NULL != covhist) free(covhist);
+				if (NULL != covhist) pfree(covhist);
 				if (bin_width_count) pfree(bin_width);
 
 				SRF_RETURN_DONE(funcctx);
@@ -4556,7 +4585,7 @@ Datum RASTER_histogramCoverage(PG_FUNCTION_ARGS)
 				SPI_cursor_close(portal);
 				SPI_finish();
 
-				if (NULL != covhist) free(covhist);
+				if (NULL != covhist) pfree(covhist);
 				if (bin_width_count) pfree(bin_width);
 
 				SRF_RETURN_DONE(funcctx);
@@ -4572,7 +4601,7 @@ Datum RASTER_histogramCoverage(PG_FUNCTION_ARGS)
 				SPI_finish();
 
 				rt_raster_destroy(raster);
-				if (NULL != covhist) free(covhist);
+				if (NULL != covhist) pfree(covhist);
 				if (bin_width_count) pfree(bin_width);
 
 				SRF_RETURN_DONE(funcctx);
@@ -4588,7 +4617,7 @@ Datum RASTER_histogramCoverage(PG_FUNCTION_ARGS)
 				SPI_finish();
 
 				rt_raster_destroy(raster);
-				if (NULL != covhist) free(covhist);
+				if (NULL != covhist) pfree(covhist);
 				if (bin_width_count) pfree(bin_width);
 
 				SRF_RETURN_DONE(funcctx);
@@ -4607,7 +4636,7 @@ Datum RASTER_histogramCoverage(PG_FUNCTION_ARGS)
 				SPI_cursor_close(portal);
 				SPI_finish();
 
-				if (NULL != covhist) free(covhist);
+				if (NULL != covhist) pfree(covhist);
 				if (bin_width_count) pfree(bin_width);
 
 				SRF_RETURN_DONE(funcctx);
@@ -4624,7 +4653,7 @@ Datum RASTER_histogramCoverage(PG_FUNCTION_ARGS)
 					SPI_cursor_close(portal);
 					SPI_finish();
 
-					if (NULL != covhist) free(covhist);
+					if (NULL != covhist) pfree(covhist);
 					if (bin_width_count) pfree(bin_width);
 
 					SRF_RETURN_DONE(funcctx);
@@ -4634,22 +4663,16 @@ Datum RASTER_histogramCoverage(PG_FUNCTION_ARGS)
 
 				/* coverage histogram */
 				if (NULL == covhist) {
-					/*
-						dustymugs 2011-08-25
-						covhist is initialized using malloc instead of palloc due to
-							strange memory issues where covvcnts is corrupted in
-							subsequent calls of SRF
-					*/
-					covhist = (rt_histogram) malloc(sizeof(struct rt_histogram_t) * count);
+					covhist = (rt_histogram) SPI_palloc(sizeof(struct rt_histogram_t) * count);
 					if (NULL == covhist) {
 						elog(ERROR, "RASTER_histogramCoverage: Unable to allocate memory for histogram of coverage");
 
+						pfree(hist);
 						if (SPI_tuptable) SPI_freetuptable(tuptable);
 						SPI_cursor_close(portal);
 						SPI_finish();
 
 						if (bin_width_count) pfree(bin_width);
-						pfree(hist);
 
 						SRF_RETURN_DONE(funcctx);
 					}
@@ -4753,7 +4776,7 @@ Datum RASTER_histogramCoverage(PG_FUNCTION_ARGS)
 	}
 	/* do when there is no more left */
 	else {
-		free(covhist2);
+		pfree(covhist2);
 		SRF_RETURN_DONE(funcctx);
 	}
 }
@@ -4861,7 +4884,7 @@ Datum RASTER_quantile(PG_FUNCTION_ARGS)
 				default:
 					elog(ERROR, "RASTER_quantile: Invalid data type for quantiles");
 					rt_raster_destroy(raster);
-					PG_RETURN_NULL();
+					SRF_RETURN_DONE(funcctx);
 					break;
 			}
 
@@ -5090,7 +5113,7 @@ Datum RASTER_quantileCoverage(PG_FUNCTION_ARGS)
 		/* column name is null, return null */
 		if (PG_ARGISNULL(1)) {
 			elog(NOTICE, "Column name must be provided");
-			PG_RETURN_NULL();
+			SRF_RETURN_DONE(funcctx);
 		}
 		colnametext = PG_GETARG_TEXT_P(1);
 		colname = text_to_cstring(colnametext);
@@ -5134,7 +5157,7 @@ Datum RASTER_quantileCoverage(PG_FUNCTION_ARGS)
 				default:
 					elog(ERROR, "RASTER_quantileCoverage: Invalid data type for quantiles");
 					rt_raster_destroy(raster);
-					PG_RETURN_NULL();
+					SRF_RETURN_DONE(funcctx);
 					break;
 			}
 
@@ -5197,7 +5220,7 @@ Datum RASTER_quantileCoverage(PG_FUNCTION_ARGS)
 		snprintf(sql, len, "SELECT count FROM _st_summarystats('%s','%s',%d,%d::boolean,%f)", tablename, colname, bandindex, (exclude_nodata_value ? 1 : 0), sample);
 		POSTGIS_RT_DEBUGF(3, "stats sql:  %s", sql);
 		spi_result = SPI_execute(sql, TRUE, 0);
-		pfree(sql);
+		SPI_pfree(sql);
 		if (spi_result != SPI_OK_SELECT || SPI_tuptable == NULL || SPI_processed != 1) {
 			elog(ERROR, "RASTER_quantileCoverage: Could not get summary stats of coverage");
 
@@ -5339,25 +5362,20 @@ Datum RASTER_quantileCoverage(PG_FUNCTION_ARGS)
 			SPI_cursor_fetch(portal, TRUE, 1);
 		}
 
-		if (SPI_tuptable) SPI_freetuptable(tuptable);
-		SPI_cursor_close(portal);
-		SPI_finish();
-
-		quantile_llist_destroy(&qlls, qlls_count);
-		if (quantiles_count) pfree(quantiles);
-
-		/*
-			dustymugs 2011-08-23
-			covquant2 is initialized using malloc instead of palloc due to
-				strange memory issues where covvcnts is corrupted in
-				subsequent calls of SRF
-		*/
-		covquant2 = malloc(sizeof(struct rt_quantile_t) * count);
+		covquant2 = SPI_palloc(sizeof(struct rt_quantile_t) * count);
 		for (i = 0; i < count; i++) {
 			covquant2[i].quantile = covquant[i].quantile;
 			covquant2[i].value = covquant[i].value;
 		}
-		pfree(covquant);
+
+		if (NULL != covquant) pfree(covquant);
+		quantile_llist_destroy(&qlls, qlls_count);
+
+		if (SPI_tuptable) SPI_freetuptable(tuptable);
+		SPI_cursor_close(portal);
+		SPI_finish();
+
+		if (quantiles_count) pfree(quantiles);
 
 		POSTGIS_RT_DEBUGF(3, "%d quantiles returned", count);
 
@@ -5422,7 +5440,7 @@ Datum RASTER_quantileCoverage(PG_FUNCTION_ARGS)
 	/* do when there is no more left */
 	else {
 		POSTGIS_RT_DEBUG(3, "done");
-		free(covquant2);
+		pfree(covquant2);
 		SRF_RETURN_DONE(funcctx);
 	}
 }
@@ -5481,7 +5499,7 @@ Datum RASTER_valueCount(PG_FUNCTION_ARGS) {
 		raster = rt_raster_deserialize(pgraster, FALSE);
 		if (!raster) {
 			elog(ERROR, "RASTER_valueCount: Could not deserialize raster");
-			PG_RETURN_NULL();
+			SRF_RETURN_DONE(funcctx);
 		}
 
 		/* band index is 1-based */
@@ -5511,7 +5529,7 @@ Datum RASTER_valueCount(PG_FUNCTION_ARGS) {
 				default:
 					elog(ERROR, "RASTER_valueCount: Invalid data type for values");
 					rt_raster_destroy(raster);
-					PG_RETURN_NULL();
+					SRF_RETURN_DONE(funcctx);
 					break;
 			}
 
@@ -5720,7 +5738,7 @@ Datum RASTER_valueCountCoverage(PG_FUNCTION_ARGS) {
 		/* column name is null, return null */
 		if (PG_ARGISNULL(1)) {
 			elog(NOTICE, "Column name must be provided");
-			PG_RETURN_NULL();
+			SRF_RETURN_DONE(funcctx);
 		}
 		colnametext = PG_GETARG_TEXT_P(1);
 		colname = text_to_cstring(colnametext);
@@ -5751,7 +5769,7 @@ Datum RASTER_valueCountCoverage(PG_FUNCTION_ARGS) {
 				default:
 					elog(ERROR, "RASTER_valueCountCoverage: Invalid data type for values");
 					rt_raster_destroy(raster);
-					PG_RETURN_NULL();
+					SRF_RETURN_DONE(funcctx);
 					break;
 			}
 
@@ -5824,7 +5842,7 @@ Datum RASTER_valueCountCoverage(PG_FUNCTION_ARGS) {
 			NULL, NULL,
 			TRUE, 0
 		);
-		pfree(sql);
+		SPI_pfree(sql);
 
 		/* process resultset */
 		SPI_cursor_fetch(portal, TRUE, 1);
@@ -5841,7 +5859,7 @@ Datum RASTER_valueCountCoverage(PG_FUNCTION_ARGS) {
 				SPI_cursor_close(portal);
 				SPI_finish();
 
-				if (NULL != covvcnts) free(covvcnts);
+				if (NULL != covvcnts) pfree(covvcnts);
 				if (search_values_count) pfree(search_values);
 
 				SRF_RETURN_DONE(funcctx);
@@ -5861,7 +5879,7 @@ Datum RASTER_valueCountCoverage(PG_FUNCTION_ARGS) {
 				SPI_cursor_close(portal);
 				SPI_finish();
 
-				if (NULL != covvcnts) free(covvcnts);
+				if (NULL != covvcnts) pfree(covvcnts);
 				if (search_values_count) pfree(search_values);
 
 				SRF_RETURN_DONE(funcctx);
@@ -5877,7 +5895,7 @@ Datum RASTER_valueCountCoverage(PG_FUNCTION_ARGS) {
 				SPI_finish();
 
 				rt_raster_destroy(raster);
-				if (NULL != covvcnts) free(covvcnts);
+				if (NULL != covvcnts) pfree(covvcnts);
 				if (search_values_count) pfree(search_values);
 
 				SRF_RETURN_DONE(funcctx);
@@ -5893,7 +5911,7 @@ Datum RASTER_valueCountCoverage(PG_FUNCTION_ARGS) {
 				SPI_finish();
 
 				rt_raster_destroy(raster);
-				if (NULL != covvcnts) free(covvcnts);
+				if (NULL != covvcnts) pfree(covvcnts);
 				if (search_values_count) pfree(search_values);
 
 				SRF_RETURN_DONE(funcctx);
@@ -5905,28 +5923,31 @@ Datum RASTER_valueCountCoverage(PG_FUNCTION_ARGS) {
 			rt_raster_destroy(raster);
 			if (NULL == vcnts || !count) {
 				elog(NOTICE, "Unable to count the values for band at index %d", bandindex);
+
+				pfree(vcnts);
+				if (SPI_tuptable) SPI_freetuptable(tuptable);
+				SPI_cursor_close(portal);
+				SPI_finish();
+
+				if (NULL != covvcnts) free(covvcnts);
+				if (search_values_count) pfree(search_values);
+
 				SRF_RETURN_DONE(funcctx);
 			}
 
 			POSTGIS_RT_DEBUGF(3, "%d value counts returned", count);
 
 			if (NULL == covvcnts) {
-				/*
-					dustymugs 2011-08-23
-					covvcnts is initialized using malloc instead of palloc due to
-						strange memory issues where covvcnts is corrupted in
-						subsequent calls of SRF
-				*/
-				covvcnts = (rt_valuecount) malloc(sizeof(struct rt_valuecount_t) * count);
+				covvcnts = (rt_valuecount) SPI_palloc(sizeof(struct rt_valuecount_t) * count);
 				if (NULL == covvcnts) {
 					elog(ERROR, "RASTER_valueCountCoverage: Unable to allocate memory for value counts of coverage");
 
+					pfree(vcnts);
 					if (SPI_tuptable) SPI_freetuptable(tuptable);
 					SPI_cursor_close(portal);
 					SPI_finish();
 
 					if (search_values_count) pfree(search_values);
-					pfree(vcnts);
 
 					SRF_RETURN_DONE(funcctx);
 				}
@@ -5955,17 +5976,17 @@ Datum RASTER_valueCountCoverage(PG_FUNCTION_ARGS) {
 					}
 					else {
 						covcount++;
-						covvcnts = realloc(covvcnts, sizeof(struct rt_valuecount_t) * covcount);
+						covvcnts = SPI_repalloc(covvcnts, sizeof(struct rt_valuecount_t) * covcount);
 						if (NULL == covvcnts) {
 							elog(ERROR, "RASTER_valueCountCoverage: Unable to change allocated memory for value counts of coverage");
 
+							pfree(vcnts);
 							if (SPI_tuptable) SPI_freetuptable(tuptable);
 							SPI_cursor_close(portal);
 							SPI_finish();
 
 							if (search_values_count) pfree(search_values);
 							if (NULL != covvcnts) free(covvcnts);
-							pfree(vcnts);
 
 							SRF_RETURN_DONE(funcctx);
 						}
@@ -6057,7 +6078,7 @@ Datum RASTER_valueCountCoverage(PG_FUNCTION_ARGS) {
 	}
 	/* do when there is no more left */
 	else {
-		free(covvcnts2);
+		pfree(covvcnts2);
 		SRF_RETURN_DONE(funcctx);
 	}
 }
@@ -7866,8 +7887,15 @@ Datum RASTER_bandmetadata(PG_FUNCTION_ARGS)
 			j++;
 		}
 
-		if (j < n)
+		if (j < 1) {
+			j = numBands;
 			bandNums = repalloc(bandNums, sizeof(uint32_t) * j);
+			for (i = 0; i < j; i++)
+				bandNums[i] = i + 1;
+		}
+		else if (j < n)
+			bandNums = repalloc(bandNums, sizeof(uint32_t) * j);
+
 		bmd = (struct bandmetadata *) palloc(sizeof(struct bandmetadata) * j);
 
 		for (i = 0; i < j; i++) {
@@ -8686,10 +8714,13 @@ Datum RASTER_mapAlgebra2(PG_FUNCTION_ARGS)
 					sql = (char *) palloc(len + 1);
 					if (sql == NULL) {
 						elog(ERROR, "RASTER_mapAlgebra2: Unable to allocate memory for expression parameter %d", exprpos[i]);
-						for (k = 0; k < set_count; k++) rt_raster_destroy(_rast[k]);
-						rt_raster_destroy(raster);
+
 						for (k = 0; k < spicount; k++) SPI_freeplan(spiplan[k]);
 						SPI_finish();
+
+						for (k = 0; k < set_count; k++) rt_raster_destroy(_rast[k]);
+						rt_raster_destroy(raster);
+
 						PG_RETURN_NULL();
 					}
 
@@ -8706,13 +8737,12 @@ Datum RASTER_mapAlgebra2(PG_FUNCTION_ARGS)
 						if (argtype == NULL) {
 							elog(ERROR, "RASTER_mapAlgebra2: Unable to allocate memory for prepared plan argtypes of expression parameter %d", exprpos[i]);
 
-							for (k = 0; k < set_count; k++) rt_raster_destroy(_rast[k]);
-							rt_raster_destroy(raster);
-
+							pfree(sql);
 							for (k = 0; k < spicount; k++) SPI_freeplan(spiplan[k]);
 							SPI_finish();
 
-							pfree(sql);
+							for (k = 0; k < set_count; k++) rt_raster_destroy(_rast[k]);
+							rt_raster_destroy(raster);
 
 							PG_RETURN_NULL();
 						}
@@ -8722,14 +8752,14 @@ Datum RASTER_mapAlgebra2(PG_FUNCTION_ARGS)
 						if (spiplan[i] == NULL) {
 							elog(ERROR, "RASTER_mapAlgebra2: Unable to create prepared plan of expression parameter %d", exprpos[i]);
 
-							for (k = 0; k < set_count; k++) rt_raster_destroy(_rast[k]);
-							rt_raster_destroy(raster);
-
+							pfree(sql);
+							pfree(argtype);
 							for (k = 0; k < spicount; k++) SPI_freeplan(spiplan[k]);
 							SPI_finish();
 
-							pfree(sql);
-							pfree(argtype);
+							for (k = 0; k < set_count; k++) rt_raster_destroy(_rast[k]);
+							rt_raster_destroy(raster);
+
 
 							PG_RETURN_NULL();
 						}
@@ -8742,13 +8772,12 @@ Datum RASTER_mapAlgebra2(PG_FUNCTION_ARGS)
 						if (err != SPI_OK_SELECT || SPI_tuptable == NULL || SPI_processed != 1) {
 							elog(ERROR, "RASTER_mapAlgebra2: Unable to evaluate expression parameter %d", exprpos[i]);
 
-							for (k = 0; k < set_count; k++) rt_raster_destroy(_rast[k]);
-							rt_raster_destroy(raster);
-
+							pfree(sql);
 							for (k = 0; k < spicount; k++) SPI_freeplan(spiplan[k]);
 							SPI_finish();
 
-							pfree(sql);
+							for (k = 0; k < set_count; k++) rt_raster_destroy(_rast[k]);
+							rt_raster_destroy(raster);
 
 							PG_RETURN_NULL();
 						}
@@ -8762,14 +8791,13 @@ Datum RASTER_mapAlgebra2(PG_FUNCTION_ARGS)
 						if (SPI_result == SPI_ERROR_NOATTRIBUTE) {
 							elog(ERROR, "RASTER_mapAlgebra2: Unable to get result of expression parameter %d", exprpos[i]);
 
-							for (k = 0; k < set_count; k++) rt_raster_destroy(_rast[k]);
-							rt_raster_destroy(raster);
-
+							pfree(sql);
 							if (SPI_tuptable) SPI_freetuptable(tuptable);
 							for (k = 0; k < spicount; k++) SPI_freeplan(spiplan[k]);
 							SPI_finish();
 
-							pfree(sql);
+							for (k = 0; k < set_count; k++) rt_raster_destroy(_rast[k]);
+							rt_raster_destroy(raster);
 
 							PG_RETURN_NULL();
 						}
@@ -8893,13 +8921,13 @@ Datum RASTER_mapAlgebra2(PG_FUNCTION_ARGS)
 						if (err < 0) {
 							elog(ERROR, "RASTER_mapAlgebra2: Unable to get pixel of %s raster", (i < 1 ? "FIRST" : "SECOND"));
 
-							for (k = 0; k < set_count; k++) rt_raster_destroy(_rast[k]);
-							rt_raster_destroy(raster);
-
 							if (calltype == TEXTOID) {
 								for (k = 0; k < spicount; k++) SPI_freeplan(spiplan[k]);
 								SPI_finish();
 							}
+
+							for (k = 0; k < set_count; k++) rt_raster_destroy(_rast[k]);
+							rt_raster_destroy(raster);
 
 							PG_RETURN_NULL();
 						}
@@ -8961,11 +8989,11 @@ Datum RASTER_mapAlgebra2(PG_FUNCTION_ARGS)
 								if (values == NULL) {
 									elog(ERROR, "RASTER_mapAlgebra2: Unable to allocate memory for value parameters of prepared statement %d", i);
 
-									for (k = 0; k < set_count; k++) rt_raster_destroy(_rast[k]);
-									rt_raster_destroy(raster);
-
 									for (k = 0; k < spicount; k++) SPI_freeplan(spiplan[k]);
 									SPI_finish();
+
+									for (k = 0; k < set_count; k++) rt_raster_destroy(_rast[k]);
+									rt_raster_destroy(raster);
 
 									PG_RETURN_NULL();
 								}
@@ -8976,11 +9004,11 @@ Datum RASTER_mapAlgebra2(PG_FUNCTION_ARGS)
 
 									pfree(values);
 
-									for (k = 0; k < set_count; k++) rt_raster_destroy(_rast[k]);
-									rt_raster_destroy(raster);
-
 									for (k = 0; k < spicount; k++) SPI_freeplan(spiplan[k]);
 									SPI_finish();
+
+									for (k = 0; k < set_count; k++) rt_raster_destroy(_rast[k]);
+									rt_raster_destroy(raster);
 
 									PG_RETURN_NULL();
 								}
@@ -9020,11 +9048,11 @@ Datum RASTER_mapAlgebra2(PG_FUNCTION_ARGS)
 							if (err != SPI_OK_SELECT || SPI_tuptable == NULL || SPI_processed != 1) {
 								elog(ERROR, "RASTER_mapAlgebra2: Unexpected error when running prepared statement %d", i);
 
-								for (k = 0; k < set_count; k++) rt_raster_destroy(_rast[k]);
-								rt_raster_destroy(raster);
-
 								for (k = 0; k < spicount; k++) SPI_freeplan(spiplan[k]);
 								SPI_finish();
+
+								for (k = 0; k < set_count; k++) rt_raster_destroy(_rast[k]);
+								rt_raster_destroy(raster);
 
 								PG_RETURN_NULL();
 							}
@@ -9038,12 +9066,12 @@ Datum RASTER_mapAlgebra2(PG_FUNCTION_ARGS)
 							if (SPI_result == SPI_ERROR_NOATTRIBUTE) {
 								elog(ERROR, "RASTER_mapAlgebra2: Unable to get result of prepared statement %d", i);
 
-								for (k = 0; k < set_count; k++) rt_raster_destroy(_rast[k]);
-								rt_raster_destroy(raster);
-
 								if (SPI_tuptable) SPI_freetuptable(tuptable);
 								for (k = 0; k < spicount; k++) SPI_freeplan(spiplan[k]);
 								SPI_finish();
+
+								for (k = 0; k < set_count; k++) rt_raster_destroy(_rast[k]);
+								rt_raster_destroy(raster);
 
 								PG_RETURN_NULL();
 							}
@@ -9091,13 +9119,13 @@ Datum RASTER_mapAlgebra2(PG_FUNCTION_ARGS)
 					if (rt_band_set_pixel(band, x, y, pixel) < 0) {
 						elog(ERROR, "RASTER_mapAlgebra2: Unable to set pixel value of output raster");
 
-						for (k = 0; k < set_count; k++) rt_raster_destroy(_rast[k]);
-						rt_raster_destroy(raster);
-
 						if (calltype == TEXTOID) {
 							for (k = 0; k < spicount; k++) SPI_freeplan(spiplan[k]);
 							SPI_finish();
 						}
+
+						for (k = 0; k < set_count; k++) rt_raster_destroy(_rast[k]);
+						rt_raster_destroy(raster);
 
 						PG_RETURN_NULL();
 					}
@@ -9552,7 +9580,7 @@ Datum RASTER_mapAlgebraFctNgb(PG_FUNCTION_ARGS)
 
     if (strcmp(strFromText, "VALUE") == 0)
         valuereplace = true;
-    else if (strcmp(strFromText, "IGNORE") < 0 && strcmp(strFromText, "NULL") < 0) {
+    else if (strcmp(strFromText, "IGNORE") != 0 && strcmp(strFromText, "NULL") != 0) {
         // if the text is not "IGNORE" or "NULL", it may be a numerical value
         if (sscanf(strFromText, "%d", &intReplace) <= 0 && sscanf(strFromText, "%f", &fltReplace) <= 0) {
             // the value is NOT an integer NOR a floating point
@@ -9632,7 +9660,8 @@ Datum RASTER_mapAlgebraFctNgb(PG_FUNCTION_ARGS)
                                 /* Replace the NODATA value with the currently processing pixel. */
                                 neighborData[nIndex] = Float8GetDatum((double)rpix);
                                 neighborNulls[nIndex] = false;
-                                /* do not increment nNullItems */
+                                /* do not increment nNullItems, since the user requested that the  */
+                                /* neighborhood replace NODATA values with the central pixel value */
                             }
                             else {
                                 neighborData[nIndex] = PointerGetDatum(NULL);
@@ -9656,7 +9685,9 @@ Datum RASTER_mapAlgebraFctNgb(PG_FUNCTION_ARGS)
              * We compute a value only for the withdata value neighborhood since the
              * nodata value has already been set by the first optimization
              **/
-            if (!nNodataOnly && !(nNullSkip && nNullItems > 0) && !(valuereplace && nNullItems > 0)) {
+            if (!(nNodataOnly ||                     /* neighborhood only contains NODATA -- OR -- */
+                (nNullSkip && nNullItems > 0) ||     /* neighborhood should skip any NODATA cells, and a NODATA cell was detected -- OR -- */
+                (valuereplace && nNullItems > 0))) { /* neighborhood should replace NODATA cells with the central pixel value, and a NODATA cell was detected */
                 POSTGIS_RT_DEBUGF(3, "RASTER_mapAlgebraFctNgb: (%dx%d), %dx%d neighborhood",
                     x, y, winwidth, winheight);
 
