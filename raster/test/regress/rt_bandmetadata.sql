@@ -96,7 +96,19 @@ SELECT
 	path
 FROM ST_BandMetaData(
 	make_test_raster(10, 10, 0, 0, 0, 0, 5, TRUE),
-	1,2,5
+	ARRAY[1,2,5]
+);
+
+SELECT
+	bandnum
+	pixeltype,
+	hasnodata,
+	round(nodatavalue::numeric, 3),
+	isoutdb,
+	path
+FROM ST_BandMetaData(
+	make_test_raster(10, 10, 0, 0, 0, 0, 5, TRUE),
+	ARRAY[]::int[]
 );
 
 DROP FUNCTION IF EXISTS make_test_raster(
