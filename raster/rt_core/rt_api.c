@@ -2156,8 +2156,6 @@ rt_band_get_histogram(rt_bandstats stats,
 
 	for (i = 0; i < bin_count; i++) {
 		bins[i].percent = ((double) bins[i].count) / sum;
-		if (bin_width_count > 1)
-			bins[i].percent /= (bins[i].max - bins[i].min);
 	}
 
 #if POSTGIS_DEBUG_LEVEL > 0
@@ -8135,6 +8133,23 @@ rt_raster_gdal_rasterize(const unsigned char *wkb,
 	dst_gt[4] = _skew_y;
 	dst_gt[5] = -1 * _scale_y;
 
+	/* user provided negative scale-x */
+	if (
+		(NULL != scale_x) &&
+		(*scale_x < 0.)
+	) {
+		dst_gt[0] = src_env.MaxX;
+		dst_gt[1] = *scale_x;
+	}
+	/* user provided positive scale-y */
+	if (
+		(NULL != scale_y) &&
+		(*scale_y > 0)
+	) {
+		dst_gt[3] = src_env.MinY;
+		dst_gt[5] = *scale_y;
+	}
+
 	RASTER_DEBUGF(3, "Applied extent: %f, %f, %f, %f",
 		src_env.MinX, src_env.MaxY, src_env.MaxX, src_env.MinY);
 	RASTER_DEBUGF(3, "Applied geotransform: %f, %f, %f, %f, %f, %f",
@@ -9069,11 +9084,11 @@ rt_raster_same_alignment(
 		err = 1;
 	}
 	/* scales must match */
-	else if (FLT_NEQ(rast1->scaleX, rast2->scaleX)) {
+	else if (FLT_NEQ(fabs(rast1->scaleX), fabs(rast2->scaleX))) {
 		RASTER_DEBUG(3, "The two raster provided have different scales on the X axis");
 		err = 1;
 	}
-	else if (FLT_NEQ(rast1->scaleY, rast2->scaleY)) {
+	else if (FLT_NEQ(fabs(rast1->scaleY), fabs(rast2->scaleY))) {
 		RASTER_DEBUG(3, "The two raster provided have different scales on the Y axis");
 		err = 1;
 	}
