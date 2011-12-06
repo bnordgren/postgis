@@ -63,6 +63,7 @@ TEST_PROPS = \
 	rt_isempty.sql \
 	rt_hasnoband.sql \
 	rt_metadata.sql \
+	rt_geotransform.sql \
 	$(NULL)
 
 TEST_BANDPROPS = \
