@@ -140,20 +140,6 @@ CREATE OR REPLACE FUNCTION st_width(raster)
     AS 'MODULE_PATHNAME','RASTER_getWidth'
     LANGUAGE 'C' IMMUTABLE STRICT;
 
-CREATE OR REPLACE FUNCTION st_pixelwidth(raster)
-    RETURNS float8
-    AS 'MODULE_PATHNAME', 'RASTER_getPixelWidth'
-    LANGUAGE 'C' IMMUTABLE STRICT;
-
-CREATE OR REPLACE FUNCTION st_pixelheight(raster)
-    RETURNS float8
-    AS 'MODULE_PATHNAME', 'RASTER_getPixelHeight'
-    LANGUAGE 'C' IMMUTABLE STRICT;
-
-CREATE OR REPLACE FUNCTION st_rotation(raster)
-    RETURNS float8
-    AS 'MODULE_PATHNAME','RASTER_getRotation'
-    LANGUAGE 'C' IMMUTABLE STRICT;
 
 CREATE OR REPLACE FUNCTION st_metadata(
 	rast raster,
@@ -170,6 +156,48 @@ CREATE OR REPLACE FUNCTION st_metadata(
 )
 	AS 'MODULE_PATHNAME', 'RASTER_metadata'
 	LANGUAGE 'C' IMMUTABLE STRICT;
+
+-----------------------------------------------------------------------
+-- Raster Geotransform Accessors
+-----------------------------------------------------------------------
+
+DROP TYPE IF EXISTS geotransform ;
+CREATE TYPE geotransform AS (
+		imag     double precision,
+    	jmag     double precision,
+    	theta_i  double precision,
+    	theta_ij double precision,
+    	xoffset  double precision,
+    	yoffset  double precision) ;
+
+CREATE OR REPLACE FUNCTION ST_GetGeotransform(rast raster)
+	RETURNS geotransform
+	AS 'MODULE_PATHNAME','RASTER_getGeotransform'
+	LANGUAGE 'C' IMMUTABLE ;
+
+
+CREATE OR REPLACE FUNCTION st_pixelwidth(raster)
+	RETURNS float8
+	AS 'MODULE_PATHNAME', 'RASTER_getPixelWidth'
+	LANGUAGE 'C' IMMUTABLE STRICT;
+
+CREATE OR REPLACE FUNCTION st_pixelheight(raster)
+	RETURNS float8
+	AS 'MODULE_PATHNAME', 'RASTER_getPixelHeight'
+	LANGUAGE 'C' IMMUTABLE STRICT;
+
+CREATE OR REPLACE FUNCTION st_rotation(rast raster)
+	RETURNS float8 AS
+    $$
+    DECLARE
+        rotation float8;
+    BEGIN
+        SELECT (ST_GetGeotransform(rast)).theta_i INTO rotation;
+        RETURN rotation;
+    END;
+    $$
+    LANGUAGE 'plpgsql' VOLATILE ;
+
 
 -----------------------------------------------------------------------
 -- Constructors ST_MakeEmptyRaster and ST_AddBand
@@ -2246,6 +2274,29 @@ CREATE OR REPLACE FUNCTION st_setrotation(rast raster, rotation float8)
     RETURNS raster
     AS 'MODULE_PATHNAME','RASTER_setRotation'
     LANGUAGE 'C' IMMUTABLE STRICT;
+
+CREATE OR REPLACE FUNCTION ST_SetGeotransform(rast raster,
+		imag double precision, jmag double precision,
+		theta_i double precision, theta_ij double precision,
+		xoffset double precision, yoffset double precision)
+	RETURNS raster
+	AS 'MODULE_PATHNAME','RASTER_setGeotransform'
+	LANGUAGE 'C' IMMUTABLE ;
+
+CREATE OR REPLACE FUNCTION ST_SetGeotransform(rast raster, gt geotransform)
+	RETURNS raster AS
+    $$
+    DECLARE
+        ret raster;
+    BEGIN
+        SELECT ST_SetGeotransform(rast, (gt).imag, (gt).jmag,
+        		(gt).theta_i, (gt).theta_ij,
+        		(gt).xoffset, (gt).yoffset) INTO ret;
+        RETURN ret;
+    END;
+    $$
+    LANGUAGE 'plpgsql' VOLATILE ;
+
 
 -----------------------------------------------------------------------
 -- Raster Editors ST_SetGeoreference()
@@ -5213,40 +5264,6 @@ CREATE OR REPLACE FUNCTION DropRasterTable(table_name varchar)
 -------------------------------------------------------------------
 --  END
 -------------------------------------------------------------------
------------------------------------------------------------------------
--- Raster Geotransform
------------------------------------------------------------------------
-
-DROP TYPE IF EXISTS geotransform ;
-CREATE TYPE geotransform AS (
-		imag     double precision,
-    	jmag     double precision,
-    	theta_i  double precision,
-    	theta_ij double precision) ;
-
-CREATE OR REPLACE FUNCTION ST_GetGeotransform(rast raster)
-	RETURNS geotransform
-	AS 'MODULE_PATHNAME','RASTER_getGeotransform'
-	LANGUAGE 'C' IMMUTABLE ;
-
-CREATE OR REPLACE FUNCTION ST_SetGeotransform(rast raster,
-		imag double precision, jmag double precision,
-		theta_i double precision, theta_ij double precision)
-	RETURNS raster
-	AS 'MODULE_PATHNAME','RASTER_setGeotransform'
-	LANGUAGE 'C' IMMUTABLE ;
-
-CREATE OR REPLACE FUNCTION ST_SetGeotransform(rast raster, gt geotransform)
-	RETURNS raster AS
-    $$
-    DECLARE
-        ret raster;
-    BEGIN
-        SELECT ST_SetGeotransform(rast, gt.imag, gt.jmag, gt.theta_i, gt.theta_ij) INTO ret;
-        RETURN ret;
-    END;
-    $$
-    LANGUAGE 'plpgsql' VOLATILE ;
 
 -----------------------------------------------------------------------
 -- Raster Operations
