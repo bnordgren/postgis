@@ -5222,7 +5222,9 @@ CREATE TYPE geotransform AS (
 		imag     double precision,
     	jmag     double precision,
     	theta_i  double precision,
-    	theta_ij double precision) ;
+    	theta_ij double precision,
+    	xoffset  double precision,
+    	yoffset  double precision) ;
 
 CREATE OR REPLACE FUNCTION ST_GetGeotransform(rast raster)
 	RETURNS geotransform
@@ -5231,7 +5233,8 @@ CREATE OR REPLACE FUNCTION ST_GetGeotransform(rast raster)
 
 CREATE OR REPLACE FUNCTION ST_SetGeotransform(rast raster,
 		imag double precision, jmag double precision,
-		theta_i double precision, theta_ij double precision)
+		theta_i double precision, theta_ij double precision,
+		xoffset double precision, yoffset double precision)
 	RETURNS raster
 	AS 'MODULE_PATHNAME','RASTER_setGeotransform'
 	LANGUAGE 'C' IMMUTABLE ;
@@ -5242,7 +5245,9 @@ CREATE OR REPLACE FUNCTION ST_SetGeotransform(rast raster, gt geotransform)
     DECLARE
         ret raster;
     BEGIN
-        SELECT ST_SetGeotransform(rast, gt.imag, gt.jmag, gt.theta_i, gt.theta_ij) INTO ret;
+        SELECT ST_SetGeotransform(rast, (gt).imag, (gt).jmag,
+        		(gt).theta_i, (gt).theta_ij,
+        		(gt).xoffset, (gt).yoffset) INTO ret;
         RETURN ret;
     END;
     $$

@@ -1500,10 +1500,11 @@ Datum RASTER_setGeotransform(PG_FUNCTION_ARGS)
 {
 	rt_pgraster *pgraster ;
 	rt_raster raster ;
-	float8 imag, jmag, theta_i, theta_ij ;
+	float8 imag, jmag, theta_i, theta_ij, xoffset, yoffset ;
 
     if (PG_ARGISNULL(0) || PG_ARGISNULL(1) || PG_ARGISNULL(2) ||
-    		PG_ARGISNULL(3) || PG_ARGISNULL(4))
+    		PG_ARGISNULL(3) || PG_ARGISNULL(4) ||
+    		PG_ARGISNULL(5) || PG_ARGISNULL(6))
     	PG_RETURN_NULL();
 
     /* get the inputs */
@@ -1513,6 +1514,8 @@ Datum RASTER_setGeotransform(PG_FUNCTION_ARGS)
     jmag = PG_GETARG_FLOAT8(2) ;
     theta_i = PG_GETARG_FLOAT8(3);
     theta_ij = PG_GETARG_FLOAT8(4);
+    xoffset = PG_GETARG_FLOAT8(5);
+    yoffset = PG_GETARG_FLOAT8(6);
 
     raster = rt_raster_deserialize(pgraster, TRUE);
     if (!raster) {
@@ -1523,6 +1526,7 @@ Datum RASTER_setGeotransform(PG_FUNCTION_ARGS)
 
     /* store the new geotransform */
     rt_raster_set_phys_params(raster, imag,jmag,theta_i,theta_ij) ;
+    rt_raster_set_offsets(raster, xoffset, yoffset) ;
 
     /* prep the return value */
     pgraster = rt_raster_serialize(raster);
@@ -1544,13 +1548,13 @@ Datum RASTER_getGeotransform(PG_FUNCTION_ARGS)
 {
 	rt_pgraster *rast ;
 	rt_raster    raster ;
-	float8 imag, jmag, theta_i, theta_ij ;
+	float8 imag, jmag, theta_i, theta_ij, xoffset, yoffset ;
 	TupleDesc result_tuple ; /* for returning a composite */
 	HeapTuple heap_tuple ;   /* instance of the tuple to return */
 	Oid result_oid ;   /* internal code for the specific return type */
 	TypeFuncClass return_type ; /* is the return type a composite? */
-	Datum return_values[4] ;
-	bool  nulls[4] ;
+	Datum return_values[6] ;
+	bool  nulls[6] ;
 
 	/* setup the return value infrastructure */
 	return_type = get_call_result_type(fcinfo, &result_oid, &result_tuple) ;
@@ -1588,7 +1592,9 @@ Datum RASTER_getGeotransform(PG_FUNCTION_ARGS)
     return_values[1] = Float8GetDatum(jmag) ;
     return_values[2] = Float8GetDatum(theta_i) ;
     return_values[3] = Float8GetDatum(theta_ij) ;
-    nulls[0] = nulls[1] = nulls[2] = nulls[3] = FALSE ;
+    return_values[4] = Float8GetDatum(rt_raster_get_x_offset(raster)) ;
+    return_values[5] = Float8GetDatum(rt_raster_get_y_offset(raster)) ;
+    nulls[0] = nulls[1] = nulls[2] = nulls[3] = nulls[4] = nulls[5] = FALSE ;
     /* stick em on the heap */
     heap_tuple = heap_form_tuple(result_tuple, return_values, nulls) ;
     /* return */
