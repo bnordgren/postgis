@@ -1601,53 +1601,6 @@ Datum RASTER_getGeotransform(PG_FUNCTION_ARGS)
     PG_RETURN_DATUM(HeapTupleGetDatum(heap_tuple)) ;
 }
 
-/**
- * Return the raster rotation. The raster rotation is calculated from
- * the scale and skew values stored in the georeference. If the scale
- * and skew values indicate that the raster is not uniformly rotated
- * (the pixels are diamond-shaped), this function will return NaN.
- */
-PG_FUNCTION_INFO_V1(RASTER_getRotation);
-Datum RASTER_getRotation(PG_FUNCTION_ARGS)
-{
-    rt_pgraster *pgraster;
-    rt_raster raster;
-    double xscale, xskew, yscale, yskew, xrot, yrot;
-
-    if (PG_ARGISNULL(0)) PG_RETURN_NULL();
-    pgraster = (rt_pgraster *)PG_DETOAST_DATUM_SLICE(PG_GETARG_DATUM(0), 0, sizeof(struct rt_raster_serialized_t));
-
-    raster = rt_raster_deserialize(pgraster, TRUE);
-    if (!raster) {
-        elog(ERROR, "RASTER_getRotation: Could not deserialize raster");
-        PG_RETURN_NULL();
-    }
-
-    xscale = rt_raster_get_x_scale(raster);
-    yscale = rt_raster_get_y_scale(raster);
-
-    if (xscale == 0 || yscale == 0) {
-        rt_raster_destroy(raster);
-
-        /* cannot compute scale with a zero denominator */
-        elog(NOTICE, "RASTER_getRotation: Could not divide by zero scale; cannot determine raster rotation.");
-        PG_RETURN_FLOAT8(NAN);
-    }
-
-    xskew = rt_raster_get_x_skew(raster);
-    yskew = rt_raster_get_y_skew(raster);
-
-    xrot = atan(yskew/xscale);
-    yrot = atan(xskew/yscale);
-
-    rt_raster_destroy(raster);
-
-    if (xrot == yrot) {
-        PG_RETURN_FLOAT8(xrot);
-    }
-
-    PG_RETURN_FLOAT8(NAN);
-}
 
 /**
  * Set the rotation of the raster. This method will change the X Scale,
@@ -1666,39 +1619,20 @@ Datum RASTER_setRotation(PG_FUNCTION_ARGS)
     rt_pgraster *pgraster = NULL;
     rt_raster raster;
     double rotation = PG_GETARG_FLOAT8(1);
-    double xscale, yscale, xskew, yskew, psize;
+    double imag, jmag, theta_i, theta_ij ;
 
-		if (PG_ARGISNULL(0)) PG_RETURN_NULL();
-		pgraster = (rt_pgraster *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
-
-    /* no matter what, we don't rotate more than once around */
-    if (rotation < 0) {
-        rotation = (-2*M_PI) + fmod(rotation, (2*M_PI));
-    }
-    else {
-        rotation = fmod(rotation, (2 * M_PI));
-    }
+	if (PG_ARGISNULL(0)) PG_RETURN_NULL();
+	pgraster = (rt_pgraster *)PG_DETOAST_DATUM(PG_GETARG_DATUM(0));
 
     raster = rt_raster_deserialize(pgraster, FALSE);
     if (! raster ) {
         elog(ERROR, "RASTER_setRotation: Could not deserialize raster");
         PG_RETURN_NULL();
     }
-
-    xscale = rt_raster_get_x_scale(raster);
-    yskew = rt_raster_get_y_skew(raster);
-    psize = sqrt(xscale*xscale + yskew*yskew);
-    xscale = psize * cos(rotation);
-    yskew = psize * sin(rotation);
     
-    yscale = rt_raster_get_y_scale(raster);
-    xskew = rt_raster_get_x_skew(raster);
-    psize = sqrt(yscale*yscale + xskew*xskew);
-    yscale = psize * cos(rotation);
-    xskew = psize * sin(rotation); 
-
-    rt_raster_set_scale(raster, xscale, yscale);
-    rt_raster_set_skews(raster, xskew, yskew);
+    /* preserve all defining characteristics of the grid except for rotation */
+    rt_raster_get_phys_params(raster, &imag, &jmag, &theta_i, &theta_ij) ;
+    rt_raster_set_phys_params(raster,  imag,  jmag, rotation,  theta_ij) ;
 
     pgraster = rt_raster_serialize(raster);
     if ( ! pgraster ) PG_RETURN_NULL();
