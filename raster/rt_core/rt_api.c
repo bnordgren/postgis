@@ -33,8 +33,6 @@
 #include <stdarg.h> /* for va_list, va_start etc */
 #include <string.h> /* for memcpy and strlen */
 #include <assert.h>
-#include <float.h> /* for FLT_EPSILON and float type limits */
-#include <limits.h> /* for integer type limits */
 #include <time.h> /* for time */
 #include "rt_api.h"
 
@@ -6636,14 +6634,7 @@ rt_raster_from_gdal_dataset(GDALDatasetH ds) {
 	int x;
 	int y;
 	double value;
-
-	int nXBlocks, nYBlocks;
-	int nXBlockSize, nYBlockSize;
-	int iXBlock, iYBlock;
-	int nXValid, nYValid;
-	int iY, iX;
 	double *values = NULL;
-	int byblock = 0;
 
 	assert(NULL != ds);
 
@@ -6656,14 +6647,14 @@ rt_raster_from_gdal_dataset(GDALDatasetH ds) {
 	RASTER_DEBUG(3, "Creating new raster");
 	rast = rt_raster_new(width, height);
 	if (NULL == rast) {
-		rterror("rt_raster_from_gdal_dataset: Out of memory allocating new raster\n");
+		rterror("rt_raster_from_gdal_dataset: Out of memory allocating new raster");
 		return NULL;
 	}
 
 	/* get raster attributes */
 	cplerr = GDALGetGeoTransform(ds, gt);
 	if (cplerr != CE_None) {
-		rterror("rt_raster_from_gdal_dataset: Unable to get geotransformation\n");
+		rterror("rt_raster_from_gdal_dataset: Unable to get geotransform matrix");
 		rt_raster_destroy(rast);
 		return NULL;
 	}
@@ -6671,12 +6662,7 @@ rt_raster_from_gdal_dataset(GDALDatasetH ds) {
 		gt[0], gt[1], gt[2], gt[3], gt[4], gt[5]);
 
 	/* apply raster attributes */
-	/* scale */
-	rt_raster_set_scale(rast, gt[1], gt[5]);
-	/* offset */
-	rt_raster_set_offsets(rast, gt[0], gt[3]);
-	/* skew */
-	rt_raster_set_skews(rast, gt[2], gt[4]);
+	rt_raster_set_geotransform_matrix(rast, gt);
 	/* srid */
 	/* CANNOT SET srid AS srid IS NOT AVAILABLE IN GDAL dataset */
 
@@ -6687,7 +6673,7 @@ rt_raster_from_gdal_dataset(GDALDatasetH ds) {
 		gdband = NULL;
 		gdband = GDALGetRasterBand(ds, i);
 		if (NULL == gdband) {
-			rterror("rt_raster_from_gdal_dataset: Unable to get transformed band\n");
+			rterror("rt_raster_from_gdal_dataset: Unable to get GDAL band");
 			rt_raster_destroy(rast);
 			return NULL;
 		}
@@ -6724,7 +6710,7 @@ rt_raster_from_gdal_dataset(GDALDatasetH ds) {
 				RASTER_DEBUG(3, "Pixel type is GDT_Float64");
 				break;
 			default:
-				rterror("rt_raster_from_gdal_dataset: Unknown pixel type for transformed raster\n");
+				rterror("rt_raster_from_gdal_dataset: Unknown pixel type for GDAL band");
 				rt_raster_destroy(rast);
 				return NULL;
 				break;
@@ -6751,112 +6737,41 @@ rt_raster_from_gdal_dataset(GDALDatasetH ds) {
 			hasnodata, nodataval, rt_raster_get_num_bands(rast)
 		);
 		if (idx < 0) {
-			rterror("rt_raster_from_gdal_dataset: Could not allocate memory for band\n");
+			rterror("rt_raster_from_gdal_dataset: Could not allocate memory for raster band");
 			rt_raster_destroy(rast);
 			return NULL;
 		}
 		band = rt_raster_get_band(rast, idx);
 
-		/* copy data from gdband to band */
-		/* try to duplicate entire band data at once */
-		do {
-			values = rtalloc(width * height * sizeof(double));
-			if (NULL == values) {
-				byblock = 1;
-				break;
-			}
-
+		/* use rows */
+		values = rtalloc(sizeof(double) * width);
+		for (y = 0; y < height; y++) {
 			cplerr = GDALRasterIO(
 				gdband, GF_Read,
-				0, 0,
-				width, height,
-				values, width, height,
+				0, y,
+				width, 1,
+				values, width, 1,
 				GDT_Float64,
 				0, 0
 			);
-
 			if (cplerr != CE_None) {
-				byblock = 1;
+				rterror("rt_raster_from_gdal_dataset: Unable to get data from GDAL band");
 				rtdealloc(values);
-				break;
+				rt_raster_destroy(rast);
+				return NULL;
 			}
 
-			for (y = 0; y < height; y++) {
-				for (x = 0; x < width; x++) {
-					value = values[x + y * width];
-
-					RASTER_DEBUGF(5, "(x, y, value) = (%d, %d, %f)", x, y, value);
-
-					if (rt_band_set_pixel(band, x, y, value) < 0) {
-						rterror("rt_raster_from_gdal_dataset: Unable to save data from transformed raster\n");
-						rt_raster_destroy(rast);
-						return NULL;
-					}
+			for (x = 0; x < width; x++) {
+				value = values[x];
+				if (rt_band_set_pixel(band, x, y, value) < 0) {
+					rterror("rt_raster_from_gdal_dataset: Unable to save data from GDAL band");
+					rtdealloc(values);
+					rt_raster_destroy(rast);
+					return NULL;
 				}
 			}
-
-			rtdealloc(values);
 		}
-		while (0);
-
-		/* this makes use of GDAL's "natural" blocks */
-		if (byblock) {
-			GDALGetBlockSize(gdband, &nXBlockSize, &nYBlockSize);
-			nXBlocks = (width + nXBlockSize - 1) / nXBlockSize;
-			nYBlocks = (height + nYBlockSize - 1) / nYBlockSize;
-			RASTER_DEBUGF(4, "(nXBlockSize, nYBlockSize) = (%d, %d)", nXBlockSize, nYBlockSize);
-			RASTER_DEBUGF(4, "(nXBlocks, nYBlocks) = (%d, %d)", nXBlocks, nYBlocks);
-
-			values = rtalloc(nXBlockSize * nYBlockSize * sizeof(double));
-			for (iYBlock = 0; iYBlock < nYBlocks; iYBlock++) {
-				for (iXBlock = 0; iXBlock < nXBlocks; iXBlock++) {
-					x = iXBlock * nXBlockSize;
-					y = iYBlock * nYBlockSize;
-
-					cplerr = GDALRasterIO(
-						gdband, GF_Read,
-						x, y,
-						nXBlockSize, nYBlockSize,
-						values, nXBlockSize, nYBlockSize,
-						GDT_Float64,
-						0, 0
-					);
-					if (cplerr != CE_None) {
-						rterror("rt_raster_from_gdal_dataset: Unable to get data from transformed raster\n");
-						rt_raster_destroy(rast);
-						return NULL;
-					}
-
-					if ((iXBlock + 1) * nXBlockSize > width)
-						nXValid = width - (iXBlock * nXBlockSize);
-					else
-						nXValid = nXBlockSize;
-
-					if ((iYBlock + 1) * nYBlockSize > height)
-						nYValid = height - (iYBlock * nYBlockSize);
-					else
-						nYValid = nYBlockSize;
-
-					for (iY = 0; iY < nYValid; iY++) {
-						for (iX = 0; iX < nXValid; iX++) {
-							x = iX + (nXBlockSize * iXBlock);
-							y = iY + (nYBlockSize * iYBlock);
-							value = values[iX + iY * nXBlockSize];
-
-							RASTER_DEBUGF(5, "(x, y, value) = (%d, %d, %f)", x, y, value);
-
-							if (rt_band_set_pixel(band, x, y, value) < 0) {
-								rterror("rt_raster_from_gdal_dataset: Unable to save data from transformed raster\n");
-								rt_raster_destroy(rast);
-								return NULL;
-							}
-						}
-					}
-				}
-			}
-
-			rtdealloc(values);
-		}
+		rtdealloc(values);
 	}
 
 	return rast;
