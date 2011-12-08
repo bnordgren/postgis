@@ -161,17 +161,15 @@ CREATE OR REPLACE FUNCTION st_metadata(
 -- Raster Geotransform Accessors
 -----------------------------------------------------------------------
 
-DROP TYPE IF EXISTS geotransform ;
-CREATE TYPE geotransform AS (
-		imag     double precision,
-    	jmag     double precision,
-    	theta_i  double precision,
-    	theta_ij double precision,
-    	xoffset  double precision,
-    	yoffset  double precision) ;
 
-CREATE OR REPLACE FUNCTION ST_GetGeotransform(rast raster)
-	RETURNS geotransform
+CREATE OR REPLACE FUNCTION ST_GetGeotransform(rast raster,
+		OUT imag     double precision,
+    	OUT jmag     double precision,
+    	OUT theta_i  double precision,
+    	OUT theta_ij double precision,
+    	OUT xoffset  double precision,
+    	OUT yoffset  double precision)
+	RETURNS record
 	AS 'MODULE_PATHNAME','RASTER_getGeotransform'
 	LANGUAGE 'C' IMMUTABLE ;
 
@@ -2283,19 +2281,6 @@ CREATE OR REPLACE FUNCTION ST_SetGeotransform(rast raster,
 	AS 'MODULE_PATHNAME','RASTER_setGeotransform'
 	LANGUAGE 'C' IMMUTABLE ;
 
-CREATE OR REPLACE FUNCTION ST_SetGeotransform(rast raster, gt geotransform)
-	RETURNS raster AS
-    $$
-    DECLARE
-        ret raster;
-    BEGIN
-        SELECT ST_SetGeotransform(rast, (gt).imag, (gt).jmag,
-        		(gt).theta_i, (gt).theta_ij,
-        		(gt).xoffset, (gt).yoffset) INTO ret;
-        RETURN ret;
-    END;
-    $$
-    LANGUAGE 'plpgsql' VOLATILE ;
 
 
 -----------------------------------------------------------------------
